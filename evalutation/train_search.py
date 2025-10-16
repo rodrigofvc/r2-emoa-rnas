@@ -10,7 +10,7 @@ from torch import nn
 
 import utils
 from architect import Architect
-from network import Network
+from model_search import Network
 
 
 def get_attack_function(attack_params):
@@ -66,11 +66,6 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
       nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
       optimizer.step()
       print('weights step DONE in %.3f seconds' % (time.time() - weights_time))
-
-      #prec1, prec5 = utils.accuracy(logits, target, topk=(1, 5))
-      #objs.update(total_loss.data.item(), n)
-      #top1.update(prec1.data.item(), n)
-      #top5.update(prec5.data.item(), n)
 
       std_predicts = logits.argmax(dim=1)
       adv_predicts = logits_adv.argmax(dim=1)
@@ -232,7 +227,7 @@ if __name__ == '__main__':
     CIFAR_CLASSES = 10
     criterion = nn.CrossEntropyLoss()
 
-    model =  Network(
+    model = Network(
         C=args.init_channels,
         num_classes=CIFAR_CLASSES,
         layers=args.layers,
@@ -294,8 +289,7 @@ if __name__ == '__main__':
 
         time_valid = time.time()
         # validation
-        #valid_acc, valid_obj = infer(valid_queue, model, attack_f=attack_f, device=DEVICE)
-        #print('valid_acc %f valid_obj %f' % (valid_acc, valid_obj))
+        valid_acc, valid_obj = infer(valid_queue, model, attack_f=attack_f, device=DEVICE)
         print(f"Tiempo de validacion epoca {epoch}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_valid))}")
         scheduler.step()
         #utils.save(model, os.path.join(args.save, 'weights.pt'))

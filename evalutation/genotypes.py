@@ -3,7 +3,7 @@ from collections import namedtuple
 Genotype = namedtuple('Genotype', 'normal normal_concat reduce reduce_concat')
 
 PRIMITIVES = [
-    'none',
+    'skip_connect',
     'max_pool_3x3',
     'avg_pool_3x3',
     'sep_conv_3x3',
