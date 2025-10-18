@@ -1,6 +1,7 @@
 import argparse
 import ssl
 import time
+import logging
 
 import torch
 import torch.nn.functional as F
@@ -44,13 +45,13 @@ def train(train_queue, valid_queue, model, architect, criterion, optimizer, lr, 
       input_search = input_search.to(device, non_blocking=True)
       target_search = target_search.to(device, non_blocking=True)
 
+      optimizer.zero_grad()
       print('data prep DONE in %.3f seconds' % (time.time() - prepare_time))
       architect_time = time.time()
       architect.step(input, target, input_search, target_search, lr, optimizer, unrolled=args.unrolled)
       print('architect step DONE in %.3f seconds' % (time.time() - architect_time))
 
       weights_time = time.time()
-      optimizer.zero_grad()
 
       attack = attack_f(model)
       adv_X = attack(input, target)
@@ -111,10 +112,17 @@ def infer(valid_queue, model, attack_f, device):
         print('infer step %d loss_ws %.5f std_acc %.3f adv_acc %.3f' % (step, total_loss.item(), std_accuracy, adv_accuracy))
     return meter_top1 / n * 100.0, meter_loss / n
 
+def setup_logger(debug_mode):
+    level = logging.DEBUG if debug_mode else logging.INFO
+    logging.basicConfig(
+        format='%(asctime)s - %(levelname)s - %(message)s',
+        level=level
+    )
 
 if __name__ == '__main__':
     torch.manual_seed(0)
-
+    debug_mode = True
+    logging.info("Este es un mensaje informativo.")
     if torch.cuda.is_available():
         DEVICE = torch.device("cuda")
     elif torch.backends.mps.is_available():
@@ -135,7 +143,7 @@ if __name__ == '__main__':
     parser.add_argument('--report_freq', type=float, default=50, help='report frequency')
     parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
     parser.add_argument('--epochs', type=int, default=20, help='num of training epochs')
-    parser.add_argument('--init_channels', type=int, default=16, help='num of init channels')
+    parser.add_argument('--init_channels', type=int, default=8, help='num of init channels')
     parser.add_argument('--layers', type=int, default=8, help='total number of cells')
     parser.add_argument('--model_path', type=str, default='saved_models', help='path to save the model')
     parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
@@ -152,7 +160,6 @@ if __name__ == '__main__':
 
     attack_params = {'name': 'FGSM', 'params': {'eps': 0.007}}
 
-    # Puedes pasar listas por celda (coincide con tu Network actual)
     steps_cells = [3, 4, 4, 4, 4, 4, 4, 4]
     multiplier_cells = [3, 4, 4, 4, 4, 4, 4, 4]
 
