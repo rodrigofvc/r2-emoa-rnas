@@ -1,12 +1,8 @@
-import argparse
-import ssl
 import time
 import logging
 
 import torch
-import torch.nn.functional as F
 import torchattacks
-import torchvision
 from torch import nn
 
 import utils
@@ -23,7 +19,7 @@ def get_attack_function(attack_params):
     return attack_function
 
 # Train a model for one epoch
-def train(train_queue, model, lambda_1, lambda_2, criterion, optimizer, attack_f, device):
+def train(train_queue, model, lambda_1, lambda_2, criterion, optimizer, args, attack_f, device):
   std_correct = 0
   adv_correct = 0
   total = 0
@@ -72,7 +68,7 @@ def train(train_queue, model, lambda_1, lambda_2, criterion, optimizer, attack_f
 
   return std_accuracy * 100.0, adv_accuracy * 100.0, total_loss.item()
 
-def train_batch(input, target, model, lambda_1, lambda_2, criterion, optimizer, attack_f, device):
+def train_batch(input, target, model, lambda_1, lambda_2, criterion, optimizer, args, attack_f, device):
     prepare_time = time.time()
     input = input.to(device, non_blocking=True)
     target = target.to(device, non_blocking=True)
@@ -144,7 +140,7 @@ def setup_logger(debug_mode):
     )
 
 # Normal epoch run function
-def run_epoch(epoch, model, individuals, n_population, train_queue, criterion, optimizer, attack_f, scheduler, args, device):
+def run_epoch(epoch, model, individuals, n_population, train_queue, valid_queue, criterion, optimizer, attack_f, scheduler, args, device):
     print(f">>>> Epoch {epoch+1}/{args.epochs}")
 
     individual = individuals[epoch % n_population]
@@ -160,7 +156,7 @@ def run_epoch(epoch, model, individuals, n_population, train_queue, criterion, o
 
     time_valid = time.time()
     # validation
-    std_accuracy, adv_accuracy, loss = infer(valid_queue, model, args.lambda_1, args.lambda_2, criterion, attack_f=attack_f, device=DEVICE)
+    std_accuracy, adv_accuracy, loss = infer(valid_queue, model, args.lambda_1, args.lambda_2, criterion, attack_f=attack_f, device=device)
     print(f"Tiempo de validacion epoca {epoch+1}/{args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_valid))}")
     scheduler.step()
     #utils.save(model, os.path.join(args.save, 'weights.pt'))
@@ -168,7 +164,7 @@ def run_epoch(epoch, model, individuals, n_population, train_queue, criterion, o
 def run_batch_epoch(model, individual, lambda_1, lambda_2, input, target, criterion, optimizer, attack_f, args, device):
 
     model.update_arch_parameters(individual)
-    discrete = discretize(individual, model.genotype(), DEVICE)
+    discrete = discretize(individual, model.genotype(), device)
     model.update_arch_parameters(discrete)
 
     prepare_time = time.time()
