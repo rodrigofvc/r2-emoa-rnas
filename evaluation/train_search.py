@@ -10,7 +10,6 @@ import torchvision
 from torch import nn
 
 import utils
-from architect import Architect
 from model_search import Network, discretize
 
 
@@ -23,16 +22,12 @@ def get_attack_function(attack_params):
         raise ValueError(f"Attack {attack_params['name']} not defined")
     return attack_function
 
-
-def train(train_queue, valid_queue, model, lambda_1, lambda_2, criterion, optimizer, lr, attack_f, device):
-  objs = utils.AvgrageMeter()
-  top1 = utils.AvgrageMeter()
-  top5 = utils.AvgrageMeter()
+# Train a model for one epoch
+def train(train_queue, model, lambda_1, lambda_2, criterion, optimizer, attack_f, device):
   std_correct = 0
   adv_correct = 0
   total = 0
   model.train()
-  valid_iterator = iter(valid_queue)
   for step, (input, target) in enumerate(train_queue):
       timesstamp = time.time()
       n = input.size(0)
@@ -41,21 +36,21 @@ def train(train_queue, valid_queue, model, lambda_1, lambda_2, criterion, optimi
       target = target.to(device, non_blocking=True)
 
 
-      input_search, target_search = next(valid_iterator)
-      input_search = input_search.to(device, non_blocking=True)
-      target_search = target_search.to(device, non_blocking=True)
-
       optimizer.zero_grad()
       print('data prep DONE in %.3f seconds' % (time.time() - prepare_time))
       weights_time = time.time()
 
+      time_stamp = time.time()
       attack = attack_f(model)
       adv_X = attack(input, target)
       logits_adv = model(adv_X)
       adv_loss = criterion(logits_adv, target)
+      print('--- adv loss DONE in %.3f seconds' % (time.time() - time_stamp))
 
+      time_stamp = time.time()
       logits = model(input)
       natural_loss = criterion(logits, target)
+      print('--- std loss DONE in %.3f seconds' % (time.time() - time_stamp))
 
       total_loss = lambda_1 * natural_loss + lambda_2 * adv_loss
 
@@ -73,41 +68,73 @@ def train(train_queue, valid_queue, model, lambda_1, lambda_2, criterion, optimi
       adv_accuracy = adv_correct / total
 
       # if step % args.report_freq == 0:
-      print ('-- train step %d/%d loss_ws %.5f std_acc %.3f adv_acc %.3f %f segs' % (step+1, len(train_queue), objs.avg, std_accuracy, adv_accuracy, time.time() - timesstamp))
+      print ('-- train step %d/%d loss_ws %.5f std_acc %.3f adv_acc %.3f %f segs' % (step+1, len(train_queue), total_loss.item(), std_accuracy, adv_accuracy, time.time() - timesstamp))
 
-  return top1.avg, objs.avg
+  return std_accuracy * 100.0, adv_accuracy * 100.0, total_loss.item()
 
-def infer(valid_queue, model, attack_f, device):
-    model.eval()
-    meter_loss, meter_top1 = 0.0, 0.0
-    n = 0
+def train_batch(input, target, model, lambda_1, lambda_2, criterion, optimizer, attack_f, device):
+    prepare_time = time.time()
+    input = input.to(device, non_blocking=True)
+    target = target.to(device, non_blocking=True)
+
+    optimizer.zero_grad()
+    print('data prep DONE in %.3f seconds' % (time.time() - prepare_time))
+    weights_time = time.time()
+
+    time_stamp = time.time()
+    attack = attack_f(model)
+    adv_X = attack(input, target)
+    logits_adv = model(adv_X)
+    adv_loss = criterion(logits_adv, target)
+    print('--- adv loss DONE in %.3f seconds' % (time.time() - time_stamp))
+
+    time_stamp = time.time()
+    logits = model(input)
+    natural_loss = criterion(logits, target)
+    print('--- std loss DONE in %.3f seconds' % (time.time() - time_stamp))
+
+    total_loss = lambda_1 * natural_loss + lambda_2 * adv_loss
+
+    total_loss.backward()
+    nn.utils.clip_grad_norm_(model.weight_parameters(), args.grad_clip)
+    optimizer.step()
+    print('weights step DONE in %.3f seconds' % (time.time() - weights_time))
+
+    std_predicts = logits.argmax(dim=1)
+    adv_predicts = logits_adv.argmax(dim=1)
+    std_correct = (std_predicts == target).sum().item()
+    adv_correct = (adv_predicts == target).sum().item()
+    return std_correct, adv_correct, total_loss.item()
+
+
+
+def infer(valid_queue, model, lambda_1, lambda_2, criterion, attack_f, device):
     std_correct = 0
     adv_correct = 0
     total = 0
-    with torch.no_grad():
-        for step, (input, target) in enumerate(valid_queue):
-            input  = input.to(device, non_blocking=True)
-            target = target.to(device, non_blocking=True)
+    model.eval()
+    for step, (input, target) in enumerate(valid_queue):
+        input  = input.to(device, non_blocking=True)
+        target = target.to(device, non_blocking=True)
+        attack = attack_f(model)
+        adv_input = attack(input, target).to(device, non_blocking=True)
+
+        with torch.no_grad():
             std_logits = model(input)
-            std_loss = F.cross_entropy(std_logits, target)
-            adv_input = attack_f(model)(input, target).to(device, non_blocking=True)
+            std_loss = criterion(std_logits, target)
             adv_logits = model(adv_input)
-            adv_loss = F.cross_entropy(adv_logits, target)
-            total_loss = 0.5 * (std_loss + adv_loss)
+            adv_loss = criterion(adv_logits, target)
+            total_loss = lambda_1 * std_loss + lambda_2 * adv_loss
 
-            n += input.size(0)
-            meter_loss += total_loss.item() * input.size(0)
-            meter_top1 += (std_logits.argmax(1) == target).float().sum().item()
-
-            std_predicts = std_logits.argmax(dim=1)
-            adv_predicts = adv_logits.argmax(dim=1)
-            std_correct += (std_predicts == target).sum().item()
-            adv_correct += (adv_predicts == target).sum().item()
-            total += target.size(0)
-            std_accuracy = std_correct / total
-            adv_accuracy = adv_correct / total
-            print('infer step %d loss_ws %.5f std_acc %.3f adv_acc %.3f' % (step, total_loss.item(), std_accuracy, adv_accuracy))
-    return meter_top1 / n * 100.0, meter_loss / n
+        std_predicts = std_logits.argmax(dim=1)
+        adv_predicts = adv_logits.argmax(dim=1)
+        std_correct += (std_predicts == target).sum().item()
+        adv_correct += (adv_predicts == target).sum().item()
+        total += target.size(0)
+        std_accuracy = std_correct / total
+        adv_accuracy = adv_correct / total
+        print('infer step %d loss_ws %.5f std_acc %.3f adv_acc %.3f' % (step, total_loss.item(), std_accuracy, adv_accuracy))
+    return std_accuracy * 100.0, adv_accuracy * 100.0, total_loss.item()
 
 def setup_logger(debug_mode):
     level = logging.DEBUG if debug_mode else logging.INFO
@@ -115,6 +142,67 @@ def setup_logger(debug_mode):
         format='%(asctime)s - %(levelname)s - %(message)s',
         level=level
     )
+
+# Normal epoch run function
+def run_epoch(epoch, model, individuals, n_population, train_queue, criterion, optimizer, attack_f, scheduler, args, device):
+    print(f">>>> Epoch {epoch+1}/{args.epochs}")
+
+    individual = individuals[epoch % n_population]
+    model.update_arch_parameters(individual)
+    discrete = discretize(individual, model.genotype(), device)
+    model.update_arch_parameters(discrete)
+
+    time_train = time.time()
+    # training
+    std_accuracy, adv_accuracy, loss = train(train_queue, model, args.lambda_1, args.lambda_2, criterion, optimizer, attack_f=attack_f, device=device)
+    print('train_acc %f, adv_acc %f, loss %f ', std_accuracy, adv_accuracy, loss)
+    print(f"Tiempo de entrenamiento epoca {epoch+1}/{args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_train))}")
+
+    time_valid = time.time()
+    # validation
+    std_accuracy, adv_accuracy, loss = infer(valid_queue, model, args.lambda_1, args.lambda_2, criterion, attack_f=attack_f, device=DEVICE)
+    print(f"Tiempo de validacion epoca {epoch+1}/{args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_valid))}")
+    scheduler.step()
+    #utils.save(model, os.path.join(args.save, 'weights.pt'))
+
+def run_batch_epoch(model, individual, lambda_1, lambda_2, input, target, criterion, optimizer, attack_f, args, device):
+
+    model.update_arch_parameters(individual)
+    discrete = discretize(individual, model.genotype(), DEVICE)
+    model.update_arch_parameters(discrete)
+
+    prepare_time = time.time()
+    input = input.to(device, non_blocking=True)
+    target = target.to(device, non_blocking=True)
+
+    optimizer.zero_grad()
+    print('data prep DONE in %.3f seconds' % (time.time() - prepare_time))
+    weights_time = time.time()
+
+    time_stamp = time.time()
+    attack = attack_f(model)
+    adv_X = attack(input, target)
+    logits_adv = model(adv_X)
+    adv_loss = criterion(logits_adv, target)
+    print('--- adv loss DONE in %.3f seconds' % (time.time() - time_stamp))
+
+    time_stamp = time.time()
+    logits = model(input)
+    natural_loss = criterion(logits, target)
+    print('--- std loss DONE in %.3f seconds' % (time.time() - time_stamp))
+
+    total_loss = lambda_1 * natural_loss + lambda_2 * adv_loss
+
+    total_loss.backward()
+    nn.utils.clip_grad_norm_(model.weight_parameters(), args.grad_clip)
+    optimizer.step()
+    print('weights step DONE in %.3f seconds' % (time.time() - weights_time))
+
+    std_predicts = logits.argmax(dim=1)
+    adv_predicts = logits_adv.argmax(dim=1)
+    std_correct = (std_predicts == target).sum().item()
+    adv_correct = (adv_predicts == target).sum().item()
+    return std_correct, adv_correct, total_loss.item()
 
 if __name__ == '__main__':
     torch.manual_seed(0)
@@ -129,6 +217,8 @@ if __name__ == '__main__':
         DEVICE = torch.device("cpu")
     print("Using device:", DEVICE)
 
+    nsga_net_setup = True
+
     parser = argparse.ArgumentParser("CIFAR")
     parser.add_argument('--data', type=str, default='../data', help='location of the data')
     parser.add_argument('--lambda_1', type=float, default=0.5, help='weight for std loss')
@@ -140,9 +230,21 @@ if __name__ == '__main__':
     parser.add_argument('--weight_decay', type=float, default=3e-4, help='weight decay')
     parser.add_argument('--report_freq', type=float, default=50, help='report frequency')
     parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
-    parser.add_argument('--epochs', type=int, default=20, help='num of training epochs')
+    parser.add_argument('--epochs', type=int, default=2, help='num of training epochs')
     parser.add_argument('--init_channels', type=int, default=8, help='num of init channels')
-    parser.add_argument('--layers', type=int, default=8, help='total number of cells')
+
+    if nsga_net_setup:
+        # NSGA-Net (6 min x indv)
+        parser.add_argument('--layers', type=int, default=3, help='total number of cells')
+        parser.add_argument('--steps', type=int, default=5, help='total number of intern nodes per cell')
+        parser.add_argument('--multiplier', type=int, default=5, help='total number of concat nodes per cell')
+    else:
+        # NEvoNAS (10 min x indv)
+        parser.add_argument('--layers', type=int, default=8, help='total number of cells')
+        parser.add_argument('--steps', type=int, default=4, help='total number of intern nodes per cell')
+        parser.add_argument('--multiplier', type=int, default=4, help='total number of concat nodes per cell')
+
+
     parser.add_argument('--model_path', type=str, default='saved_models', help='path to save the model')
     parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
     parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
@@ -154,11 +256,16 @@ if __name__ == '__main__':
     parser.add_argument('--unrolled', action='store_true', default=True, help='use one-step unrolled validation loss')
     parser.add_argument('--arch_learning_rate', type=float, default=3e-4, help='learning rate for arch encoding')
     parser.add_argument('--arch_weight_decay', type=float, default=1e-3, help='weight decay for arch encoding')
-    args = parser.parse_args()
+    args = parser.parse_args([])
 
     attack_params = {'name': 'FGSM', 'params': {'eps': 0.007}}
 
-    reduction_layers = [args.layers//3, 2*args.layers//3]
+    if nsga_net_setup:
+        # NSGA-net
+        reduction_layers = None
+    else:
+        # NEvoNAS
+        reduction_layers = [args.layers//3, 2*args.layers//3]
 
     CIFAR_CLASSES = 10
     criterion = nn.CrossEntropyLoss()
@@ -168,8 +275,8 @@ if __name__ == '__main__':
         num_classes=CIFAR_CLASSES,
         layers=args.layers,
         criterion=criterion,
-        steps=args.layers,
-        multiplier_cells=args.layers,
+        steps=args.steps,
+        multiplier_cells=args.multiplier,
         reduction_layers=reduction_layers,
         stem_multiplier=3,
         fairdarts_eval=False,
@@ -191,7 +298,6 @@ if __name__ == '__main__':
     indices = list(range(num_train))
     #split = int(np.floor(args.train_portion * num_train))
     split = 100
-    #split = 10000 // 100
 
     train_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
@@ -206,40 +312,35 @@ if __name__ == '__main__':
 
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, float(args.epochs), eta_min=args.learning_rate_min)
+        optimizer, args.epochs, eta_min=args.learning_rate_min)
 
     attack_f = get_attack_function(attack_params)
     start = time.time()
 
-    n_population = 10
+    n_population = 20
     individuals = []
     for i in range(n_population):
         normal_arch = torch.rand_like(model.arch_parameters()[0]).to(DEVICE)
         reduction_arch = torch.rand_like(model.arch_parameters()[1]).to(DEVICE)
-        arch = torch.cat([normal_arch, reduction_arch], dim=0)
-        individuals.append(torch.rand_like(arch).to(DEVICE))
+        #arch = torch.cat([normal_arch, reduction_arch], dim=0)
+        #individuals.append(torch.rand_like(arch).to(DEVICE))
+        individuals.append([normal_arch, reduction_arch])
 
     for epoch in range(args.epochs):
-        lr = scheduler.get_last_lr()[0]
-
-        print(f">>>> Epoch {epoch+1}/{args.epochs}")
-
-        individual = individuals[epoch % n_population]
-        g = model.genotype()
-        discrete = discretize(model.arch_parameters(), g, DEVICE)
-        model.update_arch_parameters(discrete)
-
-        time_train = time.time()
-        # training
-        train_acc, train_obj = train(train_queue, valid_queue, model, args.lambda_1, args.lambda_2, criterion, optimizer, lr, attack_f=attack_f, device=DEVICE)
-        print ('train_acc %f', train_acc)
-        print(f"Tiempo de entrenamiento epoca {epoch+1}/{args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_train))}")
-
-        time_valid = time.time()
-        # validation
-        #valid_acc, valid_obj = infer(valid_queue, model, attack_f=attack_f, device=DEVICE)
-        #print(f"Tiempo de validacion epoca {epoch+1}/{args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_valid))}")
+        model.train()
+        for n_batch, (input, target) in enumerate(train_queue):
+            individual = individuals[epoch % n_population]
+            time_stamp = time.time()
+            std_acc, adv_acc, loss = run_batch_epoch(model, individual, args.lambda_1, args.lambda_2,input, target, criterion, optimizer, attack_f, args, DEVICE)
+            print(f">>>> Epoch {epoch+1}/{args.epochs} Batch {n_batch+1}/{len(train_queue)} ({(time.time() - time_stamp):.4f}) seg : std_acc {std_acc/args.batch_size*100:.2f}%, adv_acc {adv_acc/args.batch_size*100:.2f}%, loss {loss:.4f}")
         scheduler.step()
-        #utils.save(model, os.path.join(args.save, 'weights.pt'))
-    print(f"Tiempo total de entrenamiento/validacion {epoch+1}/{args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} horas")
 
+    for i, individual in enumerate(individuals):
+        model.update_arch_parameters(individual)
+        discrete = discretize(individual, model.genotype(), DEVICE)
+        model.update_arch_parameters(discrete)
+        time_stamp = time.time()
+        std_acc, adv_acc, loss = infer(valid_queue, model, args.lambda_1, args.lambda_2, criterion, attack_f, DEVICE)
+        print(f"Evaluation {i+1}/{len(individuals)}: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, loss {loss:.4f} ({(time.time() - time_stamp):.4f} seg)")
+
+    print(f"Tiempo total de entrenamiento/validacion {epoch+1}/{args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} horas")
