@@ -1,0 +1,152 @@
+import torch
+from train_search import run_batch_epoch, infer, discretize, get_attack_function
+from model_search import Network
+import torch.nn as nn
+import torchvision
+import argparse
+import ssl
+import time
+import logging
+import utils
+
+
+if __name__ == '__main__':
+    torch.manual_seed(0)
+    debug_mode = True
+    logging.info("Este es un mensaje informativo.")
+
+    if torch.cuda.is_available():
+        DEVICE = torch.device("cuda")
+    elif torch.backends.mps.is_available():
+        DEVICE = torch.device("mps")
+    else:
+        DEVICE = torch.device("cpu")
+    print("Using device:", DEVICE)
+
+    nsga_net_setup = True
+
+    parser = argparse.ArgumentParser("CIFAR")
+    parser.add_argument('--data', type=str, default='../data', help='location of the data')
+    parser.add_argument('--lambda_1', type=float, default=0.5, help='weight for std loss')
+    parser.add_argument('--lambda_2', type=float, default=0.5, help='weight for adv loss')
+    parser.add_argument('--batch_size', type=int, default=32, help='batch size')
+    parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
+    parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
+    parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
+    parser.add_argument('--weight_decay', type=float, default=3e-4, help='weight decay')
+    parser.add_argument('--report_freq', type=float, default=50, help='report frequency')
+    parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
+    parser.add_argument('--epochs', type=int, default=2, help='num of training epochs')
+    parser.add_argument('--init_channels', type=int, default=8, help='num of init channels')
+
+    if nsga_net_setup:
+        # NSGA-Net (6 min x indv)
+        parser.add_argument('--layers', type=int, default=3, help='total number of cells')
+        parser.add_argument('--steps', type=int, default=5, help='total number of intern nodes per cell')
+        parser.add_argument('--multiplier', type=int, default=5, help='total number of concat nodes per cell')
+    else:
+        # NEvoNAS (10 min x indv)
+        parser.add_argument('--layers', type=int, default=8, help='total number of cells')
+        parser.add_argument('--steps', type=int, default=4, help='total number of intern nodes per cell')
+        parser.add_argument('--multiplier', type=int, default=4, help='total number of concat nodes per cell')
+
+
+    parser.add_argument('--model_path', type=str, default='saved_models', help='path to save the model')
+    parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
+    parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
+    parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
+    parser.add_argument('--save', type=str, default='EXP', help='experiment name')
+    parser.add_argument('--seed', type=int, default=2, help='random seed')
+    parser.add_argument('--grad_clip', type=float, default=5, help='gradient clipping')
+    parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
+    parser.add_argument('--unrolled', action='store_true', default=True, help='use one-step unrolled validation loss')
+    parser.add_argument('--arch_learning_rate', type=float, default=3e-4, help='learning rate for arch encoding')
+    parser.add_argument('--arch_weight_decay', type=float, default=1e-3, help='weight decay for arch encoding')
+    args = parser.parse_args([])
+
+    attack_params = {'name': 'FGSM', 'params': {'eps': 0.007}}
+
+    if nsga_net_setup:
+        # NSGA-net
+        reduction_layers = None
+    else:
+        # NEvoNAS
+        reduction_layers = [args.layers//3, 2*args.layers//3]
+
+    CIFAR_CLASSES = 10
+    criterion = nn.CrossEntropyLoss()
+
+    model = Network(
+        C=args.init_channels,
+        num_classes=CIFAR_CLASSES,
+        layers=args.layers,
+        criterion=criterion,
+        steps=args.steps,
+        multiplier_cells=args.multiplier,
+        reduction_layers=reduction_layers,
+        stem_multiplier=3,
+        fairdarts_eval=False,
+        device=DEVICE,
+    ).to(DEVICE)
+
+
+    optimizer = torch.optim.SGD(
+      model.weight_parameters(),
+      args.learning_rate,
+      momentum=args.momentum,
+      weight_decay=args.weight_decay)
+
+    ssl._create_default_https_context = ssl._create_unverified_context
+    train_transform, valid_transform = utils._data_transforms_cifar10(args)
+    train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
+
+    num_train = len(train_data)
+    indices = list(range(num_train))
+    #split = int(np.floor(args.train_portion * num_train))
+    split = 100
+
+    train_queue = torch.utils.data.DataLoader(
+      train_data, batch_size=args.batch_size,
+      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
+        num_workers=2, pin_memory=True)
+
+
+    valid_queue = torch.utils.data.DataLoader(
+      train_data, batch_size=args.batch_size,
+      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
+        num_workers=2, pin_memory=True)
+
+
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, args.epochs, eta_min=args.learning_rate_min)
+
+    attack_f = get_attack_function(attack_params)
+    start = time.time()
+
+    n_population = 20
+    individuals = []
+    for i in range(n_population):
+        normal_arch = torch.rand_like(model.arch_parameters()[0]).to(DEVICE)
+        reduction_arch = torch.rand_like(model.arch_parameters()[1]).to(DEVICE)
+        #arch = torch.cat([normal_arch, reduction_arch], dim=0)
+        #individuals.append(torch.rand_like(arch).to(DEVICE))
+        individuals.append([normal_arch, reduction_arch])
+
+    for epoch in range(args.epochs):
+        model.train()
+        for n_batch, (input, target) in enumerate(train_queue):
+            individual = individuals[epoch % n_population]
+            time_stamp = time.time()
+            std_acc, adv_acc, loss = run_batch_epoch(model, individual, args.lambda_1, args.lambda_2,input, target, criterion, optimizer, attack_f, args, DEVICE)
+            print(f">>>> Epoch {epoch+1}/{args.epochs} Batch {n_batch+1}/{len(train_queue)} ({(time.time() - time_stamp):.4f}) seg : std_acc {std_acc/args.batch_size*100:.2f}%, adv_acc {adv_acc/args.batch_size*100:.2f}%, loss {loss:.4f}")
+        scheduler.step()
+
+    for i, individual in enumerate(individuals):
+        model.update_arch_parameters(individual)
+        discrete = discretize(individual, model.genotype(), DEVICE)
+        model.update_arch_parameters(discrete)
+        time_stamp = time.time()
+        std_acc, adv_acc, loss = infer(valid_queue, model, args.lambda_1, args.lambda_2, criterion, attack_f, DEVICE)
+        print(f"Evaluation {i+1}/{len(individuals)}: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, loss {loss:.4f} ({(time.time() - time_stamp):.4f} seg)")
+
+    print(f"Tiempo total de entrenamiento/validacion {epoch+1}/{args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} horas")
