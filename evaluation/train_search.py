@@ -108,7 +108,6 @@ def infer(valid_queue, model, lambda_1, lambda_2, criterion, attack_f, device):
     std_correct = 0
     adv_correct = 0
     total = 0
-    model.eval()
     for step, (input, target) in enumerate(valid_queue):
         input  = input.to(device, non_blocking=True)
         target = target.to(device, non_blocking=True)
@@ -129,7 +128,7 @@ def infer(valid_queue, model, lambda_1, lambda_2, criterion, attack_f, device):
         total += target.size(0)
         std_accuracy = std_correct / total
         adv_accuracy = adv_correct / total
-        print('infer step %d loss_ws %.5f std_acc %.3f adv_acc %.3f' % (step, total_loss.item(), std_accuracy, adv_accuracy))
+        #print('infer step %d loss_ws %.5f std_acc %.3f adv_acc %.3f' % (step, total_loss.item(), std_accuracy, adv_accuracy))
     return std_accuracy * 100.0, adv_accuracy * 100.0, total_loss.item()
 
 def setup_logger(debug_mode):

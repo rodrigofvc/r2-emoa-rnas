@@ -12,8 +12,6 @@ import utils
 
 if __name__ == '__main__':
     torch.manual_seed(0)
-    debug_mode = True
-    logging.info("Este es un mensaje informativo.")
 
     if torch.cuda.is_available():
         DEVICE = torch.device("cuda")
@@ -128,25 +126,26 @@ if __name__ == '__main__':
     for i in range(n_population):
         normal_arch = torch.rand_like(model.arch_parameters()[0]).to(DEVICE)
         reduction_arch = torch.rand_like(model.arch_parameters()[1]).to(DEVICE)
-        #arch = torch.cat([normal_arch, reduction_arch], dim=0)
-        #individuals.append(torch.rand_like(arch).to(DEVICE))
         individuals.append([normal_arch, reduction_arch])
 
     for epoch in range(args.epochs):
         model.train()
+        time_stamp = time.time()
         for n_batch, (input, target) in enumerate(train_queue):
             individual = individuals[epoch % n_population]
             time_stamp = time.time()
             std_acc, adv_acc, loss = run_batch_epoch(model, individual, args.lambda_1, args.lambda_2,input, target, criterion, optimizer, attack_f, args, DEVICE)
             print(f">>>> Epoch {epoch+1}/{args.epochs} Batch {n_batch+1}/{len(train_queue)} ({(time.time() - time_stamp):.4f}) seg : std_acc {std_acc/args.batch_size*100:.2f}%, adv_acc {adv_acc/args.batch_size*100:.2f}%, loss {loss:.4f}")
         scheduler.step()
+        print(f">>>> Epoch {epoch+1} training DONE in {(time.time() - time_stamp):.4f} seg")
 
-    for i, individual in enumerate(individuals):
-        model.update_arch_parameters(individual)
-        discrete = discretize(individual, model.genotype(), DEVICE)
-        model.update_arch_parameters(discrete)
-        time_stamp = time.time()
-        std_acc, adv_acc, loss = infer(valid_queue, model, args.lambda_1, args.lambda_2, criterion, attack_f, DEVICE)
-        print(f"Evaluation {i+1}/{len(individuals)}: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, loss {loss:.4f} ({(time.time() - time_stamp):.4f} seg)")
+        model.eval()
+        for i, individual in enumerate(individuals):
+            model.update_arch_parameters(individual)
+            discrete = discretize(individual, model.genotype(), DEVICE)
+            model.update_arch_parameters(discrete)
+            time_stamp = time.time()
+            std_acc, adv_acc, loss = infer(valid_queue, model, args.lambda_1, args.lambda_2, criterion, attack_f, DEVICE)
+            print(f"Evaluation {i+1}/{len(individuals)}: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, loss {loss:.4f} ({(time.time() - time_stamp):.4f} seg)")
 
-    print(f"Tiempo total de entrenamiento/validacion {epoch+1}/{args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} horas")
+    print(f"Tiempo total de entrenamiento/validacion {args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} horas")
