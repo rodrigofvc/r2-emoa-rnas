@@ -71,8 +71,11 @@ def prepare_args(args):
     indices = list(range(num_train))
     split = int(np.floor(args.train_portion * num_train))
     print(f"Training samples: {split}, Validation samples: {num_train - split}")
-    #split = 32
-    #num_train = split + 32
+
+    if args.device == 'mps':
+        # testing
+        split = 32
+        num_train = split + 32
 
 
     train_queue = torch.utils.data.DataLoader(

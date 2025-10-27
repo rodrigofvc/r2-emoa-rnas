@@ -1,14 +1,13 @@
 import torch
 from torch import nn
 
-from evaluation.operations import FactorizedReduce, ReLUConvBN, OPS, Identity
+from evaluation.operations import FactorizedReduce, ReLUConvBN, OPS
 
 
 class Cell(nn.Module):
 
     def __init__(self, genotype, C_prev_prev, C_prev, C, reduction, reduction_prev):
         super(Cell, self).__init__()
-        print(C_prev_prev, C_prev, C)
 
         if reduction_prev:
             self.preprocess0 = FactorizedReduce(C_prev_prev, C)
