@@ -2,21 +2,10 @@ import time
 import logging
 
 import torch
-import torchattacks
 from torch import nn
 
-import utils
-from model_search import Network, discretize
+from evaluation.model_search import discretize
 
-
-def get_attack_function(attack_params):
-    if attack_params['name'] == 'FGSM':
-        attack_function = lambda model: torchattacks.FGSM(model, **attack_params['params'])
-    elif attack_params['name'] == 'PGD':
-        attack_function = lambda model: torchattacks.PGD(model, **attack_params['params'])
-    else:
-        raise ValueError(f"Attack {attack_params['name']} not defined")
-    return attack_function
 
 # Train a model for one epoch
 def train(train_queue, model, lambda_1, lambda_2, criterion, optimizer, args, attack_f, device):
@@ -104,32 +93,41 @@ def train_batch(input, target, model, lambda_1, lambda_2, criterion, optimizer, 
 
 
 
-def infer(valid_queue, model, lambda_1, lambda_2, criterion, attack_f, device):
+def infer(valid_queue, model, criterion, attack_f, args):
     std_correct = 0
     adv_correct = 0
+    std_loss_mean = 0
+    adv_loss_mean = 0
+    total_loss_mean = 0
     total = 0
     for step, (input, target) in enumerate(valid_queue):
-        input  = input.to(device, non_blocking=True)
-        target = target.to(device, non_blocking=True)
+        input  = input.to(args.device, non_blocking=True)
+        target = target.to(args.device, non_blocking=True)
         attack = attack_f(model)
-        adv_input = attack(input, target).to(device, non_blocking=True)
+        adv_input = attack(input, target).to(args.device, non_blocking=True)
 
         with torch.no_grad():
             std_logits = model(input)
             std_loss = criterion(std_logits, target)
             adv_logits = model(adv_input)
             adv_loss = criterion(adv_logits, target)
-            total_loss = lambda_1 * std_loss + lambda_2 * adv_loss
+            total_loss = args.lambda_1 * std_loss + args.lambda_2 * adv_loss
 
         std_predicts = std_logits.argmax(dim=1)
         adv_predicts = adv_logits.argmax(dim=1)
         std_correct += (std_predicts == target).sum().item()
         adv_correct += (adv_predicts == target).sum().item()
         total += target.size(0)
-        std_accuracy = std_correct / total
-        adv_accuracy = adv_correct / total
+        std_loss_mean += std_loss.item()
+        adv_loss_mean += adv_loss.item()
+        total_loss_mean += total_loss.item()
         #print('infer step %d loss_ws %.5f std_acc %.3f adv_acc %.3f' % (step, total_loss.item(), std_accuracy, adv_accuracy))
-    return std_accuracy * 100.0, adv_accuracy * 100.0, total_loss.item()
+    std_accuracy = std_correct / total
+    adv_accuracy = adv_correct / total
+    std_loss_mean /= total
+    adv_loss_mean /= total
+    total_loss_mean /= total
+    return std_accuracy * 100.0, adv_accuracy * 100.0, std_loss_mean, adv_loss_mean, total_loss_mean
 
 def setup_logger(debug_mode):
     level = logging.DEBUG if debug_mode else logging.INFO
@@ -160,18 +158,15 @@ def run_epoch(epoch, model, individuals, n_population, train_queue, valid_queue,
     scheduler.step()
     #utils.save(model, os.path.join(args.save, 'weights.pt'))
 
-def run_batch_epoch(model, individual, lambda_1, lambda_2, input, target, criterion, optimizer, attack_f, args, device):
-
-    model.update_arch_parameters(individual)
-    discrete = discretize(individual, model.genotype(), device)
+def run_batch_epoch(model, architect, input, target, criterion, optimizer, attack_f, args):
+    model.update_arch_parameters(architect)
+    discrete = discretize(architect, model.genotype(), args.device)
     model.update_arch_parameters(discrete)
 
-    prepare_time = time.time()
-    input = input.to(device, non_blocking=True)
-    target = target.to(device, non_blocking=True)
+    input = input.to(args.device, non_blocking=True)
+    target = target.to(args.device, non_blocking=True)
 
     optimizer.zero_grad()
-    print('data prep DONE in %.3f seconds' % (time.time() - prepare_time))
     weights_time = time.time()
 
     time_stamp = time.time()
@@ -186,12 +181,12 @@ def run_batch_epoch(model, individual, lambda_1, lambda_2, input, target, criter
     natural_loss = criterion(logits, target)
     print('--- std loss DONE in %.3f seconds' % (time.time() - time_stamp))
 
-    total_loss = lambda_1 * natural_loss + lambda_2 * adv_loss
+    total_loss = args.lambda_1 * natural_loss + args.lambda_2 * adv_loss
 
     total_loss.backward()
     nn.utils.clip_grad_norm_(model.weight_parameters(), args.grad_clip)
     optimizer.step()
-    print('weights step DONE in %.3f seconds' % (time.time() - weights_time))
+    print('--- weights step DONE in %.3f seconds' % (time.time() - weights_time))
 
     std_predicts = logits.argmax(dim=1)
     adv_predicts = logits_adv.argmax(dim=1)

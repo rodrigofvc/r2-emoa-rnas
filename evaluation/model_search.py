@@ -1,5 +1,5 @@
-from genotypes import PRIMITIVES, Genotype
-from operations import *
+from evaluation.genotypes import PRIMITIVES, Genotype
+from evaluation.operations import *
 from torch import nn
 import torch.nn.functional as F
 
@@ -88,15 +88,18 @@ class Network(nn.Module):
     def __init__(self, C, num_classes, layers, criterion, steps, multiplier_cells,
                  reduction_layers=None, stem_multiplier=3, fairdarts_eval=False, device='cuda'):
         super().__init__()
-        self._C = C
-        self._num_classes = num_classes
-        self._layers = layers
+        self.C = C
+        self.num_classes = num_classes
+        self.layers = layers
         self._criterion = criterion
         self._steps = steps
         self._multiplier_cells = multiplier_cells
         self._stem_multiplier = stem_multiplier
         self._fairdarts_eval = fairdarts_eval
         self._device = device
+        k = sum(1 for i in range(self._steps) for _ in range(2 + i))
+        num_ops = len(PRIMITIVES)
+        self.alphas_dim = (k, num_ops)
 
         C_stem = stem_multiplier * C
         # Capa inicial que convierte los 3 canales a C_stem en el foward
@@ -142,7 +145,6 @@ class Network(nn.Module):
         # Clasificador final (GAP + FC)
         self.global_pooling = nn.AdaptiveAvgPool2d(1)
         self.classifier = nn.Linear(C_prev, num_classes)
-
         self._initialize_alphas()
 
     def _initialize_alphas(self):
