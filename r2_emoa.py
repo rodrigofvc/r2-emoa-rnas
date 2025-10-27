@@ -108,8 +108,8 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
 
         selection = TournamentSelection(func_comp=tournament_r2)
         parents = selection.do(problem=problem, pop=pop, n_parents=2, n_select=pop.size // 2, to_pop=False)
-        sbx = SBX(prob=0.9, eta=10, n_offsprings=2)
-        pm = PM(prob=0.1, eta=20)
+        sbx = SBX(prob=args.prob_cross, eta=args.eta_cross, n_offsprings=2)
+        pm = PM(prob=args.prob_mut, eta=args.eta_mut)
 
         offsprings = sbx.do(problem, pop, parents=parents)
         mutation = pm.do(problem, offsprings)
