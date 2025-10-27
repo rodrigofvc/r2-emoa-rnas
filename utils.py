@@ -31,6 +31,12 @@ def store_weights(n, k):
     with open(file, 'wb') as f:
         pickle.dump(directions_set, f)
 
+def save_archive_accuracy(archive, archive_path):
+    archive_path += 'archive_accuracy'
+    np_archive = [[p.std_acc, p.adv_acc] for p in archive]
+    np_archive = np.array(np_archive)
+    np.savez_compressed(archive_path, np_archive)
+
 def save_archive(archive, archive_path):
     archive_path += 'archive'
     np_archive = [p.F for p in archive]
