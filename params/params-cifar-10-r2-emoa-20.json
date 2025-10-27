@@ -1,6 +1,6 @@
 {
     "classes": 10,
-    "device": "mps",
+    "device": "cuda",
     "objectives": 4,
     "std_loss_index": 0,
     "adv_loss_index": 1,
