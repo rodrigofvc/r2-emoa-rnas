@@ -12,15 +12,15 @@ def edge_key(src, dst):
     return f"{src}->{dst}"
 
 """
-    Devuelve una lista de pares (src,dst) ordenados a partir de un dict {src: [dst,...]}.
+    returns a set of edges (src,dst) for a list of cells dicts 
 """
-def edges_from_dict(edges_dict):
-    pairs = []
-    for src, dsts in edges_dict.items():
-        for dst in dsts:
-            pairs.append((src, dst))
-    pairs.sort(key=lambda t: (t[1], t[0]))  # primero por dst, luego por src
-    return pairs
+def edges_union(cells_edges_idx):
+    s = set()
+    for ed in cells_edges_idx:
+        for src, dsts in ed.items():
+            for dst in dsts:
+                s.add((int(src), int(dst)))
+    return sorted(s, key=lambda t: (t[1], t[0]))
 
 class Network(nn.Module):
     """
@@ -31,15 +31,14 @@ class Network(nn.Module):
       num_classes: #clases
       layers: numero de celdas
       steps_cells: nodos intermedios por celda (e.g., 4)
-      multiplier_cells: cuantos nodos concatenar por celda (típicamente = steps)
-      cells_edges: lista de dicts (len == layers). Cada item es el edges_dict de ESA celda:
-                   {src: [dst,...]}, con convención 0=s0,1=s1,2.. internos y src<dst.
-      reduction_layers: set/list con indices de celdas que son de reduccion .
-                        Si None, usa posiciones canon: floor(l/3) y floor(2l/3).
+      multiplier_cells: cuantos nodos concatenar por celda
+      cells_edges: lista de dicts (len == layers).
+      reduction_layers: lista con indices de celdas que son de reduccion.
+                        Si None, usa posiciones: floor(l/3) y floor(2l/3).
       stem_multiplier: multiplicador de canales en el stem (por defecto 3 como en DARTS)
     """
     def __init__(self, C, num_classes, layers, criterion, steps_cells, multiplier_cells,
-                 cells_edges, reduction_layers=None, stem_multiplier=3):
+                 cells_edges, reduction_layers=None, stem_multiplier=3, fairdarts_eval=False):
         super().__init__()
         assert len(cells_edges) == layers, "cells_edges debe tener un dict por celda"
         self._C = C
@@ -49,8 +48,8 @@ class Network(nn.Module):
         self._steps_cells = steps_cells
         self._multiplier_cells = multiplier_cells
         self._cells_edges = cells_edges
-        self._reduction_layers = reduction_layers
         self._stem_multiplier = stem_multiplier
+        self.fairdarts_eval = fairdarts_eval
 
         C_stem = stem_multiplier * C
         # Capa inicial que convierte los 3 canales a C_stem en el foward
@@ -68,6 +67,7 @@ class Network(nn.Module):
 
         self.cells = nn.ModuleList()
         self.cells_edges = cells_edges
+        self._reduction_layers = reduction_layers
 
         C_prev_prev, C_prev, C_curr = C_stem, C_stem, C
 
@@ -77,7 +77,7 @@ class Network(nn.Module):
             is_reduction = layer_idx in reduction_layers
 
             cell = Cell(
-                steps=self._steps_cells[layer_idx],
+                steps=self._steps_cells,
                 multiplier=self._multiplier_cells[layer_idx],
                 C_prev_prev=C_prev_prev,
                 C_prev=C_prev,
@@ -89,22 +89,25 @@ class Network(nn.Module):
             self.cells.append(cell)
 
             # En celda normal, el numero de celdas de salida es multiplier*C_curr (nodos * canales)
-            C_prev_prev, C_prev = C_prev, self._multiplier_cells[layer_idx] * C_curr
+            C_prev_prev, C_prev = C_prev, self._multiplier_cells * C_curr
             if is_reduction:
-                # DARTS suele doblar C tras reducción (opcional; puedes mantenerlo)
                 # si es celda de reduccion, la salida sera multiplier*(2*C_curr)
                 C_curr *= 2
             prev_reduction = is_reduction
 
-        self.alphas = nn.ModuleList()
-        for layer_idx in range(layers):
-            pd = nn.ParameterDict()
-            pairs = edges_from_dict(cells_edges[layer_idx])
-            for (src, dst) in pairs:
-                pd[edge_key(src, dst)] = nn.Parameter(
-                    1e-3 * torch.randn(len(PRIMITIVES))
-                )
-            self.alphas.append(pd)
+        normals_idx = [i for i in range(layers) if i not in reduction_layers]
+        reduces_idx = [i for i in range(layers) if i in reduction_layers]
+        union_norm = edges_union([cells_edges[i] for i in normals_idx]) if normals_idx else []
+        union_red = edges_union([cells_edges[i] for i in reduces_idx]) if reduces_idx else []
+
+        self.alphas_normal = nn.ParameterDict({
+            edge_key(s, d): nn.Parameter(1e-3 * torch.randn(len(PRIMITIVES)))
+            for (s, d) in union_norm
+        })
+        self.alphas_reduce = nn.ParameterDict({
+            edge_key(s, d): nn.Parameter(1e-3 * torch.randn(len(PRIMITIVES)))
+            for (s, d) in union_red
+        })
 
         # Clasificador final (GAP + FC)
         self.global_pooling = nn.AdaptiveAvgPool2d(1)
@@ -120,7 +123,7 @@ class Network(nn.Module):
 
     # --- utilidades para exponer α ---
     def arch_parameters(self):
-        return [p for pd in self.alphas for p in pd.parameters()]
+        return list(self.alphas_normal.parameters()) + list(self.alphas_reduce.parameters())
 
     def weight_parameters(self):
         arch_set = {id(p) for p in self.arch_parameters()}
@@ -128,15 +131,21 @@ class Network(nn.Module):
             if id(p) not in arch_set:
                 yield p
 
-
-    @staticmethod
-    def _softmax_paramdict(paramdict):
-        out = {}
-        for k, alpha in paramdict.items():
-            # k es "src->dst"
-            src, dst = map(int, k.split("->"))
-            out[(src, dst)] = F.softmax(alpha, dim=-1)
-        return out
+    def _make_weights_for_cell(self, cell, layer_idx):
+        pd = self.alphas_reduce if cell.reduction else self.alphas_normal
+        weights = {}
+        for src, dsts in self.cells_edges[layer_idx].items():
+            for dst in dsts:
+                k = edge_key(src, dst)
+                if k not in pd:
+                    raise ValueError(f"Edge {k} not in parameter dict for layer {layer_idx}")
+                alpha_vec = pd[k]
+                if self.fairdarts_eval:
+                    probs = torch.sigmoid(alpha_vec)      # FairDARTS
+                else:
+                    probs = F.softmax(alpha_vec, dim=-1)  # DARTS
+                weights[(int(src), int(dst))] = probs
+        return weights
 
     def _loss(self, x, target):
         logits = self(x)
@@ -148,11 +157,11 @@ class Network(nn.Module):
         s0 = s1 = self.stem(x)
         # Para cada celda, construye los pesos y ejecuta
         for layer_idx, cell in enumerate(self.cells):
-            weights_dict = self._softmax_paramdict(self.alphas[layer_idx])
+            weights_dict = self._make_weights_for_cell(cell, layer_idx)
             # Ejecutar la celda con su propia grafica y pesos
             s = cell(s0, s1, weights_dict)
             s0, s1 = s1, s
-
         out = self.global_pooling(s1)
         logits = self.classifier(out.view(out.size(0), -1))
         return logits
+

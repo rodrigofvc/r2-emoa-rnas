@@ -72,7 +72,7 @@ def prepare_args(args):
     split = int(np.floor(args.train_portion * num_train))
     print(f"Training samples: {split}, Validation samples: {num_train - split}")
 
-    if args.device == 'mps':
+    if torch.backends.mps.is_available():
         # testing
         split = 32
         num_train = split + 32
@@ -148,4 +148,4 @@ if __name__ == '__main__':
             architectures.append(unpack_alphas(individual.X, model.alphas_dim))
         utils.save_architectures(architectures, args.save_path_final_architect)
         utils.save_archive(archive, args.save_path_final_architect)
-
+        utils.save_archive_accuracy(archive, args.save_path_final_architect)
