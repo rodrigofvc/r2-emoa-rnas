@@ -100,6 +100,7 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     archive = []
     archive_accuracy = []
     pop = initial_population(args.n_population, model.alphas_dim, args.objectives)
+    print(f">>>> Initial population of size {pop.size} created.")
     train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, args)
     eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device)
 
