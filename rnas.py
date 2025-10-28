@@ -131,7 +131,7 @@ if __name__ == '__main__':
 
     model, criterion, optimizer, scheduler, train_queue, valid_queue, attack_f, weights_r2 = prepare_args(args)
     if args.algorithm == 'r2-emoa':
-        supernet, archive = r2_emoa_rnas(
+        supernet, archive, archive_accuracy = r2_emoa_rnas(
             model=model,
             criterion=criterion,
             optimizer=optimizer,
@@ -148,4 +148,4 @@ if __name__ == '__main__':
             architectures.append(unpack_alphas(individual.X, model.alphas_dim))
         utils.save_architectures(architectures, args.save_path_final_architect)
         utils.save_archive(archive, args.save_path_final_architect)
-        utils.save_archive_accuracy(archive, args.save_path_final_architect)
+        utils.save_archive_accuracy(archive_accuracy, args.save_path_final_architect)

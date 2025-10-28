@@ -24,3 +24,25 @@ def archive_update_pq(archive, population):
                 archive.pop(i)
             archive.append(ind)
     return archive
+
+def archive_update_pq_accuracy(archive, population):
+    for ind in population:
+        dominated = False
+        to_remove = []
+        for i, arch_ind in enumerate(archive):
+            if ((arch_ind.get("adv_acc") >= ind.get("adv_acc") and
+                arch_ind.get("std_acc") >= ind.get("std_acc")) and
+                    not np.isclose(arch_ind.get("adv_acc"), ind.get("adv_acc")) and
+                    not np.isclose(arch_ind.get("std_acc"), ind.get("std_acc"))):
+                dominated = True
+                break
+            elif ((ind.get("adv_acc") >= arch_ind.get("adv_acc") and
+                    ind.get("std_acc") >= arch_ind.get("std_acc")) and
+                  not np.isclose(arch_ind.get("adv_acc"), ind.get("adv_acc")) and
+                  not np.isclose(arch_ind.get("std_acc"), ind.get("std_acc"))):
+                to_remove.append(i)
+        if not dominated:
+            for i in reversed(to_remove):
+                archive.pop(i)
+            archive.append(ind)
+    return archive

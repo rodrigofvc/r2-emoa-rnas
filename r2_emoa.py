@@ -3,7 +3,7 @@ import time
 import numpy as np
 
 import utils
-from archivers import archive_update_pq
+from archivers import archive_update_pq, archive_update_pq_accuracy
 from evaluation.model_search import discretize
 from evaluation.train_search import infer, run_batch_epoch
 from evolutionary import AlphaProblem, unpack_alphas, flatten_alphas, tournament_r2
@@ -59,6 +59,7 @@ def get_dynamic_r2_reference(population):
     return z_ref
 
 def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, device):
+    model.eval()
     objective_space = np.empty((pop.size, args.objectives))
     for i, individual in enumerate(pop):
         individual_architect = unpack_alphas(individual.X, model.alphas_dim)
@@ -75,36 +76,38 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
         individual.F[args.flops_index] = model_flops
         individual.F[args.params_index] = model_parameters
         objective_space[i, :] = individual.F
-        print(f"Evaluation {i + 1}/{pop.size}: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, loss {ws_loss:.4f} ({(time.time() - time_stamp):.4f} seg)")
+        print(f"Evaluation {i + 1}/{pop.size}: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, loss {ws_loss:.4f} ({(time.time() - time_stamp) / 60 :.2f}) mins")
     z_ref = get_dynamic_r2_reference(pop)
     for ind in pop:
         ind.c_r2 = contribution_r2(pop, ind, weights_r2, z_ref)
     utils.store_metrics(objective_space, args.algorithm)
 
+def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoch, scheduler, args):
+    model.train()
+    for n_batch, (input, target) in enumerate(train_queue):
+        individual = pop[n_batch % args.n_population]
+        individual_architect = unpack_alphas(individual.X, model.alphas_dim)
+        time_stamp = time.time()
+        std_acc, adv_acc, loss = run_batch_epoch(model, individual_architect, input, target, criterion, optimizer,
+                                                 attack_f, args)
+        if n_batch % args.report_freq == 0:
+            print(
+                f">>>> Epoch {epoch + 1}/{args.epochs} Batch {n_batch + 1}/{len(train_queue)} ({(time.time() - time_stamp) / 60:.2f}) mins: std_acc {std_acc / args.batch_size * 100:.2f}%, adv_acc {adv_acc / args.batch_size * 100:.2f}%, loss {loss:.4f}")
+    scheduler.step()
+
 def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, scheduler, attack_f, weights_r2):
     problem = AlphaProblem(model.alphas_dim)
-    pop = initial_population(args.n_population, model.alphas_dim, args.objectives)
     archive = []
+    archive_accuracy = []
+    pop = initial_population(args.n_population, model.alphas_dim, args.objectives)
+    train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, args)
+    eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device)
 
     for epoch in range(args.epochs):
         start = time.time()
-
-        model.train()
         time_stamp_epoch = time.time()
-        for n_batch, (input, target) in enumerate(train_queue):
-            individual = pop[n_batch % args.n_population]
-            individual_architect = unpack_alphas(individual.X, model.alphas_dim)
-            time_stamp = time.time()
-            std_acc, adv_acc, loss = run_batch_epoch(model, individual_architect, input, target, criterion, optimizer, attack_f, args)
-            if n_batch % args.report_freq == 0:
-                print(f">>>> Epoch {epoch + 1}/{args.epochs} Batch {n_batch + 1}/{len(train_queue)} ({(time.time() - time_stamp):.4f}) seg : std_acc {std_acc / args.batch_size * 100:.2f}%, adv_acc {adv_acc / args.batch_size * 100:.2f}%, loss {loss:.4f}")
-        scheduler.step()
-        print(f">>>> Epoch {epoch + 1} training DONE in {(time.time() - time_stamp_epoch):.4f} seg")
-
-        # Evaluate parents
-        model.eval()
-        eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device)
-        print(f"Tiempo total de entrenamiento/validacion {args.epochs} (1): {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} horas")
+        train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, args)
+        print(f">>>> Epoch {epoch + 1} training DONE in {(time.time() - time_stamp_epoch) / 60:.2f} mins")
 
         selection = TournamentSelection(func_comp=tournament_r2)
         parents = selection.do(problem=problem, pop=pop, n_parents=2, n_select=pop.size // 2, to_pop=False)
@@ -126,9 +129,10 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
         print(f"Tiempo total de entrenamiento/validacion {args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} horas")
 
         archive = archive_update_pq(archive, Population.merge(pop, mutation))
+        archive_accuracy = archive_update_pq_accuracy(archive_accuracy, Population.merge(pop, mutation))
         pop = update_population_r2(pop, mutation, weights_r2)
 
-    return model, archive
+    return model, archive, archive_accuracy
 
 def update_population_r2(pop, offspring, weights_r2):
     c = Population.merge(pop, offspring)
