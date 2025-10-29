@@ -10,7 +10,6 @@ import torchvision
 from torch import nn
 
 import utils
-from evolutionary import unpack_alphas
 from r2_emoa import r2_emoa_rnas
 from evaluation.model_search import Network
 
@@ -131,7 +130,7 @@ if __name__ == '__main__':
 
     model, criterion, optimizer, scheduler, train_queue, valid_queue, attack_f, weights_r2 = prepare_args(args)
     if args.algorithm == 'r2-emoa':
-        supernet, archive, archive_accuracy = r2_emoa_rnas(
+        supernet, archive, archive_accuracy, statistics = r2_emoa_rnas(
             model=model,
             criterion=criterion,
             optimizer=optimizer,
@@ -142,10 +141,13 @@ if __name__ == '__main__':
             weights_r2=weights_r2,
             args=args
         )
-        utils.save_model(supernet, args.save_path_final_model)
-        architectures = []
+        utils.save_supernet(supernet, args.save_path_final_model)
+        print("Final archive:")
         for individual in archive:
-            architectures.append(unpack_alphas(individual.X, model.alphas_dim))
-        utils.save_architectures(architectures, args.save_path_final_architect)
+            print(individual.F, individual.std_acc, individual.adv_acc)
+        utils.save_architectures(archive, args.save_path_final_architect)
         utils.save_archive(archive, args.save_path_final_architect)
         utils.save_archive_accuracy(archive_accuracy, args.save_path_final_architect)
+        utils.plot_archive_accuracy(archive_accuracy, args.save_path_final_architect)
+        utils.save_statistics_to_csv(statistics, args.save_path_final_architect)
+        print("Experiment completed and results saved.")

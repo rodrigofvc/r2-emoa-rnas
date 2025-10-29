@@ -1,6 +1,7 @@
+import csv
 import lzma
 import time
-
+import matplotlib.pyplot as plt
 import torchprofile
 import numpy as np
 import torch
@@ -43,28 +44,59 @@ def save_archive(archive, archive_path):
     np_archive = np.array(np_archive)
     np.savez_compressed(archive_path, np_archive)
 
+# Create experiment directory structure for searching algorithms
 def create_experiment_dir(algorithm, dataset, seed):
     base_dir = 'results' + os.sep + algorithm + os.sep + dataset
     if not os.path.exists(base_dir):
         os.makedirs(base_dir)
-    exp_dir = base_dir + os.sep + str(time.strftime('%Y-%m-%d_%H-%M-%S_')) + str(seed)
+    exp_dir = base_dir + os.sep + str(time.strftime('%Y-%m-%d_%H-%M-%S_')) + str(seed) + os.sep + 'search' + os.sep
     if not os.path.exists(exp_dir):
         os.makedirs(exp_dir)
-    return exp_dir + os.sep
+    return exp_dir
 
 
 def store_metrics(objective_space, algorithm):
     # TODO Obtener peores valores de hyp
     pass
 
-def save_model(model, model_path):
+def save_supernet(model, model_path):
     model_path += 'super-net.pt'
     torch.save(model.state_dict(), model_path)
+
+def save_model(model, model_path, name):
+    model_path += os.sep + name
+    torch.save(model.state_dict(), model_path)
+
+def save_log_train(arch_path, log):
+    arch_path += 'train_log.csv'
+
+    with open(arch_path, 'a') as f:
+        log_str = ','.join([str(item) for item in log])
+        f.write(log_str + '\n')
+
+def load_model(model_path):
+    model_path += 'super-net.pt'
+    state_dict = torch.load(model_path)
+    return state_dict
 
 def save_architectures(architectures, architect_path):
     architect_path += 'architectures.xz'
     with lzma.open(architect_path, 'wb') as f:
         pickle.dump(architectures, f)
+
+def save_statistics_to_csv(statistics, csv_path):
+    csv_path += 'statistics.csv'
+    with open(csv_path, mode='w', newline='') as file:
+        writer = csv.writer(file)
+        writer.writerow(['Key', 'Value'])
+        for key, value in statistics.items():
+            writer.writerow([key, value])
+
+def load_architectures(architect_path):
+    architect_path += 'architectures.xz'
+    with lzma.open(architect_path, 'rb') as f:
+        architectures = pickle.load(f)
+    return architectures
 
 def read_architectures(architect_path):
     with lzma.open(architect_path, 'rb') as f:
@@ -73,6 +105,19 @@ def read_architectures(architect_path):
         print(l_tensor[0].shape)
         print(l_tensor[1].shape)
     return architectures
+
+def plot_archive_accuracy(archive_accuracy, archive_path):
+    archive_path += 'archive_accuracy.png'
+    std_acc = [p.std_acc for p in archive_accuracy]
+    adv_acc = [p.adv_acc for p in archive_accuracy]
+    plt.figure(figsize=(8, 6))
+    plt.scatter(std_acc, adv_acc, c='blue', marker='o')
+    plt.title('Archive Accuracy')
+    plt.xlabel('Standard Accuracy (%)')
+    plt.ylabel('Adversarial Accuracy (%)')
+    plt.grid(True)
+    plt.savefig(archive_path)
+    plt.close()
 
 
 class Cutout(object):
