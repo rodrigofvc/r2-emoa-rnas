@@ -121,7 +121,8 @@ def infer(valid_queue, model, criterion, attack_f, args):
         std_loss_mean += std_loss.item()
         adv_loss_mean += adv_loss.item()
         total_loss_mean += total_loss.item()
-        #print('infer step %d loss_ws %.5f std_acc %.3f adv_acc %.3f' % (step, total_loss.item(), std_accuracy, adv_accuracy))
+        if step % args.report_freq == 0:
+            print('infer step %d loss_ws %.5f std_acc %.3f adv_acc %.3f' % (step, total_loss.item(), std_correct / total, adv_correct / total))
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
     std_loss_mean /= total
