@@ -14,6 +14,9 @@ from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.mutation.pm import PM
 from pymoo.operators.selection.tournament import TournamentSelection
 
+from indicators import normalize_objectives, get_dynamic_r2_reference, contribution_r2
+
+
 def initial_population(n_population, alphas_dim, k):
     individuals = []
     for i in range(n_population):
@@ -25,41 +28,11 @@ def initial_population(n_population, alphas_dim, k):
                             .set("adv_acc", 0.0)
                             .set("std_acc", 0.0)
                             .set("F", np.zeros(k))
+                            .set("F_norm", np.zeros(k))
                             .set("genotype", None))
     return Population(individuals=individuals)
 
-def r2(population, weights, z_ref):
-    acc = 0.0
-    for w in weights:
-        min_diff = float('inf')
-        for p in population:
-            max_diff = max([w[i] * abs(p.F[i] - z_ref[i]) for i in range(len(p.F))])
-            min_diff = min(min_diff, max_diff)
-        acc += min_diff
-    return acc / weights.shape[0]
-
-def contribution_r2(population, individual, weights, z_ref):
-    n = population.size
-    assert weights[n].shape[0] == n, f"weights shape != population size {n}"
-    full = r2(population, weights[n], z_ref)
-    population_exclude = [p for p in population if p != individual]
-    excl = r2(Population(individuals=population_exclude), weights[n], z_ref)
-    return abs(full - excl)
-
-def get_dynamic_r2_reference(population):
-    n_obj = len(population[0].F)
-    z_ref = [0] * n_obj
-    max_f = 0
-    for i in range(n_obj):
-        max_f_i = max([ind.F[i] for ind in population])
-        min_f_i = min([ind.F[i] for ind in population])
-        max_f = max(max_f, max_f_i - min_f_i)
-    for i in range(n_obj):
-        min_f_i = min([ind.F[i] for ind in population])
-        z_ref[i] = min_f_i - max_f
-    return z_ref
-
-def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, device, statisctics):
+def eval_population(epoch, model, pop, valid_queue, args, criterion, attack_f, weights_r2, device, statisctics):
     model.eval()
     objective_space = np.empty((pop.size, args.objectives))
     for i, individual in enumerate(pop):
@@ -77,20 +50,14 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
         model_flops, model_parameters = utils.get_model_metrics(model.genotype(), model)
         individual.F[args.flops_index] = model_flops
         individual.F[args.params_index] = model_parameters
+        individual.F_norm = np.zeros(args.objectives)
         objective_space[i, :] = individual.F
-        print(f"Evaluation {i + 1}/{pop.size}: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, loss {ws_loss:.4f} ({time.strftime('%M:%S', time.gmtime(time.time() - time_stamp))}) mins")
-    statisctics['max_f1'] = max(statisctics['max_f1'], np.max(objective_space[:, 0]))
-    statisctics['max_f2'] = max(statisctics['max_f2'], np.max(objective_space[:, 1]))
-    statisctics['max_f3'] = max(statisctics['max_f3'], np.max(objective_space[:, 2]))
-    statisctics['max_f4'] = max(statisctics['max_f4'], np.max(objective_space[:, 3]))
-    statisctics['min_f1'] = min(statisctics['min_f1'], np.min(objective_space[:, 0]))
-    statisctics['min_f2'] = min(statisctics['min_f2'], np.min(objective_space[:, 1]))
-    statisctics['min_f3'] = min(statisctics['min_f3'], np.min(objective_space[:, 2]))
-    statisctics['min_f4'] = min(statisctics['min_f4'], np.min(objective_space[:, 3]))
+        print(f"Evaluation {i + 1}/{pop.size}: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, loss {ws_loss:.4f} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))}) (HH:MM:SS)")
+    normalize_objectives(pop)
     z_ref = get_dynamic_r2_reference(pop)
     for ind in pop:
         ind.c_r2 = contribution_r2(pop, ind, weights_r2, z_ref)
-    utils.store_metrics(objective_space, args.algorithm)
+    utils.store_metrics(epoch, pop, objective_space, args, statisctics, weights_r2)
 
 def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoch, scheduler, args):
     model.train()
@@ -102,7 +69,7 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoc
                                                  attack_f, args)
         if n_batch % args.report_freq == 0:
             print(
-                f">>>> Epoch {epoch + 1}/{args.epochs} Batch {n_batch + 1}/{len(train_queue)} ({(time.time() - time_stamp) / 60:.2f}) mins: std_acc {std_acc / args.batch_size * 100:.2f}%, adv_acc {adv_acc / args.batch_size * 100:.2f}%, loss {loss:.4f}")
+                f">>>> Epoch {epoch + 1}/{args.epochs} Batch {n_batch + 1}/{len(train_queue)} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))}) (HH:MM:SS): std_acc {std_acc / args.batch_size * 100:.2f}%, adv_acc {adv_acc / args.batch_size * 100:.2f}%, loss {loss:.4f}")
     scheduler.step()
 
 def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, scheduler, attack_f, weights_r2):
@@ -112,13 +79,14 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     pop = initial_population(args.n_population, model.alphas_dim, args.objectives)
     print(f">>>> Initial population of size {pop.size} created.")
     train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, args)
-    statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'), 'min_f3': float('inf'), 'min_f4': float('inf')}
-    eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
+    statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'), 'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'r2_log': []}
+    eval_population(0, model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
+    time_search = time.time()
     for epoch in range(args.epochs):
         start = time.time()
         time_stamp_epoch = time.time()
-        train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, args)
-        print(f">>>> Epoch {epoch + 1} training DONE in {time.strftime('%M:%S', time.gmtime(time.time() - time_stamp_epoch))} mins")
+        train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoch + 1, scheduler, args)
+        print(f">>>> Epoch {epoch + 1} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_epoch))} (HH:MM:SS)")
 
         selection = TournamentSelection(func_comp=tournament_r2)
         parents = selection.do(problem=problem, pop=pop, n_parents=2, n_select=pop.size // 2, to_pop=False)
@@ -133,17 +101,18 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
             p.set("adv_acc", 0.0)
             p.set("std_acc", 0.0)
             p.set("F", np.zeros(args.objectives))
+            p.set("F_norm", np.zeros(args.objectives))
             p.set("genotype", None)
 
         print(f'>>>>> size parents: {len(parents)}, size offsprings: {len(offsprings)}')
         # Evaluate offspring
-        eval_population(model, mutation, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
-        print(f"Tiempo total de entrenamiento/validacion {args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} horas")
+        eval_population(epoch + 1, model, mutation, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
+        print(f"Tiempo total de entrenamiento/validacion {args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} (HH:MM:SS)")
 
         archive = archive_update_pq(archive, Population.merge(pop, mutation))
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, Population.merge(pop, mutation))
         pop = update_population_r2(pop, mutation, weights_r2)
-
+    print(f">>>> Total search time: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_search))} (HH:MM:SS)")
     return model, archive, archive_accuracy, statistics
 
 def update_population_r2(pop, offspring, weights_r2):

@@ -145,9 +145,12 @@ if __name__ == '__main__':
         print("Final archive:")
         for individual in archive:
             print(individual.F, individual.std_acc, individual.adv_acc)
-        utils.save_architectures(archive, args.save_path_final_architect)
+        for i, individual in enumerate(archive):
+            utils.save_architecture(i, individual, args.save_path_final_architect)
         utils.save_archive(archive, args.save_path_final_architect)
         utils.save_archive_accuracy(archive_accuracy, args.save_path_final_architect)
         utils.plot_archive_accuracy(archive_accuracy, args.save_path_final_architect)
+        utils.plot_hypervolume(statistics, args.save_path_final_architect)
+        utils.plot_r2(statistics, args.save_path_final_architect)
         utils.save_statistics_to_csv(statistics, args.save_path_final_architect)
         print("Experiment completed and results saved.")
