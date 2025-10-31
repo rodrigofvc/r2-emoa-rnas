@@ -109,7 +109,7 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
 # it loads the architectures and supernet from specified paths
 # and trains each architecture from scratch, saving results in a new directory.
 if __name__ == '__main__':
-# python3 rnas_train.py --arch_path results/r2-emoa/cifar10/2025-10-31_12-21-22_12/search/architectures/arch_0.xz --supernet_path results/r2-emoa/cifar10/2025-10-31_12-21-22_12/search/super-net.pt --trained_arch_path results/r2-emoa/cifar10/2025-10-31_12-21-22_12/train --params_dir params/train/params-cifar-10-r2-emoa-light.json
+
     parser = argparse.ArgumentParser(description="Training architectures found by RNAS")
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset for training')
