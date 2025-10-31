@@ -5,12 +5,15 @@ import matplotlib.pyplot as plt
 import torchprofile
 import numpy as np
 import torch
+from pymoo.indicators.hv import HV
 from pymoo.util.ref_dirs import get_reference_directions
 import torchvision.transforms as transforms
 import os
 import pickle
 
 from evaluation.model import NetworkCIFAR
+from indicators import r2
+
 
 # Load R2 weights for the i-th population size
 def get_weights_r2(n):
@@ -55,9 +58,33 @@ def create_experiment_dir(algorithm, dataset, seed):
     return exp_dir
 
 
-def store_metrics(objective_space, algorithm):
-    # TODO Obtener peores valores de hyp
-    pass
+def store_metrics(epoch, population, objective_space, args, statistics, weights_r2):
+    # get maximum and minimum for each objective
+    statistics['max_f1'] = max(statistics['max_f1'], np.max(objective_space[:, 0]))
+    statistics['max_f2'] = max(statistics['max_f2'], np.max(objective_space[:, 1]))
+    statistics['max_f3'] = max(statistics['max_f3'], np.max(objective_space[:, 2]))
+    statistics['max_f4'] = max(statistics['max_f4'], np.max(objective_space[:, 3]))
+    statistics['min_f1'] = min(statistics['min_f1'], np.min(objective_space[:, 0]))
+    statistics['min_f2'] = min(statistics['min_f2'], np.min(objective_space[:, 1]))
+    statistics['min_f3'] = min(statistics['min_f3'], np.min(objective_space[:, 2]))
+    statistics['min_f4'] = min(statistics['min_f4'], np.min(objective_space[:, 3]))
+    n_obj = objective_space.shape[1]
+    # compute hypervolume
+    ind = HV(ref_point=np.ones(n_obj))
+    population_array = np.array([ind.F_norm for ind in population])
+    hyp = ind(population_array)
+    statistics['hyp_log'].append(hyp)
+    # compute r2
+    r2_population = r2(population, weights_r2[population.size], np.zeros(n_obj))
+    statistics['r2_log'].append(r2_population)
+    row_hyp = [args.algorithm, args.dataset, args.attack['name'], epoch, 'hv', hyp, args.save_path_final_model]
+    row_r2 = [args.algorithm, args.dataset, args.attack['name'], epoch, 'r2', r2_population, args.save_path_final_model]
+    file = open('evaluations.csv', 'a', newline='')
+    writer = csv.writer(file)
+    writer.writerow(row_hyp)
+    writer.writerow(row_r2)
+    file.close()
+
 
 def save_supernet(model, model_path):
     model_path += 'super-net.pt'
@@ -78,6 +105,15 @@ def load_model(model_path):
     model_path += 'super-net.pt'
     state_dict = torch.load(model_path)
     return state_dict
+
+def save_architecture(i, individual, architect_path):
+    architect_path += 'architectures' + os.sep
+    if not os.path.exists(architect_path):
+        os.makedirs(architect_path)
+    architect_path += f'arch_{i}.xz'
+    with lzma.open(architect_path, 'wb') as f:
+        pickle.dump(individual, f)
+
 
 def save_architectures(architectures, architect_path):
     architect_path += 'architectures.xz'
@@ -118,6 +154,29 @@ def plot_archive_accuracy(archive_accuracy, archive_path):
     plt.grid(True)
     plt.savefig(archive_path)
     plt.close()
+
+def plot_hypervolume(statistics, path):
+    path += 'hypervolume.png'
+    plt.figure(figsize=(8, 6))
+    plt.plot(statistics['hyp_log'], marker='o', color='blue')
+    plt.title('Hypervolume over Generations')
+    plt.xlabel('Generation')
+    plt.ylabel('Hypervolume')
+    plt.grid(True)
+    plt.savefig(path)
+    plt.close()
+
+def plot_r2(statistics, path):
+    path += 'r2.png'
+    plt.figure(figsize=(8, 6))
+    plt.plot(statistics['r2_log'], marker='o', color='red')
+    plt.title('R2 over Generations')
+    plt.xlabel('Generation')
+    plt.ylabel('R2 Indicator')
+    plt.grid(True)
+    plt.savefig(path)
+    plt.close()
+
 
 
 class Cutout(object):

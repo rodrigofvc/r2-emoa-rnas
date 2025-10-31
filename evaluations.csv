@@ -1,1 +1,1 @@
-algorithm, dataset, attack, std_accuracy, adv_accuracy, std_loss, adv_loss, parameters, flops, dir
+algorithm, dataset, attack, epoch, indicator, value, dir
