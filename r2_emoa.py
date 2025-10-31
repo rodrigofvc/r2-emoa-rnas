@@ -32,7 +32,7 @@ def initial_population(n_population, alphas_dim, k):
                             .set("genotype", None))
     return Population(individuals=individuals)
 
-def eval_population(epoch, model, pop, valid_queue, args, criterion, attack_f, weights_r2, device, statisctics):
+def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, device, statisctics):
     model.eval()
     objective_space = np.empty((pop.size, args.objectives))
     for i, individual in enumerate(pop):
@@ -57,7 +57,7 @@ def eval_population(epoch, model, pop, valid_queue, args, criterion, attack_f, w
     z_ref = get_dynamic_r2_reference(pop)
     for ind in pop:
         ind.c_r2 = contribution_r2(pop, ind, weights_r2, z_ref)
-    utils.store_metrics(epoch, pop, objective_space, args, statisctics, weights_r2)
+    utils.store_statisctics(statisctics, objective_space)
 
 def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoch, scheduler, args):
     model.train()
@@ -80,7 +80,8 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     print(f">>>> Initial population of size {pop.size} created.")
     train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, args)
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'), 'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'r2_log': []}
-    eval_population(0, model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
+    eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
+    utils.store_metrics(0, pop, args, weights_r2, statistics)
     time_search = time.time()
     for epoch in range(args.epochs):
         start = time.time()
@@ -106,12 +107,13 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
 
         print(f'>>>>> size parents: {len(parents)}, size offsprings: {len(offsprings)}')
         # Evaluate offspring
-        eval_population(epoch + 1, model, mutation, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
+        eval_population(model, mutation, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
         print(f"Tiempo total de entrenamiento/validacion {args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} (HH:MM:SS)")
 
         archive = archive_update_pq(archive, Population.merge(pop, mutation))
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, Population.merge(pop, mutation))
         pop = update_population_r2(pop, mutation, weights_r2)
+        utils.store_metrics(epoch, archive, args, weights_r2, statistics)
     print(f">>>> Total search time: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_search))} (HH:MM:SS)")
     return model, archive, archive_accuracy, statistics
 
