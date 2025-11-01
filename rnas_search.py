@@ -12,17 +12,7 @@ from torch import nn
 import utils
 from r2_emoa import r2_emoa_rnas
 from evaluation.model_search import Network
-
-
-def get_attack_function(attack_params):
-    attack_params['params']['eps'] = float(Fraction(attack_params['params']['eps'])) if '/' in attack_params['params']['eps'] else float(attack_params['params']['eps'])
-    if attack_params['name'] == 'FGSM':
-        attack_function = lambda model: torchattacks.FGSM(model, **attack_params['params'])
-    elif attack_params['name'] == 'PGD':
-        attack_function = lambda model: torchattacks.PGD(model, **attack_params['params'])
-    else:
-        raise ValueError(f"Attack {attack_params['name']} not defined")
-    return attack_function
+from adversarial import get_attack_function
 
 # Prepare all arguments and components such as model, optimizer, data loaders, weights, scheduler, attack.
 def prepare_args(args):

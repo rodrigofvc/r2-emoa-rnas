@@ -12,8 +12,7 @@ import torchvision
 import utils
 from evaluation.model import NetworkCIFAR
 from evaluation.model_search import discretize
-from rnas_search import get_attack_function
-
+from adversarial import get_attack_function
 
 def prepare_args(args):
     if torch.cuda.is_available():

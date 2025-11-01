@@ -9,7 +9,7 @@ import torchvision
 
 import utils
 from evaluation.train_search import infer
-from rnas_search import get_attack_function
+from adversarial import get_attack_function
 
 
 def prepare_args(args, model):
