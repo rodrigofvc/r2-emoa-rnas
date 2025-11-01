@@ -72,7 +72,6 @@ def store_metrics(epoch, population, args, weights_r2, statistics):
     max_f2 = 2 * 1.5
     max_f3 = 50 * 1.5
     max_f4 = 2 * 1.5
-    n_obj = population[0].F.shape[0]
     # compute hypervolume
     ind = HV(ref_point=np.array([max_f1, max_f2, max_f3, max_f4]))
     population_array = np.array([ind.F for ind in population])
@@ -149,7 +148,7 @@ def read_architectures(architect_path):
     return architectures
 
 def plot_archive_accuracy(archive_accuracy, archive_path):
-    archive_path += 'archive_accuracy.png'
+    archive_path += 'archive_accuracy.pdf'
     std_acc = [p.std_acc for p in archive_accuracy]
     adv_acc = [p.adv_acc for p in archive_accuracy]
     plt.figure(figsize=(8, 6))
@@ -162,7 +161,7 @@ def plot_archive_accuracy(archive_accuracy, archive_path):
     plt.close()
 
 def plot_hypervolume(statistics, path):
-    path += 'hypervolume.png'
+    path += 'hypervolume.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['hyp_log'], marker='o', color='blue')
     plt.title('Hypervolume over generations')
@@ -173,7 +172,7 @@ def plot_hypervolume(statistics, path):
     plt.close()
 
 def plot_r2(statistics, path):
-    path += 'r2.png'
+    path += 'r2.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['r2_log'], marker='o', color='red')
     plt.title('R2 over Generations')
