@@ -12,7 +12,7 @@ import os
 import pickle
 
 from evaluation.model import NetworkCIFAR
-from indicators import r2
+from indicators import r2, normalize_objectives
 
 
 # Load R2 weights for the i-th population size
@@ -57,9 +57,7 @@ def create_experiment_dir(algorithm, dataset, seed):
         os.makedirs(exp_dir)
     return exp_dir
 
-
-def store_metrics(epoch, population, objective_space, args, statistics, weights_r2):
-    # get maximum and minimum for each objective
+def store_statisctics(statistics, objective_space):
     statistics['max_f1'] = max(statistics['max_f1'], np.max(objective_space[:, 0]))
     statistics['max_f2'] = max(statistics['max_f2'], np.max(objective_space[:, 1]))
     statistics['max_f3'] = max(statistics['max_f3'], np.max(objective_space[:, 2]))
@@ -68,14 +66,21 @@ def store_metrics(epoch, population, objective_space, args, statistics, weights_
     statistics['min_f2'] = min(statistics['min_f2'], np.min(objective_space[:, 1]))
     statistics['min_f3'] = min(statistics['min_f3'], np.min(objective_space[:, 2]))
     statistics['min_f4'] = min(statistics['min_f4'], np.min(objective_space[:, 3]))
-    n_obj = objective_space.shape[1]
+
+def store_metrics(epoch, population, args, weights_r2, statistics):
+    max_f1 = 2 * 1.5
+    max_f2 = 2 * 1.5
+    max_f3 = 50 * 1.5
+    max_f4 = 2 * 1.5
+    n_obj = population[0].F.shape[0]
     # compute hypervolume
-    ind = HV(ref_point=np.ones(n_obj))
-    population_array = np.array([ind.F_norm for ind in population])
+    ind = HV(ref_point=np.array([max_f1, max_f2, max_f3, max_f4]))
+    population_array = np.array([ind.F for ind in population])
     hyp = ind(population_array)
     statistics['hyp_log'].append(hyp)
     # compute r2
-    r2_population = r2(population, weights_r2[population.size], np.zeros(n_obj))
+    normalize_objectives(population)
+    r2_population = r2(population, weights_r2[args.n_population], np.zeros(n_obj))
     statistics['r2_log'].append(r2_population)
     row_hyp = [args.algorithm, args.dataset, args.attack['name'], epoch, 'hv', hyp, args.save_path_final_model]
     row_r2 = [args.algorithm, args.dataset, args.attack['name'], epoch, 'r2', r2_population, args.save_path_final_model]
@@ -91,8 +96,10 @@ def save_supernet(model, model_path):
     torch.save(model.state_dict(), model_path)
 
 def save_model(model, model_path, name):
+    if not os.path.exists(model_path):
+        os.makedirs(model_path)
     model_path += os.sep + name
-    torch.save(model.state_dict(), model_path)
+    torch.save(model, model_path)
 
 def save_log_train(arch_path, log):
     arch_path += 'train_log.csv'
@@ -102,7 +109,6 @@ def save_log_train(arch_path, log):
         f.write(log_str + '\n')
 
 def load_model(model_path):
-    model_path += 'super-net.pt'
     state_dict = torch.load(model_path)
     return state_dict
 
@@ -128,8 +134,7 @@ def save_statistics_to_csv(statistics, csv_path):
         for key, value in statistics.items():
             writer.writerow([key, value])
 
-def load_architectures(architect_path):
-    architect_path += 'architectures.xz'
+def load_architecture(architect_path):
     with lzma.open(architect_path, 'rb') as f:
         architectures = pickle.load(f)
     return architectures

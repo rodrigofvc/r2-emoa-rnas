@@ -69,7 +69,7 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoc
                                                  attack_f, args)
         if n_batch % args.report_freq == 0:
             print(
-                f">>>> Epoch {epoch + 1}/{args.epochs} Batch {n_batch + 1}/{len(train_queue)} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))}) (HH:MM:SS): std_acc {std_acc / args.batch_size * 100:.2f}%, adv_acc {adv_acc / args.batch_size * 100:.2f}%, loss {loss:.4f}")
+                f">>>> Epoch {epoch}/{args.epochs} Batch {n_batch + 1}/{len(train_queue)} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))}) (HH:MM:SS): std_acc {std_acc / args.batch_size * 100:.2f}%, adv_acc {adv_acc / args.batch_size * 100:.2f}%, loss {loss:.4f}")
     scheduler.step()
 
 def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, scheduler, attack_f, weights_r2):
@@ -81,7 +81,8 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, args)
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'), 'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'r2_log': []}
     eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
-    utils.store_metrics(0, pop, args, weights_r2, statistics)
+    archive = archive_update_pq(archive, pop)
+    utils.store_metrics(0, archive, args, weights_r2, statistics)
     time_search = time.time()
     for epoch in range(args.epochs):
         start = time.time()
@@ -114,6 +115,9 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, Population.merge(pop, mutation))
         pop = update_population_r2(pop, mutation, weights_r2)
         utils.store_metrics(epoch, archive, args, weights_r2, statistics)
+        utils.save_supernet(model, args.save_path_final_model)
+        utils.save_architectures(archive, args.save_path_final_architect)
+        utils.plot_hypervolume(statistics, args.save_path_final_architect)
     print(f">>>> Total search time: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_search))} (HH:MM:SS)")
     return model, archive, archive_accuracy, statistics
 
