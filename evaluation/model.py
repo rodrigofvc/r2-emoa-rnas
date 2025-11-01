@@ -118,4 +118,4 @@ class NetworkCIFAR(nn.Module):
                     logits_aux = self.auxiliary_head(s1)
         out = self.global_pooling(s1)
         logits = self.classifier(out.view(out.size(0), -1))
-        return logits, logits_aux
+        return logits

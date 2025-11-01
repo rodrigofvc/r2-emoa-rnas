@@ -1,0 +1,28 @@
+{
+    "classes": 10,
+    "device": "cuda",
+    "data": "../data",
+    "lambda_1": 0.5,
+    "lambda_2": 0.5,
+    "batch_size": 256,
+    "learning_rate": 0.025,
+    "learning_rate_min": 0.001,
+    "momentum": 0.9,
+    "weight_decay": 0.0003,
+    "report_freq": 30,
+    "freq_save": 30,
+    "epochs": 600,
+    "init_channels": 36,
+    "reduction": true,
+    "layers": 20,
+    "steps": 4,
+    "multiplier": 4,
+    "attack": { "name": "FGSM",
+        "params": {"eps": "8/255"}
+    },
+    "cutout": false,
+    "cutout_length": 16,
+    "drop_path_prob": 0.3,
+    "grad_clip": 5,
+    "train_portion": 0.5
+}

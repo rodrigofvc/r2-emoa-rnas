@@ -12,7 +12,7 @@ import os
 import pickle
 
 from evaluation.model import NetworkCIFAR
-from indicators import r2, normalize_objectives
+from indicators import r2, normalize_objectives, get_dynamic_r2_reference
 
 
 # Load R2 weights for the i-th population size
@@ -80,7 +80,8 @@ def store_metrics(epoch, population, args, weights_r2, statistics):
     statistics['hyp_log'].append(hyp)
     # compute r2
     normalize_objectives(population)
-    r2_population = r2(population, weights_r2[args.n_population], np.zeros(n_obj))
+    z_ref = get_dynamic_r2_reference(population)
+    r2_population = r2(population, weights_r2[args.n_population], z_ref)
     statistics['r2_log'].append(r2_population)
     row_hyp = [args.algorithm, args.dataset, args.attack['name'], epoch, 'hv', hyp, args.save_path_final_model]
     row_r2 = [args.algorithm, args.dataset, args.attack['name'], epoch, 'r2', r2_population, args.save_path_final_model]
@@ -164,7 +165,7 @@ def plot_hypervolume(statistics, path):
     path += 'hypervolume.png'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['hyp_log'], marker='o', color='blue')
-    plt.title('Hypervolume over Generations')
+    plt.title('Hypervolume over generations')
     plt.xlabel('Generation')
     plt.ylabel('Hypervolume')
     plt.grid(True)

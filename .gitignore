@@ -4,3 +4,7 @@ __pycache__/
 .idea
 .vscode/
 params/params-cifar-10-r2-emoa-light.json
+evaluations.csv
+*.sh
+r2_weights/
+results/

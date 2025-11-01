@@ -159,31 +159,3 @@ def run_epoch(epoch, model, individuals, n_population, train_queue, valid_queue,
     scheduler.step()
     #utils.save(model, os.path.join(args.save, 'weights.pt'))
 
-def run_batch_epoch(model, architect, input, target, criterion, optimizer, attack_f, args):
-    model.update_arch_parameters(architect)
-    discrete = discretize(architect, model.genotype(), args.device)
-    model.update_arch_parameters(discrete)
-
-    input = input.to(args.device, non_blocking=True)
-    target = target.to(args.device, non_blocking=True)
-
-    optimizer.zero_grad()
-    attack = attack_f(model)
-    adv_X = attack(input, target)
-    logits_adv = model(adv_X)
-    adv_loss = criterion(logits_adv, target)
-
-    logits = model(input)
-    natural_loss = criterion(logits, target)
-
-    total_loss = args.lambda_1 * natural_loss + args.lambda_2 * adv_loss
-
-    total_loss.backward()
-    nn.utils.clip_grad_norm_(model.weight_parameters(), args.grad_clip)
-    optimizer.step()
-
-    std_predicts = logits.argmax(dim=1)
-    adv_predicts = logits_adv.argmax(dim=1)
-    std_correct = (std_predicts == target).sum().item()
-    adv_correct = (adv_predicts == target).sum().item()
-    return std_correct, adv_correct, total_loss.item()

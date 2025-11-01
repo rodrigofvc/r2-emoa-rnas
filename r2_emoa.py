@@ -5,7 +5,8 @@ import numpy as np
 import utils
 from archivers import archive_update_pq, archive_update_pq_accuracy
 from evaluation.model_search import discretize
-from evaluation.train_search import infer, run_batch_epoch
+from evaluation.train_search import infer
+from rnas_train import run_batch_epoch
 from evolutionary import AlphaProblem, unpack_alphas, flatten_alphas, tournament_r2
 import torch
 from pymoo.core.population import Population
