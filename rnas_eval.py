@@ -29,7 +29,7 @@ def prepare_args(args, model):
 
     num_train = len(test_data)
     indices = list(range(num_train))
-    split = int(np.floor(args.train_portion * num_train))
+    split = int(np.floor(args.test_portion * num_train))
     print(f"Evaluation samples: {split}")
 
     if torch.backends.mps.is_available():
@@ -62,6 +62,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Evaluating architectures found by RNAS")
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset for training')
+    parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--model_path', type=str, required=True, help="Path to the saved model")
     parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary tower')
     parser.add_argument('--params_dir', type=str, required=True, help="params json dir")
