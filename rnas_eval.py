@@ -44,16 +44,7 @@ def prepare_args(args, model):
     criterion = torch.nn.CrossEntropyLoss().to(args.device)
     attack_f = get_attack_function(args.attack)
 
-    optimizer = torch.optim.SGD(
-        model.parameters(),
-        args.learning_rate,
-        momentum=args.momentum,
-        weight_decay=args.weight_decay)
-
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, args.epochs, eta_min=args.learning_rate_min)
-
-    return test_queue, criterion, attack_f, optimizer, scheduler
+    return test_queue, criterion, attack_f
 
 
 
@@ -80,7 +71,7 @@ if __name__ == '__main__':
 
     model = torch.load(args.model_path, weights_only=False)
 
-    test_queue, criterion, attack_f, optimizer, scheduler = prepare_args(args, model)
+    test_queue, criterion, attack_f = prepare_args(args, model)
     time_stamp = time.time()
     std_accuracy, adv_accuracy, _, _, _ = infer(test_queue, model, criterion, attack_f, args)
     print('Evaluation DONE in %.3f seconds' % (time.time() - time_stamp))
