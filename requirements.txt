@@ -1,4 +1,6 @@
+torch@https://download.pytorch.org/whl/cu121/torch-2.3.0%2Bcu121-cp310-cp310-linux_x86_64.whl
+torchvision
+torchaudio
 torchprofile==0.0.4
 torchattacks==3.5.1
 pymoo==0.6.0.1
-torch==2.5.1+cu124
