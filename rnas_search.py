@@ -92,6 +92,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument('--algorithm', type=str, choices=['r2-emoa'], help='algorithm to run')
     parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset to use')
+    parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--params_dir', type=str, required=True, help="params json dir")
     args = parser.parse_args()
 
@@ -143,4 +144,5 @@ if __name__ == '__main__':
         utils.plot_hypervolume(statistics, args.save_path_final_architect)
         utils.plot_r2(statistics, args.save_path_final_architect)
         utils.save_statistics_to_csv(statistics, args.save_path_final_architect)
+        utils.save_params(args, args.save_path_final_architect)
         print("Experiment completed and results saved.")

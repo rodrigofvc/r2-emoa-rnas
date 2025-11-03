@@ -74,5 +74,6 @@ if __name__ == '__main__':
     test_queue, criterion, attack_f = prepare_args(args, model)
     time_stamp = time.time()
     std_accuracy, adv_accuracy, _, _, _ = infer(test_queue, model, criterion, attack_f, args)
+    utils.save_params(args, args.model_path.replace('.pt', '_eval_params.json').replace('train', 'eval'))
     print('Evaluation DONE in %.3f seconds' % (time.time() - time_stamp))
     print('Final Test Accuracy: STD %.3f ADV %.3f' % (std_accuracy, adv_accuracy))

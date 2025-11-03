@@ -9,7 +9,6 @@
     "data": "../data",
     "lambda_1": 0.5,
     "lambda_2": 0.5,
-    "batch_size": 184,
     "prob_cross": 0.9,
     "prob_mut": 0.1,
     "eta_cross": 10,

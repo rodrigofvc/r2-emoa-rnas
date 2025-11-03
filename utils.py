@@ -1,4 +1,5 @@
 import csv
+import json
 import lzma
 import time
 import matplotlib.pyplot as plt
@@ -234,4 +235,39 @@ def get_model_metrics(genotype, model):
     params = sum(v.numel() for v in filter(lambda p: p.requires_grad, discretized_model.parameters())) / 1e6
     return round(flops, 4), round(params, 4)
 
+def get_best_architecture_adversarial(archs_path):
+    best_adv_acc = -1.0
+    best_individual = None
+    best_path = ""
+    for arch_path in os.listdir(archs_path):
+        with lzma.open(archs_path + os.sep + arch_path, 'rb') as f:
+            individual = pickle.load(f)
+            if individual.adv_acc > best_adv_acc:
+                best_adv_acc = individual.adv_acc
+                best_individual = individual
+                best_path = archs_path + os.sep + arch_path
+    return best_individual, best_path
+
+def get_best_architecture_standard(archs_path):
+    best_std_acc = -1.0
+    best_individual = None
+    best_path = ""
+    for arch_path in os.listdir(archs_path):
+        with lzma.open(archs_path + os.sep + arch_path, 'rb') as f:
+            individual = pickle.load(f)
+            if individual.std_acc > best_std_acc:
+                best_std_acc = individual.std_acc
+                best_individual = individual
+                best_path = archs_path + os.sep + arch_path
+    return best_individual, best_path
+
+def save_params(args, trained_arch_path):
+    params_path = trained_arch_path + os.sep
+    params_dict = vars(args)
+    params_dict['device'] = str(params_dict['device'])
+    if not os.path.exists(os.path.dirname(params_path)):
+        os.makedirs(os.path.dirname(params_path))
+    params_path += 'params.json'
+    with open(params_path, 'w') as f:
+        json.dump(params_dict, f, indent=4)
 

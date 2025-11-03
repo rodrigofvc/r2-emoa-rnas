@@ -141,6 +141,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Training architectures found by RNAS")
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset for training')
+    parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--arch_path', type=str, required=True, help="Path to the saved architecture")
     parser.add_argument('--supernet_path', type=str, required=True, help="Path to the saved supernet model")
     parser.add_argument('--trained_arch_path', type=str, required=True, help='Path to store the trained architecture')
@@ -178,6 +179,7 @@ if __name__ == '__main__':
         time_stamp = time.time()
         std_acc, adv_acc, loss_ws = train(train_queue, model, criterion, scheduler, optimizer, attack_f, args)
         print(f">>>> Epoch {epoch + 1} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))} (HH:MM:SS) std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, loss {loss_ws:.4f}")
-        if epoch % args.freq_save == 0:
+        if epoch + 1 % args.freq_save == 0:
             utils.save_model(model, args.trained_arch_path, f"model_epoch_{epoch}.pt")
+    utils.save_params(args, args.trained_arch_path)
     print(f"Total training time: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_train))} (HH:MM:SS)")
