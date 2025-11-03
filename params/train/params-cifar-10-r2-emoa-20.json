@@ -1,6 +1,5 @@
 {
     "classes": 10,
-    "device": "cuda",
     "data": "../data",
     "lambda_1": 0.5,
     "lambda_2": 0.5,

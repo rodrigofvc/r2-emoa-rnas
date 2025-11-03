@@ -179,7 +179,7 @@ if __name__ == '__main__':
         time_stamp = time.time()
         std_acc, adv_acc, loss_ws = train(train_queue, model, criterion, scheduler, optimizer, attack_f, args)
         print(f">>>> Epoch {epoch + 1} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))} (HH:MM:SS) std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, loss {loss_ws:.4f}")
-        if epoch + 1 % args.freq_save == 0:
+        if (epoch + 1) % args.freq_save == 0:
             utils.save_model(model, args.trained_arch_path, f"model_epoch_{epoch}.pt")
     utils.save_params(args, args.trained_arch_path)
     print(f"Total training time: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_train))} (HH:MM:SS)")
