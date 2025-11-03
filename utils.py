@@ -271,3 +271,10 @@ def save_params(args, trained_arch_path):
     with open(params_path, 'w') as f:
         json.dump(params_dict, f, indent=4)
 
+if __name__ == '__main__':
+    best_adv = "results/r2-emoa/cifar10/2025-11-01_02-15-47_345821/search/architectures/arch_56.xz"
+    path = "results/r2-emoa/cifar10/2025-11-01_02-15-47_345821/search/architectures"
+    best_ind, best_path = get_best_architecture_adversarial(path)
+    print(f"Best adversarial architecture found in {best_path} with adv acc {best_ind.adv_acc} and std acc {best_ind.std_acc}")
+    best_ind, best_path = get_best_architecture_standard(path)
+    print(f"Best standard architecture found in {best_path} with std acc {best_ind.std_acc} and adv acc {best_ind.adv_acc}")
