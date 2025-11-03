@@ -59,13 +59,12 @@ def prepare_args(args):
     num_train = len(train_data)
     indices = list(range(num_train))
     split = int(np.floor(args.train_portion * num_train))
-    print(f"Training samples: {split}, Validation samples: {num_train - split}")
 
     if torch.backends.mps.is_available():
         # testing
         split = 32
         num_train = split + 32
-
+    print(f"Training samples: {split}, Validation samples: {num_train - split}")
 
     train_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
