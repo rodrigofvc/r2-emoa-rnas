@@ -10,7 +10,7 @@
     "weight_decay": 0.0003,
     "report_freq": 30,
     "freq_save": 30,
-    "epochs": 600,
+    "epochs": 120,
     "init_channels": 36,
     "reduction": true,
     "layers": 20,
