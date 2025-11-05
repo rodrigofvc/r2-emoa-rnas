@@ -10,9 +10,24 @@
     "report_freq": 30,
     "freq_save": 30,
     "init_channels": 36,
-    "attack": { "name": "FGSM",
-        "params": {"eps": "8/255"}
-    },
+    "attacks": [
+        {   "name": "FGSM",
+            "params": {"eps": "8/255"}
+        },
+        {   "name": "PGD-7",
+            "params": {"eps": "8/255", "alpha": "2/255", "steps": 7}
+        },
+        {   "name": "PGD-10",
+            "params": {"eps": "8/255", "alpha": "2/255", "steps": 10}
+        },
+        {   "name": "PGD-20",
+            "params": {"eps": "8/255", "alpha": "2/255", "steps": 20}
+        },
+        {
+            "name": "PGD-100",
+            "params": {"eps": "8/255", "alpha": "2/255", "steps": 100}
+        }
+    ],
     "cutout": false,
     "cutout_length": 16,
     "drop_path_prob": 0.3,

@@ -42,9 +42,13 @@ def prepare_args(args, model):
         num_workers=2, pin_memory=True)
 
     criterion = torch.nn.CrossEntropyLoss().to(args.device)
-    attack_f = get_attack_function(args.attack)
+    attack_f_list = []
+    attack_names = []
+    for attack in args.attacks:
+        attack_f_list.append(get_attack_function(attack))
+        attack_names.append(attack['name'])
 
-    return test_queue, criterion, attack_f
+    return test_queue, criterion, attack_f_list, attack_names
 
 
 
@@ -71,9 +75,11 @@ if __name__ == '__main__':
 
     model = torch.load(args.model_path, weights_only=False)
 
-    test_queue, criterion, attack_f = prepare_args(args, model)
-    time_stamp = time.time()
-    std_accuracy, adv_accuracy, _, _, _ = infer(test_queue, model, criterion, attack_f, args)
-    utils.save_params(args, args.model_path.replace('.pt', '_eval_params.json').replace('train', 'eval'))
-    print('Evaluation DONE in %.3f seconds' % (time.time() - time_stamp))
-    print('Final Test Accuracy: STD %.3f ADV %.3f' % (std_accuracy, adv_accuracy))
+    test_queue, criterion, attack_f_list, attack_names = prepare_args(args, model)
+    for i, attack_f in enumerate(attack_f_list):
+        print(f"Starting evaluation with attack: {attack_names[i]}")
+        time_stamp = time.time()
+        std_accuracy, adv_accuracy, _, _, _ = infer(test_queue, model, criterion, attack_f, args)
+        utils.save_params(args, args.model_path.replace('.pt', '_eval_params.json').replace('train', 'eval'))
+        print('Evaluation DONE in', time.strftime('%HH:%MM:%SS', time.gmtime(time.time() - time_stamp)))
+        print(f'Final Test Accuracy {attack_names[i]} : STD {std_accuracy:.3f} ADV {adv_accuracy:.3f}')
