@@ -107,12 +107,12 @@ def infer(valid_queue, model, criterion, attack_f, args):
         attack = attack_f(model)
         adv_input = attack(input, target).to(args.device, non_blocking=True)
 
-        with torch.no_grad():
-            std_logits = model(input)
-            std_loss = criterion(std_logits, target)
-            adv_logits = model(adv_input)
-            adv_loss = criterion(adv_logits, target)
-            total_loss = args.lambda_1 * std_loss + args.lambda_2 * adv_loss
+
+        std_logits = model(input)
+        std_loss = criterion(std_logits, target)
+        adv_logits = model(adv_input)
+        adv_loss = criterion(adv_logits, target)
+        total_loss = args.lambda_1 * std_loss + args.lambda_2 * adv_loss
 
         std_predicts = std_logits.argmax(dim=1)
         adv_predicts = adv_logits.argmax(dim=1)
