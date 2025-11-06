@@ -94,7 +94,8 @@ def store_metrics(epoch, population, args, weights_r2, statistics):
 
 def save_supernet(model, model_path):
     model_path += 'super-net.pt'
-    torch.save(model.state_dict(), model_path)
+    model.to('cpu')
+    torch.save(model, model_path)
 
 def save_model(model, model_path, name):
     if not os.path.exists(model_path):
@@ -270,11 +271,3 @@ def save_params(args, trained_arch_path):
     params_path += 'params.json'
     with open(params_path, 'w') as f:
         json.dump(params_dict, f, indent=4)
-
-if __name__ == '__main__':
-    best_adv = "results/r2-emoa/cifar10/2025-11-01_02-15-47_345821/search/architectures/arch_56.xz"
-    path = "results/r2-emoa/cifar10/2025-11-01_02-15-47_345821/search/architectures"
-    best_ind, best_path = get_best_architecture_adversarial(path)
-    print(f"Best adversarial architecture found in {best_path} with adv acc {best_ind.adv_acc} and std acc {best_ind.std_acc}")
-    best_ind, best_path = get_best_architecture_standard(path)
-    print(f"Best standard architecture found in {best_path} with std acc {best_ind.std_acc} and adv acc {best_ind.adv_acc}")
