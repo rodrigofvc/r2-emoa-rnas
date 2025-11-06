@@ -96,6 +96,8 @@ def save_supernet(model, model_path):
     model_path += 'super-net.pt'
     model.to('cpu')
     torch.save(model, model_path)
+    if torch.cuda.is_available():
+        model.to('cuda')
 
 def save_model(model, model_path, name):
     if not os.path.exists(model_path):
@@ -112,6 +114,8 @@ def save_log_train(arch_path, log):
 
 def load_model(model_path):
     state_dict = torch.load(model_path)
+    if torch.cuda.is_available():
+        state_dict.to('cuda')
     return state_dict
 
 def save_architecture(i, individual, architect_path):
