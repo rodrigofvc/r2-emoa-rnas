@@ -112,6 +112,7 @@ if __name__ == '__main__':
 
     if torch.cuda.is_available():
         torch.cuda.manual_seed(args.seed)
+        torch.backends.cudnn.enabled = True
 
 
     results_dir = utils.create_experiment_dir(args.algorithm, args.dataset, args.seed)
