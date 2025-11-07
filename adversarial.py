@@ -25,9 +25,12 @@ def fgsm(model, x, y, eps=8/255):
     )
     y = y.to(device, non_blocking=True)
 
-
-    autocast = getattr(torch.cuda.amp, "autocast", None)
-    amp_ctx = autocast(enabled=False) if autocast is not None else contextlib.nullcontext()
+    try:
+        from torch.amp import autocast
+        amp_ctx = autocast('cuda', enabled=False)
+    except ImportError:
+        from torch.cuda.amp import autocast
+        amp_ctx = autocast(enabled=False)
 
     prev_cudnn = torch.backends.cudnn.enabled
     torch.backends.cudnn.enabled = False
