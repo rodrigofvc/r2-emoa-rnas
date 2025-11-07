@@ -36,6 +36,7 @@ def initial_population(n_population, alphas_dim, k):
 def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, device, statisctics):
     model.eval()
     objective_space = np.empty((pop.size, args.objectives))
+    attack = attack_f(model)
     for i, individual in enumerate(pop):
         individual_architect = unpack_alphas(individual.X, model.alphas_dim)
         model.update_arch_parameters(individual_architect)
@@ -43,7 +44,7 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
         model.update_arch_parameters(discrete)
         individual.set("genotype", model.genotype())
         time_stamp = time.time()
-        std_acc, adv_acc, std_loss, adv_loss, ws_loss = infer(valid_queue, model, criterion, attack_f, args)
+        std_acc, adv_acc, std_loss, adv_loss, ws_loss = infer(valid_queue, model, criterion, attack, args)
         individual.std_acc = std_acc
         individual.adv_acc = adv_acc
         individual.F[args.std_loss_index] = std_loss
@@ -62,12 +63,13 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
 
 def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoch, scheduler, args):
     model.train()
+    attack = attack_f(model)
     for n_batch, (input, target) in enumerate(train_queue):
         individual = pop[n_batch % args.n_population]
         individual_architect = unpack_alphas(individual.X, model.alphas_dim)
         time_stamp = time.time()
         std_acc, adv_acc, loss = run_batch_epoch(model, individual_architect, input, target, criterion, optimizer,
-                                                 attack_f, args)
+                                                 attack, args)
         if n_batch % args.report_freq == 0:
             print(
                 f">>>> Epoch {epoch}/{args.epochs} Batch {n_batch + 1}/{len(train_queue)} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))}) (HH:MM:SS): std_acc {std_acc / args.batch_size * 100:.2f}%, adv_acc {adv_acc / args.batch_size * 100:.2f}%, loss {loss:.4f}")
