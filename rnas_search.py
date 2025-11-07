@@ -13,6 +13,9 @@ import utils
 from r2_emoa import r2_emoa_rnas
 from evaluation.model_search import Network
 from adversarial import get_attack_function
+import contextlib
+import torchattacks.attack as attack_mod
+attack_mod.Attack._change_model_mode = lambda self, model=None: contextlib.nullcontext()
 
 # Prepare all arguments and components such as model, optimizer, data loaders, weights, scheduler, attack.
 def prepare_args(args):
