@@ -13,13 +13,21 @@ def fgsm(model, x, y, eps=8/255):
     model.train(was_training)
     return adv
 
+class FGSMAttack():
+    def __init__(self, model, eps=8 / 255):
+        self.model = model
+        self.eps = eps
+
+    def __call__(self, x, y):
+        return fgsm(self.model, x, y, eps=self.eps)
+
 
 def get_attack_function(attack_params):
     attack_params['params']['eps'] = float(Fraction(attack_params['params']['eps'])) if '/' in attack_params['params']['eps'] else float(attack_params['params']['eps'])
     if 'alpha' in attack_params['params']:
         attack_params['params']['alpha'] = float(Fraction(attack_params['params']['alpha'])) if '/' in attack_params['params']['alpha'] else float(attack_params['params']['alpha'])
     if attack_params['name'] == 'FGSM':
-        attack_function = lambda model, x, y, eps: fgsm(model, x, y, eps=attack_params['params']['eps'])
+        attack_function = lambda model: FGSMAttack(model, eps=attack_params['params']['eps'])
     elif 'PGD' in attack_params['name']:
         attack_function = lambda model: torchattacks.PGD(model, **attack_params['params'])
     else:
