@@ -1,16 +1,14 @@
 from fractions import Fraction
 import torch
 import torchattacks
+import torch.nn.functional as F
 
 def fgsm(model, x, y, eps=8/255):
-    was_training = model.training
-    model.eval()
-    x = x.detach().clone().requires_grad_(True)
-    logits = model(x)
-    loss = torch.nn.functional.cross_entropy(logits, y)
-    loss.backward()
-    adv = (x + eps * x.grad.sign()).clamp(0, 1).detach()
-    model.train(was_training)
+    x_adv = x.detach().clone().requires_grad_(True)
+    logits = model(x_adv)
+    loss = F.cross_entropy(logits, y)
+    (grad,) = torch.autograd.grad(loss, x_adv, retain_graph=False, create_graph=False)
+    adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach()
     return adv
 
 class FGSMAttack():
