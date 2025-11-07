@@ -3,6 +3,10 @@ from fractions import Fraction
 import torch
 import torchattacks
 import torch.nn.functional as F
+try:
+    from torch.amp import autocast
+except ImportError:
+    from torch.cuda.amp import autocast
 
 def fgsm_dep(model, x, y, eps=8/255):
     x_adv = x.detach().clone().requires_grad_(True)
@@ -19,18 +23,13 @@ def fgsm(model, x, y, eps=8/255):
         x.detach()
          .to(device, non_blocking=True)
          .float()
-         .contiguous(memory_format=torch.contiguous_format)
+         .contiguous()
          .clone()
          .requires_grad_(True)
     )
     y = y.to(device, non_blocking=True)
 
-    try:
-        from torch.amp import autocast
-        amp_ctx = autocast('cuda', enabled=False)
-    except ImportError:
-        from torch.cuda.amp import autocast
-        amp_ctx = autocast(enabled=False)
+    amp_ctx = autocast('cuda', enabled=False)
 
     prev_cudnn = torch.backends.cudnn.enabled
     torch.backends.cudnn.enabled = False
@@ -59,7 +58,7 @@ def get_attack_function(attack_params):
     if 'alpha' in attack_params['params']:
         attack_params['params']['alpha'] = float(Fraction(attack_params['params']['alpha'])) if '/' in attack_params['params']['alpha'] else float(attack_params['params']['alpha'])
     if attack_params['name'] == 'FGSM':
-        attack_function = lambda model: torchattacks.FGSM(model, **attack_params['params'])
+        attack_function = lambda model: FGSMAttack(model, eps=attack_params['params']['eps'])
     elif 'PGD' in attack_params['name']:
         attack_function = lambda model: torchattacks.PGD(model, **attack_params['params'])
     else:

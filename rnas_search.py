@@ -10,6 +10,7 @@ import torchvision
 from torch import nn
 
 import utils
+from cycle_det import assert_no_cycles
 from r2_emoa import r2_emoa_rnas
 from evaluation.model_search import Network
 from adversarial import get_attack_function
@@ -47,7 +48,7 @@ def prepare_args(args):
         fairdarts_eval=False,
         device=args.device,
     ).to(args.device)
-
+    assert_no_cycles(model)
 
     optimizer = torch.optim.SGD(
       model.weight_parameters(),
