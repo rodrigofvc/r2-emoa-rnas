@@ -103,16 +103,12 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
     total_loss_mean /= total
     return std_accuracy * 100.0, adv_accuracy * 100.0, total_loss_mean
 
-def run_batch_epoch(model, architect, input, target, criterion, optimizer, attack_f, args):
-    model.update_arch_parameters(architect)
-    discrete = discretize(architect, model.genotype(), args.device)
-    model.update_arch_parameters(discrete)
+def run_batch_epoch(model, input, target, criterion, optimizer, attack, args):
 
     input = input.to(args.device, non_blocking=True)
     target = target.to(args.device, non_blocking=True)
 
     optimizer.zero_grad()
-    attack = attack_f(model)
     adv_X = attack(input, target)
     logits_adv = model(adv_X)
     adv_loss = criterion(logits_adv, target)

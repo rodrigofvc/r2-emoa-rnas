@@ -93,7 +93,7 @@ def train_batch(input, target, model, lambda_1, lambda_2, criterion, optimizer, 
 
 
 
-def infer(valid_queue, model, criterion, attack_f, args):
+def infer(valid_queue, model, criterion, attack, args):
     std_correct = 0
     adv_correct = 0
     std_loss_mean = 0
@@ -104,7 +104,6 @@ def infer(valid_queue, model, criterion, attack_f, args):
     for step, (input, target) in enumerate(valid_queue):
         input  = input.to(args.device, non_blocking=True)
         target = target.to(args.device, non_blocking=True)
-        attack = attack_f(model)
         adv_input = attack(input, target).to(args.device, non_blocking=True)
 
 
