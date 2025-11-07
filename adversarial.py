@@ -1,13 +1,44 @@
+import contextlib
 from fractions import Fraction
 import torch
 import torchattacks
 import torch.nn.functional as F
 
-def fgsm(model, x, y, eps=8/255):
+def fgsm_dep(model, x, y, eps=8/255):
     x_adv = x.detach().clone().requires_grad_(True)
     logits = model(x_adv)
     loss = F.cross_entropy(logits, y)
     (grad,) = torch.autograd.grad(loss, x_adv, retain_graph=False, create_graph=False)
+    adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach()
+    return adv
+
+def fgsm(model, x, y, eps=8/255):
+    device = next(model.parameters()).device
+
+    x_adv = (
+        x.detach()
+         .to(device, non_blocking=True)
+         .float()
+         .contiguous(memory_format=torch.contiguous_format)
+         .clone()
+         .requires_grad_(True)
+    )
+    y = y.to(device, non_blocking=True)
+
+
+    autocast = getattr(torch.cuda.amp, "autocast", None)
+    amp_ctx = autocast(enabled=False) if autocast is not None else contextlib.nullcontext()
+
+    prev_cudnn = torch.backends.cudnn.enabled
+    torch.backends.cudnn.enabled = False
+    try:
+        with amp_ctx:
+            logits = model(x_adv)
+            loss = F.cross_entropy(logits, y)
+        grad, = torch.autograd.grad(loss, x_adv, retain_graph=False, create_graph=False)
+    finally:
+        torch.backends.cudnn.enabled = prev_cudnn
+
     adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach()
     return adv
 
