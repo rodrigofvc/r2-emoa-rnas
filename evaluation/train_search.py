@@ -102,10 +102,11 @@ def infer(valid_queue, model, criterion, attack_f, args):
     total = 0
     model.eval()
     for step, (input, target) in enumerate(valid_queue):
-        input  = input.to(args.device, non_blocking=True)
+        input = input.float().contiguous(memory_format=torch.contiguous_format).to(args.device, non_blocking=True)
+        #input = input.to(args.device, non_blocking=True)
         target = target.to(args.device, non_blocking=True)
         attack = attack_f(model)
-        adv_input = attack(input, target).to(args.device, non_blocking=True)
+        adv_input = attack(input, target).float().contiguous(memory_format=torch.contiguous_format).to(args.device)
 
 
         std_logits = model(input)

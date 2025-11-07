@@ -108,12 +108,13 @@ def run_batch_epoch(model, architect, input, target, criterion, optimizer, attac
     discrete = discretize(architect, model.genotype(), args.device)
     model.update_arch_parameters(discrete)
 
-    input = input.to(args.device, non_blocking=True)
+    input = input.float().contiguous(memory_format=torch.contiguous_format).to(args.device, non_blocking=True)
+    #input = input.float().contiguous().to(args.device, non_blocking=True)
     target = target.to(args.device, non_blocking=True)
 
     optimizer.zero_grad()
     attack = attack_f(model)
-    adv_X = attack(input, target)
+    adv_X = attack(input, target).float().contiguous(memory_format=torch.contiguous_format).to(args.device)
     logits_adv = model(adv_X)
     adv_loss = criterion(logits_adv, target)
 
