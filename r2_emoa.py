@@ -34,15 +34,15 @@ def initial_population(n_population, alphas_dim, k):
     return Population(individuals=individuals)
 
 def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, device, statisctics):
-    model.eval()
     objective_space = np.empty((pop.size, args.objectives))
-    attack = attack_f(model)
     for i, individual in enumerate(pop):
         individual_architect = unpack_alphas(individual.X, model.alphas_dim)
         model.update_arch_parameters(individual_architect)
         discrete = discretize(individual_architect, model.genotype(), device)
         model.update_arch_parameters(discrete)
         individual.set("genotype", model.genotype())
+        attack = attack_f(model)
+        model.eval()
         time_stamp = time.time()
         std_acc, adv_acc, std_loss, adv_loss, ws_loss = infer(valid_queue, model, criterion, attack, args)
         individual.std_acc = std_acc
@@ -67,8 +67,11 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoc
     for n_batch, (input, target) in enumerate(train_queue):
         individual = pop[n_batch % args.n_population]
         individual_architect = unpack_alphas(individual.X, model.alphas_dim)
+        model.update_arch_parameters(individual_architect)
+        discrete = discretize(individual_architect, model.genotype(), args.device)
+        model.update_arch_parameters(discrete)
         time_stamp = time.time()
-        std_acc, adv_acc, loss = run_batch_epoch(model, individual_architect, input, target, criterion, optimizer,
+        std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer,
                                                  attack, args)
         if n_batch % args.report_freq == 0:
             print(
