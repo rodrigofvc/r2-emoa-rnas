@@ -5,6 +5,8 @@ from fractions import Fraction
 
 import numpy as np
 import torch
+torch.cuda.synchronize()
+
 import torchattacks
 import torchvision
 from torch import nn
