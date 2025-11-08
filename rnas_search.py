@@ -6,6 +6,15 @@ from fractions import Fraction
 import numpy as np
 import torch
 torch.cuda.synchronize()
+try:
+    import threadpoolctl
+    threadpoolctl.threadpool_limits(1)  # limita OpenBLAS/MKL a 1
+except Exception:
+    pass
+
+torch.set_num_threads(1)
+torch.set_num_interop_threads(1)
+np.seterr(all="raise")  # convierte warnings numéricos en excepciones claras
 
 import torchattacks
 import torchvision
