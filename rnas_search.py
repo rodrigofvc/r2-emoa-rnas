@@ -14,10 +14,7 @@ from r2_emoa import r2_emoa_rnas
 from evaluation.model_search import Network
 from adversarial import get_attack_function
 
-import os
-os.environ.setdefault("PYTHONFAULTHANDLER","1")
-os.environ.setdefault("CUDA_LAUNCH_BLOCKING","1")
-
+torch.set_float32_matmul_precision("medium")
 
 torch.backends.cudnn.benchmark = False
 torch.backends.cudnn.deterministic = True

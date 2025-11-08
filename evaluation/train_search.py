@@ -91,7 +91,10 @@ def train_batch(input, target, model, lambda_1, lambda_2, criterion, optimizer, 
     adv_correct = (adv_predicts == target).sum().item()
     return std_correct, adv_correct, total_loss.item()
 
-
+def check_input(input):
+    assert input.dtype == torch.float32 and input.is_contiguous(), (input.dtype, input.stride())
+    assert input.dim() == 4 and input.shape[1] in (1, 3, 16, 24, 32, 64), input.shape
+    assert torch.isfinite(input).all(), "input contiene NaN/Inf"
 
 def infer(valid_queue, model, criterion, attack, args):
     std_correct = 0
@@ -106,6 +109,8 @@ def infer(valid_queue, model, criterion, attack, args):
         target = target.to(args.device, non_blocking=True)
         adv_input = attack(input, target).to(args.device, non_blocking=True)
 
+        check_input(input)
+        check_input(adv_input)
 
         std_logits = model(input)
         std_loss = criterion(std_logits, target)
