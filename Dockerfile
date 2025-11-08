@@ -1,9 +1,12 @@
 # CUDA 12.1 + cuDNN 8 (driver 580 compatible)
 FROM nvidia/cuda:12.1.1-cudnn8-runtime-ubuntu22.04
 
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    software-properties-common ca-certificates curl git build-essential \
+    tzdata software-properties-common ca-certificates curl git build-essential \
  && add-apt-repository ppa:deadsnakes/ppa -y \
  && apt-get update && apt-get install -y --no-install-recommends \
     python3.11 python3.11-venv python3.11-distutils \
