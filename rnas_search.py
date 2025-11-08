@@ -1,13 +1,11 @@
 import argparse
 import json
 import ssl
-from fractions import Fraction
 
 import numpy as np
 import torch
 torch.cuda.synchronize()
 
-import torchattacks
 import torchvision
 from torch import nn
 
@@ -15,6 +13,17 @@ import utils
 from r2_emoa import r2_emoa_rnas
 from evaluation.model_search import Network
 from adversarial import get_attack_function
+
+import os
+os.environ.setdefault("PYTHONFAULTHANDLER","1")
+os.environ.setdefault("CUDA_LAUNCH_BLOCKING","1")
+
+
+torch.backends.cudnn.benchmark = False
+torch.backends.cudnn.deterministic = True
+
+torch.backends.cuda.matmul.allow_tf32 = False
+torch.backends.cudnn.allow_tf32 = False
 
 # Prepare all arguments and components such as model, optimizer, data loaders, weights, scheduler, attack.
 def prepare_args(args):
