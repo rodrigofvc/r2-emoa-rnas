@@ -16,11 +16,11 @@ from adversarial import get_attack_function
 
 torch.set_float32_matmul_precision("medium")
 
-torch.backends.cudnn.benchmark = False
-torch.backends.cudnn.deterministic = True
+torch.backends.cudnn.benchmark = True
+torch.backends.cudnn.deterministic = False
 
-torch.backends.cuda.matmul.allow_tf32 = False
-torch.backends.cudnn.allow_tf32 = False
+torch.backends.cuda.matmul.allow_tf32 = True
+torch.backends.cudnn.allow_tf32 = True
 
 # Prepare all arguments and components such as model, optimizer, data loaders, weights, scheduler, attack.
 def prepare_args(args):
