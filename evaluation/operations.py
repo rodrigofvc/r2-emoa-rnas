@@ -47,7 +47,10 @@ class DilConv(nn.Module):
         )
 
     def forward(self, x):
-        return self.op(x)
+        torch.backends.cudnn.enabled = False
+        out = self.op(x)
+        torch.backends.cudnn.enabled = True
+        return out
 
 
 class SepConv(nn.Module):
@@ -66,7 +69,10 @@ class SepConv(nn.Module):
         )
 
     def forward(self, x):
-        return self.op(x)
+        torch.backends.cudnn.enabled = False
+        out = self.op(x)
+        torch.backends.cudnn.enabled = True
+        return out
 
 
 class Identity(nn.Module):
