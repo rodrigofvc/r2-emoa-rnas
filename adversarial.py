@@ -4,6 +4,8 @@ import torch
 import torchattacks
 import torch.nn.functional as F
 
+torchattacks.Attack._change_model_mode = lambda self, model, revert=False: None
+
 def fgsm_dep(model, x, y, eps=8/255):
     x_adv = x.detach().clone().requires_grad_(True)
     logits = model(x_adv)
