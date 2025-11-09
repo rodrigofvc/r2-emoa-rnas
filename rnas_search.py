@@ -14,13 +14,11 @@ from r2_emoa import r2_emoa_rnas
 from evaluation.model_search import Network
 from adversarial import get_attack_function
 
-torch.set_float32_matmul_precision("medium")
-
-torch.backends.cudnn.benchmark = True
-torch.backends.cudnn.deterministic = False
-
-torch.backends.cuda.matmul.allow_tf32 = True
-torch.backends.cudnn.allow_tf32 = True
+#torch.set_float32_matmul_precision("medium")
+#torch.backends.cudnn.benchmark = True
+#torch.backends.cudnn.deterministic = False
+#torch.backends.cuda.matmul.allow_tf32 = True
+#torch.backends.cudnn.allow_tf32 = True
 
 # Prepare all arguments and components such as model, optimizer, data loaders, weights, scheduler, attack.
 def prepare_args(args):
