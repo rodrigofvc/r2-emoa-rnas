@@ -48,7 +48,7 @@ def fgsm(model, x, y, eps=8/255):
 
 def fgsm_simple(model, x, y, eps):
     x_adv = x.detach().clone().requires_grad_(True)
-    x_adv = x_adv.to(torch.float32).contiguous()
+    #x_adv = x_adv.to(torch.float32).contiguous()
     logits = model(x_adv)
     loss = F.cross_entropy(logits, y)
     grad = torch.autograd.grad(loss, x_adv)[0]
