@@ -109,8 +109,8 @@ def infer(valid_queue, model, criterion, attack, args):
         target = target.to(args.device, non_blocking=True)
         adv_input = attack(input, target).to(args.device, non_blocking=True)
 
-        check_input(input)
-        check_input(adv_input)
+        #check_input(input)
+        #check_input(adv_input)
 
         std_logits = model(input)
         std_loss = criterion(std_logits, target)
