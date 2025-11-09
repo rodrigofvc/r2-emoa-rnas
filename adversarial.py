@@ -4,7 +4,6 @@ import torch
 import torchattacks
 import torch.nn.functional as F
 
-torchattacks.Attack._change_model_mode = lambda self, model, revert=False: None
 
 def fgsm_dep(model, x, y, eps=8/255):
     x_adv = x.detach().clone().requires_grad_(True)
@@ -47,13 +46,21 @@ def fgsm(model, x, y, eps=8/255):
     adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach()
     return adv
 
+def fgsm_simple(model, x, y, eps):
+    x_adv = x.detach().clone().requires_grad_(True)
+    logits = model(x_adv)
+    loss = F.cross_entropy(logits, y)
+    grad = torch.autograd.grad(loss, x_adv)[0]
+    adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach()
+    return adv
+
 class FGSMAttack():
     def __init__(self, model, eps=8 / 255):
         self.model = model
         self.eps = eps
 
     def __call__(self, x, y):
-        return fgsm(self.model, x, y, eps=self.eps)
+        return fgsm_simple(self.model, x, y, eps=self.eps)
 
 
 def get_attack_function(attack_params):
@@ -61,7 +68,7 @@ def get_attack_function(attack_params):
     if 'alpha' in attack_params['params']:
         attack_params['params']['alpha'] = float(Fraction(attack_params['params']['alpha'])) if '/' in attack_params['params']['alpha'] else float(attack_params['params']['alpha'])
     if attack_params['name'] == 'FGSM':
-        attack_function = lambda model: torchattacks.FGSM(model, **attack_params['params'])
+        attack_function = lambda model: FGSMAttack(model, eps=attack_params['params']['eps'])
     elif 'PGD' in attack_params['name']:
         attack_function = lambda model: torchattacks.PGD(model, **attack_params['params'])
     else:
