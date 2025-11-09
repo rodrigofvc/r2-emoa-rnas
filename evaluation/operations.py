@@ -2,45 +2,20 @@ import torch
 import torch.nn as nn
 
 OPS = {
-    'none': lambda C, stride, affine: Zero(stride),
-    'avg_pool_3x3': lambda C, stride, affine: nn.AvgPool2d(3, stride=stride, padding=1, count_include_pad=False),
-    'max_pool_3x3': lambda C, stride, affine: nn.MaxPool2d(3, stride=stride, padding=1),
-    'skip_connect': lambda C, stride, affine: Identity() if stride == 1 else FactorizedReduce(C, C, affine=affine),
-    'sep_conv_3x3': lambda C, s, a: (
-        SepConv(C, C, 3, 1, 1, affine=a) if s == 1 else
-        nn.Sequential(
-            nn.ReLU(inplace=False),
-            nn.Conv2d(C, C, 1, stride=s, padding=0, bias=False),
-            nn.BatchNorm2d(C, affine=a),
-            SepConv(C, C, 3, 1, 1, affine=a)
-        )
+    'none': lambda C, s, a: Zero(s),
+    'avg_pool_3x3': lambda C, s, a: nn.AvgPool2d(3, stride=s, padding=1, count_include_pad=False),
+    'max_pool_3x3': lambda C, s, a: nn.MaxPool2d(3, stride=s, padding=1),
+    'skip_connect': lambda C, s, a: Identity() if s == 1 else FactorizedReduce(C, C, affine=a),
+    'sep_conv_3x3': lambda C, s, a: SepConv(C, C, 3, s, 1, affine=a),
+    'sep_conv_5x5': lambda C, s, a: SepConv(C, C, 5 if s == 1 else 3, s, 2 if s == 1 else 1, affine=a),
+    'sep_conv_7x7': lambda C, s, a: SepConv(C, C, 7 if s == 1 else 3, s, 3 if s == 1 else 1, affine=a),
+    'dil_conv_3x3': lambda C, s, a: (
+        DilConv(C, C, 3, 1, 2, 2, affine=a) if s == 1 else
+        DilConv(C, C, 3, s, 1, 1, affine=a)
     ),
-    'sep_conv_5x5': lambda C, s, a: (
-        SepConv(C, C, 5, 1, 2, affine=a) if s == 1 else
-        nn.Sequential(
-            nn.ReLU(inplace=False),
-            nn.Conv2d(C, C, 1, stride=s, padding=0, bias=False),
-            nn.BatchNorm2d(C, affine=a),
-            SepConv(C, C, 3, 1, 1, affine=a)
-        )
-    ),
-    'sep_conv_7x7': lambda C, s, a: (
-        SepConv(C, C, 7, 1, 3, affine=a) if s == 1 else
-        nn.Sequential(
-            nn.ReLU(inplace=False),
-            nn.Conv2d(C, C, 1, stride=s, padding=0, bias=False),
-            nn.BatchNorm2d(C, affine=a),
-            SepConv(C, C, 3, 1, 1, affine=a)
-        )
-    ),
-    'dil_conv_3x3': lambda C, s, a: nn.Sequential(
-        SepConv(C, C, 3, s, 1, affine=a),
-        SepConv(C, C, 3, 1, 1, affine=a),
-    ),
-    'dil_conv_5x5': lambda C, s, a: nn.Sequential(
-        SepConv(C, C, 3, s, 1, affine=a),
-        SepConv(C, C, 3, 1, 1, affine=a),
-        SepConv(C, C, 3, 1, 1, affine=a),
+    'dil_conv_5x5': lambda C, s, a: (
+        DilConv(C, C, 5, 1, 4, 2, affine=a) if s == 1 else
+        DilConv(C, C, 3, s, 1, 1, affine=a)
     ),
     'conv_7x1_1x7': lambda C, s, a: nn.Sequential(
         nn.ReLU(inplace=False),
