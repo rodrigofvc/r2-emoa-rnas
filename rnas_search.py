@@ -4,7 +4,7 @@ import ssl
 
 import numpy as np
 import torch
-torch.cuda.synchronize()
+#torch.cuda.synchronize()
 
 import torchvision
 from torch import nn
