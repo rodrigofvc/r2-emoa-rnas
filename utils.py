@@ -95,7 +95,7 @@ def store_metrics(epoch, population, args, weights_r2, statistics):
 def save_supernet(model, model_path):
     model_path += 'super-net.pt'
     cpu_state = {k: v.detach().cpu().contiguous() for k, v in model.state_dict().items()}
-    torch.save(cpu_state, path)
+    torch.save(cpu_state, model_path)
     if torch.cuda.is_available():
         model.to('cuda')
 
