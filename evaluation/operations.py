@@ -66,7 +66,11 @@ class SepConv(nn.Module):
         )
 
     def forward(self, x):
-        return self.op(x)
+        prev = torch.backends.cudnn.enabled
+        torch.backends.cudnn.enabled = False
+        out = self.op(x)
+        torch.backends.cudnn.enabled = prev
+        return out
 
 
 class Identity(nn.Module):

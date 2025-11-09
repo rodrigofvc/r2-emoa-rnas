@@ -51,6 +51,8 @@ def prepare_args(args):
         device=args.device,
     ).to(args.device)
 
+    for name, child in model.named_children():
+        assert isinstance(child, nn.Module), f"{name} no es nn.Module: {type(child)}"
 
     optimizer = torch.optim.SGD(
       model.weight_parameters(),
