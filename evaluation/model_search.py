@@ -193,7 +193,7 @@ class Network(nn.Module):
         gene_normal = _parse(F.softmax(self.alphas_normal, dim=-1).data.cpu().numpy())
         gene_reduce = _parse(F.softmax(self.alphas_reduce, dim=-1).data.cpu().numpy())
 
-        concat = range(2+self._steps-self._multiplier_cells, self._steps+2)
+        concat = range(2+self._steps-self._multiplier, self._steps+2)
         genotype = Genotype(
           normal=gene_normal, normal_concat=concat,
           reduce=gene_reduce, reduce_concat=concat
