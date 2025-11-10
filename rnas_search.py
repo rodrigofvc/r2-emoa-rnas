@@ -31,11 +31,6 @@ def prepare_args(args):
     print("Using device:", device)
     args.device = device
 
-    if args.reduction:
-        reduction_layers = [args.layers//3, 2*args.layers//3]
-    else:
-        reduction_layers = None
-
     criterion = nn.CrossEntropyLoss()
 
     model = Network(
@@ -44,15 +39,11 @@ def prepare_args(args):
         layers=args.layers,
         criterion=criterion,
         steps=args.steps,
-        multiplier_cells=args.multiplier,
-        reduction_layers=reduction_layers,
+        multiplier=args.multiplier,
         stem_multiplier=3,
-        fairdarts_eval=False,
         device=args.device,
     ).to(args.device)
 
-    for name, child in model.named_children():
-        assert isinstance(child, nn.Module), f"{name} no es nn.Module: {type(child)}"
 
     optimizer = torch.optim.SGD(
       model.weight_parameters(),
