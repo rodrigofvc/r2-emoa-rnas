@@ -37,6 +37,7 @@ RUN pip install --no-cache-dir -r /tmp/requirements.txt
 RUN useradd -ms /bin/bash appuser
 USER appuser
 WORKDIR /workspace
-
-
+ENV LD_LIBRARY_PATH=/opt/venv/lib/python3.11/site-packages/nvidia/cudnn/lib:/usr/local/nvidia/lib:/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
+ENV LD_PRELOAD=/opt/venv/lib/python3.11/site-packages/nvidia/cudnn/lib/libcudnn.so.8
+ENV CUDA_MODULE_LOADING=LAZY
 CMD ["python3", "-c", "import torch, numpy as np; print('torch:', torch.__version__, 'cuda:', torch.version.cuda, 'cuDNN:', torch.backends.cudnn.version(), 'avail:', torch.cuda.is_available())"]
