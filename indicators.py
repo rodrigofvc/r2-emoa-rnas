@@ -19,7 +19,7 @@ def r2(population, weights, z_ref):
     for w in weights:
         min_diff = float('inf')
         for p in population:
-            max_diff = max([w[i] * abs(p.F_norm[i] - z_ref[i]) for i in range(len(p.F_norm))])
+            max_diff = max([w_j * abs(p.F_norm[j] - z_ref[j]) for j, w_j in enumerate(w)])
             min_diff = min(min_diff, max_diff)
         acc += min_diff
     return acc / weights.shape[0]
