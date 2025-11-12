@@ -4,7 +4,6 @@ import ssl
 
 import numpy as np
 import torch
-#torch.cuda.synchronize()
 
 import torchvision
 from torch import nn
@@ -14,11 +13,6 @@ from r2_emoa import r2_emoa_rnas
 from evaluation.model_search import Network
 from adversarial import get_attack_function
 
-#torch.set_float32_matmul_precision("medium")
-#torch.backends.cudnn.benchmark = True
-#torch.backends.cudnn.deterministic = False
-#torch.backends.cuda.matmul.allow_tf32 = True
-#torch.backends.cudnn.allow_tf32 = True
 
 # Prepare all arguments and components such as model, optimizer, data loaders, weights, scheduler, attack.
 def prepare_args(args):
@@ -68,12 +62,12 @@ def prepare_args(args):
     train_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-        num_workers=0, pin_memory=False)
+        num_workers=2, pin_memory=True)
 
     valid_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-        num_workers=0, pin_memory=False)
+        num_workers=2, pin_memory=True)
 
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, args.epochs, eta_min=args.learning_rate_min)
@@ -108,6 +102,7 @@ if __name__ == '__main__':
 
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
+    torch.backends.cudnn.benchmark = False
 
     if torch.cuda.is_available():
         torch.cuda.manual_seed(args.seed)
