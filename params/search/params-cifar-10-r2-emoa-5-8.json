@@ -18,7 +18,6 @@
     "weight_decay": 0.0003,
     "report_freq": 45,
     "gpu": 0,
-    "epochs": 35,
     "n_population": 40,
     "init_channels": 8,
     "reduction": true,

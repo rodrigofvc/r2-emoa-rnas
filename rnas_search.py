@@ -85,6 +85,7 @@ if __name__ == '__main__':
     parser.add_argument('--algorithm', type=str, choices=['r2-emoa'], help='algorithm to run')
     parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset to use')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
+    parser.add_argument('--epochs', type=int, default=30, help='number of epochs to search')
     parser.add_argument('--params_dir', type=str, required=True, help="params json dir")
     args = parser.parse_args()
 
@@ -103,6 +104,7 @@ if __name__ == '__main__':
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     torch.backends.cudnn.benchmark = False
+    torch.backends.cudnn.deterministic = True
 
     if torch.cuda.is_available():
         torch.cuda.manual_seed(args.seed)
