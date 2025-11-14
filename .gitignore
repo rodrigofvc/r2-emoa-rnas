@@ -10,4 +10,3 @@ evaluation_deprecated/
 evaluations.csv
 *.sh
 r2_weights/
-results/

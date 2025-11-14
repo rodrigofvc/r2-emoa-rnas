@@ -15,7 +15,7 @@ def normalize_objectives(population):
             else:
                 ind.F_norm[i] = 0.0
             assert np.isfinite(ind.F_norm[i]), f"Non-finite F_norm encountered in normalization: {ind.F_norm[i]}"
-            ind.F_norm[i] = np.clip(ind.F_norm[i], a_min=0.0, a_max=1.0)
+    ind.F_norm = np.clip(ind.F_norm, a_min=0.0, a_max=1.0)
 
 
 def r2(population, weights, z_ref):
