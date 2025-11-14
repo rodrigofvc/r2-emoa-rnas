@@ -4,15 +4,19 @@ FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    python3 \
-    python3-venv \
-    python3-pip \
-    python3-dev \
-    build-essential \
-    git \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+RUN set -eux; \
+    apt-get -o Acquire::AllowInsecureRepositories=true \
+            -o APT::Get::AllowUnauthenticated=true \
+            install -y --no-install-recommends \
+                python3 \
+                python3-venv \
+                python3-pip \
+                python3-dev \
+                build-essential \
+                git \
+                ca-certificates \
+    ; \
+    rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:${PATH}"
