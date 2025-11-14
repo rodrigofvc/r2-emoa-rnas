@@ -1,5 +1,5 @@
 # CUDA 12.1 + cuDNN 8 (driver 580 compatible)
-FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
+FROM --platform=linux/amd64 nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
