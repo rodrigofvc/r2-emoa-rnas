@@ -7,11 +7,15 @@ def normalize_objectives(population):
     f_mins = [min([ind.F[i] for ind in population]) for i in range(n_obj)]
     f_maxs = [max([ind.F[i] for ind in population]) for i in range(n_obj)]
     for ind in population:
+        ind.F = np.clip(ind.F, a_min=1e-8, a_max=1e8)
         for i in range(n_obj):
-            if f_maxs[i] - f_mins[i] > 0:
+            assert np.isfinite(ind.F[i]), f"Non-finite F encountered in normalization: {ind.F[i]}"
+            if f_maxs[i] - f_mins[i] > 1e-12:
                 ind.F_norm[i] = (ind.F[i] - f_mins[i]) / (f_maxs[i] - f_mins[i])
             else:
                 ind.F_norm[i] = 0.0
+            assert np.isfinite(ind.F_norm[i]), f"Non-finite F_norm encountered in normalization: {ind.F_norm[i]}"
+            ind.F_norm[i] = np.clip(ind.F_norm[i], a_min=0.0, a_max=1.0)
 
 
 def r2(population, weights, z_ref):
@@ -41,7 +45,12 @@ def get_dynamic_r2_reference(population):
         max_f_i = max([ind.F_norm[i] for ind in population])
         min_f_i = min([ind.F_norm[i] for ind in population])
         max_f = max(max_f, max_f_i - min_f_i)
+        assert np.isfinite(min_f_i), "Non-finite min_f_i encountered in dynamic R2 reference point calculation"
+        assert np.isfinite(max_f_i), "Non-finite max_f_i encountered in dynamic R2 reference point calculation"
+        assert np.isfinite(max_f), "Non-finite max_f encountered in dynamic R2 reference point calculation"
     for i in range(n_obj):
         min_f_i = min([ind.F_norm[i] for ind in population])
         z_ref[i] = min_f_i - max_f
+        assert np.isfinite(z_ref[i]), "Non-finite z_ref encountered in dynamic R2 reference point calculation"
+        assert np.isfinite(min_f_i), "Non-finite min_f_i encountered in dynamic R2 reference point calculation"
     return z_ref
