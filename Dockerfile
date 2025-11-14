@@ -5,6 +5,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 
 RUN set -eux; \
+    apt-get -o Acquire::AllowInsecureRepositories=true update; \
     apt-get -o Acquire::AllowInsecureRepositories=true \
             -o APT::Get::AllowUnauthenticated=true \
             install -y --no-install-recommends \
@@ -14,8 +15,7 @@ RUN set -eux; \
                 python3-dev \
                 build-essential \
                 git \
-                ca-certificates \
-    ; \
+                ca-certificates; \
     rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m venv /opt/venv
