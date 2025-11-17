@@ -90,6 +90,7 @@ def store_metrics(epoch, population, args, weights_r2, statistics):
     writer.writerow(row_hyp)
     writer.writerow(row_r2)
     file.close()
+    return hyp, r2_population
 
 
 def save_supernet(model, model_path):
