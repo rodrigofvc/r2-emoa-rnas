@@ -22,7 +22,7 @@ def get_weights_ponderated(n, k):
     while len(w_p) < n:
         w_set = get_reference_directions("energy", k, n, seed=seed)
         for w in w_set:
-            if w[0] + w[1] <= 0.75 and len(w_p) < n:
+            if w[0] + w[1] >= 0.75 and len(w_p) < n:
                 w_p.append(w)
         seed += 1
     return np.array(w_p)
