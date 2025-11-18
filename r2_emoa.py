@@ -119,7 +119,7 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
         archive = archive_update_pq(archive, Population.merge(pop, mutation))
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, Population.merge(pop, mutation))
         pop = update_population_r2(pop, mutation, weights_r2)
-        hyp_archive, r2_archive = utils.store_metrics(epoch, archive, args, weights_r2, statistics)
+        hyp_archive, r2_archive = utils.store_metrics(epoch + 1, archive, args, weights_r2, statistics)
         utils.save_supernet(model, args.save_path_final_model)
         utils.save_architectures(archive, args.save_path_final_architect)
         utils.plot_hypervolume(statistics, args.save_path_final_architect)
