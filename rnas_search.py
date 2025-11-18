@@ -103,10 +103,10 @@ if __name__ == '__main__':
 
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
-    torch.backends.cudnn.benchmark = False
-    torch.backends.cudnn.deterministic = True
 
     if torch.cuda.is_available():
+        torch.backends.cudnn.benchmark = False
+        torch.backends.cudnn.deterministic = True
         torch.cuda.manual_seed(args.seed)
         torch.backends.cudnn.enabled = True
 
@@ -141,4 +141,4 @@ if __name__ == '__main__':
         utils.plot_r2(statistics, args.save_path_final_architect)
         utils.save_statistics_to_csv(statistics, args.save_path_final_architect)
         utils.save_params(args, args.save_path_final_architect)
-        print("Experiment completed and results saved.")
+        print(f"Experiment completed and results saved in {results_dir}")

@@ -90,6 +90,7 @@ def store_metrics(epoch, population, args, weights_r2, statistics):
     writer.writerow(row_hyp)
     writer.writerow(row_r2)
     file.close()
+    return hyp, r2_population
 
 
 def save_supernet(model, model_path):
@@ -117,6 +118,14 @@ def load_model(model_path):
     if torch.cuda.is_available():
         state_dict.to('cuda')
     return state_dict
+
+def load_supernet(model_path, model):
+    model_path += 'super-net.pt'
+    state_dict = torch.load(model_path, map_location='cpu')
+    model.load_state_dict(state_dict)
+    if torch.cuda.is_available():
+        model.to('cuda')
+    return model
 
 def save_architecture(i, individual, architect_path):
     architect_path += 'architectures' + os.sep

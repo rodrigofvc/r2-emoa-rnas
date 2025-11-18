@@ -21,7 +21,7 @@
     "n_population": 40,
     "init_channels": 8,
     "reduction": true,
-    "layers": 6,
+    "layers": 8,
     "steps": 4,
     "multiplier": 4,
     "attack": { "name": "FGSM",
