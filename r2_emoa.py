@@ -38,7 +38,7 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
     objective_space = np.empty((pop.size, args.objectives))
     attack = attack_f(model)
     for i, individual in enumerate(pop):
-        individual_architect = unpack_alphas(individual.X, model.alphas_dim)
+        individual_architect = unpack_alphas(individual.X, model.alphas_dim, args)
         model.update_arch_parameters(individual_architect)
         discrete = discretize(individual_architect, model.genotype(), device)
         model.update_arch_parameters(discrete)
@@ -66,7 +66,7 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoc
     attack = attack_f(model)
     for n_batch, (input, target) in enumerate(train_queue):
         individual = pop[n_batch % args.n_population]
-        individual_architect = unpack_alphas(individual.X, model.alphas_dim)
+        individual_architect = unpack_alphas(individual.X, model.alphas_dim, args)
         model.update_arch_parameters(individual_architect)
         discrete = discretize(individual_architect, model.genotype(), args.device)
         model.update_arch_parameters(discrete)
