@@ -16,6 +16,7 @@ class MixedOp(nn.Module):
       self._ops.append(op)
 
   def forward(self, x, weights):
+    weights = [w.to(x.device) for w in weights]
     return sum(w * op(x) for w, op in zip(weights, self._ops))
 
 class Cell(nn.Module):
@@ -57,7 +58,6 @@ class Cell(nn.Module):
     def forward(self, s0, s1, weights):
         s0 = self.preprocess0(s0)
         s1 = self.preprocess1(s1)
-
         states = [s0, s1]
         offset = 0
         # i = 0, j = 0,1 sum(s_0,s_1)
@@ -130,8 +130,8 @@ class Network(nn.Module):
         # i = 3, j = 0,1,2,3,4 sum(s_0,s_1,x0,x1,x2)
         k = sum(1 for i in range(self._steps) for _ in range(2 + i))
         num_ops = len(PRIMITIVES)
-        self.alphas_reduce = (1e-3 * torch.randn(k, num_ops).to(self._device)).requires_grad_()
-        self.alphas_normal = (1e-3 * torch.randn(k, num_ops).to(self._device)).requires_grad_()
+        self.alphas_normal = nn.Parameter(1e-3 * torch.randn(k, num_ops).to(self._device), requires_grad=False)
+        self.alphas_reduce = nn.Parameter(1e-3 * torch.randn(k, num_ops).to(self._device), requires_grad=False)
 
     def new(self):
         model_new = Network(self._C, self._num_classes, self._layers, self._criterion,
@@ -146,8 +146,9 @@ class Network(nn.Module):
     def update_arch_parameters(self, new_alphas):
         assert new_alphas[0].is_cuda == self.alphas_normal.is_cuda
         assert new_alphas[1].is_cuda == self.alphas_reduce.is_cuda
-        self.alphas_normal.data.copy_(new_alphas[0].data)
-        self.alphas_reduce.data.copy_(new_alphas[1].data)
+        with torch.no_grad():
+            self.alphas_normal.copy_(new_alphas[0])
+            self.alphas_reduce.copy_(new_alphas[1])
 
     def weight_parameters(self):
         arch_set = {id(p) for p in self.arch_parameters()}
@@ -163,9 +164,9 @@ class Network(nn.Module):
         s0 = s1 = self.stem(input)
         for i, cell in enumerate(self.cells):
             if cell.reduction:
-                weights = F.softmax(self.alphas_reduce, dim=-1)
+                weights = F.softmax(self.alphas_reduce, dim=-1).to(self._device)
             else:
-                weights = F.softmax(self.alphas_normal, dim=-1)
+                weights = F.softmax(self.alphas_normal, dim=-1).to(self._device)
             s0, s1 = s1, cell(s0, s1, weights)
         out = self.global_pooling(s1)
         logits = self.classifier(out.view(out.size(0), -1))
