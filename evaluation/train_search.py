@@ -111,7 +111,7 @@ def infer(valid_queue, model, criterion, attack, args):
         adv_input = adv_input.to(args.device, non_blocking=True)
 
         with torch.no_grad():
-            with torch.amp.autocast("cuda", dtype=torch.float16):
+            with torch.amp.autocast(args.device, dtype=torch.float16):
                 std_logits = model(input)
                 std_loss = criterion(std_logits, target)
                 adv_logits = model(adv_input)

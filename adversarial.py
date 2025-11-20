@@ -3,6 +3,7 @@ from fractions import Fraction
 import torch
 import torchattacks
 import torch.nn.functional as F
+from torch import amp
 
 
 def fgsm_dep(model, x, y, eps=8/255):
@@ -47,11 +48,12 @@ def fgsm(model, x, y, eps=8/255):
     return adv
 
 def fgsm_simple(model, x, y, eps):
-    x_adv = x.detach().clone().requires_grad_(True)
-    #x_adv = x_adv.to(torch.float32).contiguous()
-    logits = model(x_adv)
-    loss = F.cross_entropy(logits, y)
-    grad = torch.autograd.grad(loss, x_adv)[0]
+    x_adv = x.detach().clone().to(x.device).float().requires_grad_(True)
+    model.zero_grad(set_to_none=True)
+    with amp.autocast("cuda", dtype=torch.float16):
+        logits = model(x_adv)
+        loss = F.cross_entropy(logits, y)
+    grad = torch.autograd.grad(loss, x_adv, retain_graph=False, create_graph=False)[0]
     adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach()
     return adv
 
