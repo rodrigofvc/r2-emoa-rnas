@@ -144,6 +144,8 @@ class Network(nn.Module):
         return [self.alphas_normal, self.alphas_reduce]
 
     def update_arch_parameters(self, new_alphas):
+        assert new_alphas[0].is_cuda == self.alphas_normal.is_cuda
+        assert new_alphas[1].is_cuda == self.alphas_reduce.is_cuda
         self.alphas_normal.data.copy_(new_alphas[0].data)
         self.alphas_reduce.data.copy_(new_alphas[1].data)
 

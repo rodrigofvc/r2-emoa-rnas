@@ -107,8 +107,8 @@ def infer(valid_queue, model, criterion, attack, args):
     for step, (input, target) in enumerate(valid_queue):
         input  = input.to(args.device, non_blocking=True)
         target = target.to(args.device, non_blocking=True)
-        adv_input = attack(input, target).to(args.device, non_blocking=True)
-
+        adv_input = attack(input, target)
+        adv_input = adv_input.to(args.device, non_blocking=True)
         #check_input(input)
         #check_input(adv_input)
 

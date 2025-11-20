@@ -8,12 +8,12 @@ def flatten_alphas(individual):
     return np.concatenate([alpha_normal.detach().cpu().numpy().ravel(),
                            alpha_reduce.detach().cpu().numpy().ravel()]).astype(np.float64)
 
-def unpack_alphas(vec, shape_alphas):
+def unpack_alphas(vec, shape_alphas, args):
     n_norm = shape_alphas[0] * shape_alphas[1]
     a_norm = vec[:n_norm].reshape(shape_alphas)
     a_reduction = vec[n_norm:].reshape(shape_alphas)
     return [torch.from_numpy(a_norm).float(), torch.from_numpy(a_reduction).float()]
-
+    #return [torch.from_numpy(a_norm).float().to(args.device), torch.from_numpy(a_reduction).float().to(args.device)]
 class AlphaProblem(Problem):
     def __init__(self, shape_alphas):
         n_var = shape_alphas[0] * shape_alphas[1] * 2
