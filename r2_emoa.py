@@ -1,6 +1,7 @@
 import time
 
 import numpy as np
+from torch.amp import GradScaler
 
 import utils
 from archivers import archive_update_pq, archive_update_pq_accuracy
@@ -61,7 +62,7 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
         ind.c_r2 = contribution_r2(pop, ind, weights_r2, z_ref)
     utils.store_statisctics(statisctics, objective_space)
 
-def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoch, scheduler, args):
+def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoch, scheduler, scaler, args):
     model.train()
     attack = attack_f(model)
     for n_batch, (input, target) in enumerate(train_queue):
@@ -71,7 +72,7 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoc
         discrete = discretize(individual_architect, model.genotype(), args.device)
         model.update_arch_parameters(discrete)
         time_stamp = time.time()
-        std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, attack, args)
+        std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, args)
         if n_batch % args.report_freq == 0:
             print(
                 f">>>> Epoch {epoch}/{args.epochs} Batch {n_batch + 1}/{len(train_queue)} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))}) (HH:MM:SS): std_acc {std_acc / args.batch_size * 100:.2f}%, adv_acc {adv_acc / args.batch_size * 100:.2f}%, loss {loss:.4f}")
@@ -83,7 +84,8 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     archive_accuracy = []
     pop = initial_population(args.n_population, model.alphas_dim, args.objectives)
     print(f">>>> Initial population of size {pop.size} created.")
-    train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, args)
+    scaler = GradScaler()
+    train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, scaler, args)
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'), 'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'r2_log': []}
     eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
     archive = archive_update_pq(archive, pop)
@@ -92,7 +94,7 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     for epoch in range(args.epochs):
         start = time.time()
         time_stamp_epoch = time.time()
-        train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoch + 1, scheduler, args)
+        train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoch + 1, scheduler, scaler, args)
         print(f">>>> Epoch {epoch + 1} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_epoch))} (HH:MM:SS)")
 
         selection = TournamentSelection(func_comp=tournament_r2)
@@ -124,6 +126,8 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
         utils.save_architectures(archive, args.save_path_final_architect)
         utils.plot_hypervolume(statistics, args.save_path_final_architect)
         print(f"Hypervolume: {hyp_archive}, R2: {r2_archive}")
+        if torch.cuda.is_available():
+            print(f'GPU VRAM {torch.cuda.memory_allocated()/1e9:.2f} GB allocated')
     print(f">>>> Total search time: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_search))} (HH:MM:SS)")
     return model, archive, archive_accuracy, statistics
 
