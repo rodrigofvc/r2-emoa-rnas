@@ -3,7 +3,7 @@ import logging
 
 import torch
 from torch import nn
-
+from torch.cuda.amp import autocast
 from evaluation.model_search import discretize
 
 
@@ -109,14 +109,14 @@ def infer(valid_queue, model, criterion, attack, args):
         target = target.to(args.device, non_blocking=True)
         adv_input = attack(input, target)
         adv_input = adv_input.to(args.device, non_blocking=True)
-        #check_input(input)
-        #check_input(adv_input)
 
-        std_logits = model(input)
-        std_loss = criterion(std_logits, target)
-        adv_logits = model(adv_input)
-        adv_loss = criterion(adv_logits, target)
-        total_loss = args.lambda_1 * std_loss + args.lambda_2 * adv_loss
+        with torch.no_grad():
+            with autocast(dtype=torch.float16):
+                std_logits = model(input)
+                std_loss = criterion(std_logits, target)
+                adv_logits = model(adv_input)
+                adv_loss = criterion(adv_logits, target)
+                total_loss = args.lambda_1 * std_loss + args.lambda_2 * adv_loss
 
         std_predicts = std_logits.argmax(dim=1)
         adv_predicts = adv_logits.argmax(dim=1)
