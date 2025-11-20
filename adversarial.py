@@ -58,13 +58,12 @@ def fgsm_simple(model, x, y, eps):
     adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach()
     return adv, std_logits.detach()
 
-class FGSMAttack():
-    def __init__(self, model, eps=8 / 255):
-        self.model = model
+class FGSMAttack:
+    def __init__(self, eps=8/255):
         self.eps = eps
 
-    def __call__(self, x, y):
-        return fgsm_simple(self.model, x, y, eps=self.eps)
+    def __call__(self, model, x, y):
+        return fgsm_simple(model, x, y, self.eps)
 
 
 def get_attack_function(attack_params):
@@ -72,7 +71,8 @@ def get_attack_function(attack_params):
     if 'alpha' in attack_params['params']:
         attack_params['params']['alpha'] = float(Fraction(attack_params['params']['alpha'])) if '/' in attack_params['params']['alpha'] else float(attack_params['params']['alpha'])
     if attack_params['name'] == 'FGSM':
-        attack_function = lambda model: FGSMAttack(model, eps=attack_params['params']['eps'])
+        atk = FGSMAttack(attack_params['params']['eps'])
+        return lambda model: lambda x, y: atk(model, x, y)
     elif 'PGD' in attack_params['name']:
         attack_function = lambda model: torchattacks.PGD(model, **attack_params['params'])
     else:
