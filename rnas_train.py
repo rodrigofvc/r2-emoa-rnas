@@ -109,12 +109,12 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, args):
     target = target.to(args.device, non_blocking=True)
 
     optimizer.zero_grad()
-    adv_X = attack(input, target)
+    adv_X, std_logits = attack(input, target)
     logits_adv = model(adv_X)
     adv_loss = criterion(logits_adv, target)
 
-    logits = model(input)
-    natural_loss = criterion(logits, target)
+    #logits = model(input)
+    natural_loss = criterion(std_logits, target)
 
     total_loss = args.lambda_1 * natural_loss + args.lambda_2 * adv_loss
 
@@ -122,7 +122,7 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, args):
     nn.utils.clip_grad_norm_(model.weight_parameters(), args.grad_clip)
     optimizer.step()
 
-    std_predicts = logits.argmax(dim=1)
+    std_predicts = std_logits.argmax(dim=1)
     adv_predicts = logits_adv.argmax(dim=1)
     std_correct = (std_predicts == target).sum().item()
     adv_correct = (adv_predicts == target).sum().item()

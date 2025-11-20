@@ -52,11 +52,11 @@ def fgsm_simple(model, x, y, eps):
     x_adv = x.detach().clone().to(device).float().requires_grad_(True)
     model.zero_grad(set_to_none=True)
     with amp.autocast('cuda', dtype=torch.float16):
-        logits = model(x_adv)
-        loss = F.cross_entropy(logits, y)
+        std_logits = model(x_adv)
+        loss = F.cross_entropy(std_logits, y)
     grad = torch.autograd.grad(loss, x_adv, retain_graph=False, create_graph=False)[0]
     adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach()
-    return adv
+    return adv, std_logits.detach()
 
 class FGSMAttack():
     def __init__(self, model, eps=8 / 255):
