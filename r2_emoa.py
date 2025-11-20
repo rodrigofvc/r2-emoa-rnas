@@ -21,8 +21,8 @@ from indicators import normalize_objectives, get_dynamic_r2_reference, contribut
 def initial_population(n_population, alphas_dim, k):
     individuals = []
     for i in range(n_population):
-        normal_arch = torch.rand((alphas_dim[0], alphas_dim[1]))
-        reduction_arch = torch.rand((alphas_dim[0], alphas_dim[1]))
+        normal_arch = torch.rand((alphas_dim[0], alphas_dim[1])).requires_grad_(False)
+        reduction_arch = torch.rand((alphas_dim[0], alphas_dim[1])).requires_grad_(False)
         individuals.append(Individual(X=flatten_alphas((normal_arch, reduction_arch)))
                             .set("k", k)
                             .set("c_r2", 0.0)
