@@ -3,7 +3,6 @@ import logging
 
 import torch
 from torch import nn
-from torch.cuda.amp import autocast
 from evaluation.model_search import discretize
 
 

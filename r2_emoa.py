@@ -127,7 +127,7 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
         utils.plot_hypervolume(statistics, args.save_path_final_architect)
         print(f"Hypervolume: {hyp_archive}, R2: {r2_archive}")
         if torch.cuda.is_available():
-            print(f'GPU VRAM {torch.cuda.memory_allocated()/1e9:.2f} GB allocated')
+            print(f'GPU VRAM {torch.cuda.memory_allocated()/1e7:.2f} GB allocated')
     print(f">>>> Total search time: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_search))} (HH:MM:SS)")
     return model, archive, archive_accuracy, statistics
 
