@@ -9,18 +9,12 @@ from individual import Individual
 
 def unpack_alphas(vec, shape_alphas, args):
     n_norm = shape_alphas[0] * shape_alphas[1]
-    a_norm = torch.tensor(
-        vec[:n_norm].reshape(shape_alphas),
-        dtype=torch.float32,
-        requires_grad=False,
-        device=args.device
-    )
-    a_reduction = torch.tensor(
-        vec[n_norm:].reshape(shape_alphas),
-        dtype=torch.float32,
-        requires_grad=False,
-        device=args.device,
-    )
+    a_norm = vec[:n_norm].reshape(shape_alphas).clone().detach().to(
+        dtype=torch.float32, device=args.device
+    ).requires_grad_(False)
+    a_reduction = vec[n_norm:].reshape(shape_alphas).clone().detach().to(
+        dtype=torch.float32, device=args.device
+    ).requires_grad_(False)
     return [a_norm, a_reduction]
 class AlphaProblem(Problem):
     def __init__(self, shape_alphas):
