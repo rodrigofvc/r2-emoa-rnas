@@ -7,14 +7,11 @@ import utils
 from archivers import archive_update_pq, archive_update_pq_accuracy
 from evaluation.model_search import discretize
 from evaluation.train_search import infer
+from individual import Individual
 from rnas_train import run_batch_epoch
-from evolutionary import AlphaProblem, unpack_alphas, flatten_alphas, tournament_r2
+from evolutionary import unpack_alphas, tournament_selection, binary_crossover, polynomial_mutation
 import torch
-from pymoo.core.population import Population
-from pymoo.core.individual import Individual
-from pymoo.operators.crossover.sbx import SBX
-from pymoo.operators.mutation.pm import PM
-from pymoo.operators.selection.tournament import TournamentSelection
+
 
 from indicators import normalize_objectives, get_dynamic_r2_reference, contribution_r2
 
@@ -22,17 +19,9 @@ from indicators import normalize_objectives, get_dynamic_r2_reference, contribut
 def initial_population(n_population, alphas_dim, k):
     individuals = []
     for i in range(n_population):
-        normal_arch = torch.rand((alphas_dim[0], alphas_dim[1])).requires_grad_(False)
-        reduction_arch = torch.rand((alphas_dim[0], alphas_dim[1])).requires_grad_(False)
-        individuals.append(Individual(X=flatten_alphas((normal_arch, reduction_arch)))
-                            .set("k", k)
-                            .set("c_r2", 0.0)
-                            .set("adv_acc", 0.0)
-                            .set("std_acc", 0.0)
-                            .set("F", np.zeros(k))
-                            .set("F_norm", np.zeros(k))
-                            .set("genotype", None))
-    return Population(individuals=individuals)
+        flattened = torch.rand(alphas_dim[0]*alphas_dim[1]*2).requires_grad_(False).to('cpu')
+        individuals.append(Individual(X=flattened, k=k))
+    return individuals
 
 def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, device, statisctics):
     model.eval()
@@ -43,7 +32,7 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
         model.update_arch_parameters(individual_architect)
         discrete = discretize(individual_architect, model.genotype(), device)
         model.update_arch_parameters(discrete)
-        individual.set("genotype", model.genotype())
+        individual.genotype = model.genotype()
         time_stamp = time.time()
         std_acc, adv_acc, std_loss, adv_loss, ws_loss = infer(valid_queue, model, criterion, attack, args)
         individual.std_acc = std_acc
@@ -79,7 +68,6 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoc
     scheduler.step()
 
 def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, scheduler, attack_f, weights_r2):
-    problem = AlphaProblem(model.alphas_dim)
     archive = []
     archive_accuracy = []
     pop = initial_population(args.n_population, model.alphas_dim, args.objectives)
@@ -97,29 +85,17 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
         train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoch + 1, scheduler, scaler, args)
         print(f">>>> Epoch {epoch + 1} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_epoch))} (HH:MM:SS)")
 
-        selection = TournamentSelection(func_comp=tournament_r2)
-        parents = selection.do(problem=problem, pop=pop, n_parents=2, n_select=pop.size // 2, to_pop=False)
-        sbx = SBX(prob=args.prob_cross, eta=args.eta_cross, n_offsprings=2)
-        pm = PM(prob=args.prob_mut, eta=args.eta_mut)
-
-        offsprings = sbx.do(problem, pop, parents=parents)
-        mutation = pm.do(problem, offsprings)
-        for p in mutation:
-            p.set("k", args.objectives)
-            p.set("c_r2", 0.0)
-            p.set("adv_acc", 0.0)
-            p.set("std_acc", 0.0)
-            p.set("F", np.zeros(args.objectives))
-            p.set("F_norm", np.zeros(args.objectives))
-            p.set("genotype", None)
+        parents = tournament_selection(pop, n_select=len(pop)//2, tournament_size=5)
+        offsprings = binary_crossover(parents, n_childs=len(pop), eta=args.eta_cross, prob_cross=args.prob_cross)
+        mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
         print(f'>>>>> size parents: {len(parents)}, size offsprings: {len(offsprings)}')
         # Evaluate offspring
         eval_population(model, mutation, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
         print(f"Tiempo total de entrenamiento/validacion {args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} (HH:MM:SS)")
 
-        archive = archive_update_pq(archive, Population.merge(pop, mutation))
-        archive_accuracy = archive_update_pq_accuracy(archive_accuracy, Population.merge(pop, mutation))
+        archive = archive_update_pq(archive, pop + mutation)
+        archive_accuracy = archive_update_pq_accuracy(archive_accuracy, pop + mutation)
         pop = update_population_r2(pop, mutation, weights_r2)
         hyp_archive, r2_archive = utils.store_metrics(epoch + 1, archive, args, weights_r2, statistics)
         utils.save_supernet(model, args.save_path_final_model)
@@ -132,7 +108,7 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     return model, archive, archive_accuracy, statistics
 
 def update_population_r2(pop, offspring, weights_r2):
-    c = Population.merge(pop, offspring)
+    c = pop + offspring
     n = pop.size
     assert len(c) >= 2*n
     for i in range(n):
@@ -142,4 +118,4 @@ def update_population_r2(pop, offspring, weights_r2):
         worst = sorted(c, key=lambda x: x.c_r2, reverse=True)[0]
         c = np.delete(c, np.where(c == worst)[0][0])
     assert len(c) == n, f"len(c)={len(c)}, n={n}"
-    return Population(individuals=c)
+    return c
