@@ -40,7 +40,7 @@ def prepare_args(args):
 
 
     optimizer = torch.optim.SGD(
-      model.weight_parameters(),
+      model.parameters(),
       args.learning_rate,
       momentum=args.momentum,
       weight_decay=args.weight_decay)

@@ -3,6 +3,8 @@ import logging
 
 import torch
 from torch import nn
+
+from debug import inspect_model
 from evaluation.model_search import discretize
 
 
@@ -102,6 +104,7 @@ def infer(valid_queue, model, criterion, attack, args):
     adv_loss_mean = 0
     total_loss_mean = 0
     total = 0
+    inspect_model(model)
     model.eval()
     for step, (input, target) in enumerate(valid_queue):
         input  = input.to(args.device, non_blocking=True)
