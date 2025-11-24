@@ -25,7 +25,7 @@ def initial_population(n_population, alphas_dim, k):
 
 def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, device, statisctics):
     model.eval()
-    objective_space = np.empty((pop.size, args.objectives))
+    objective_space = np.empty((len(pop), args.objectives))
     attack = attack_f(model)
     for i, individual in enumerate(pop):
         individual_architect = unpack_alphas(individual.X, model.alphas_dim, args)
@@ -44,7 +44,7 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
         individual.F[args.params_index] = model_parameters
         individual.F_norm = np.zeros(args.objectives)
         objective_space[i, :] = individual.F
-        print(f"Evaluation {i + 1}/{pop.size}: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, loss {ws_loss:.4f} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))}) (HH:MM:SS)")
+        print(f"Evaluation {i + 1}/{len(pop)}: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, loss {ws_loss:.4f} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))}) (HH:MM:SS)")
     normalize_objectives(pop)
     z_ref = get_dynamic_r2_reference(pop)
     for ind in pop:
@@ -71,7 +71,7 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     archive = []
     archive_accuracy = []
     pop = initial_population(args.n_population, model.alphas_dim, args.objectives)
-    print(f">>>> Initial population of size {pop.size} created.")
+    print(f">>>> Initial population of size {len(pop)} created.")
     scaler = GradScaler()
     train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, scaler, args)
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'), 'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'r2_log': []}
@@ -109,7 +109,7 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
 
 def update_population_r2(pop, offspring, weights_r2):
     c = pop + offspring
-    n = pop.size
+    n = len(pop)
     assert len(c) >= 2*n
     for i in range(n):
         z = get_dynamic_r2_reference(pop)
