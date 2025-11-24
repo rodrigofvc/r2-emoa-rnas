@@ -1,5 +1,4 @@
 import numpy as np
-from pymoo.core.population import Population
 
 
 def normalize_objectives(population):
@@ -29,12 +28,12 @@ def r2(population, weights, z_ref):
     return acc / weights.shape[0]
 
 def contribution_r2(population, individual, weights, z_ref):
-    n = population.size
+    n = len(population)
     assert weights[n].shape[0] == n, f"weights shape != population size {n}"
     full = r2(population, weights[n], z_ref)
     population_exclude = [p for p in population if p != individual]
     assert len(population_exclude) == n - 1, f"population_exclude size != population size - 1 {n - 1}"
-    excl = r2(Population(individuals=population_exclude), weights[n], z_ref)
+    excl = r2(population_exclude, weights[n], z_ref)
     return abs(full - excl)
 
 def get_dynamic_r2_reference(population):

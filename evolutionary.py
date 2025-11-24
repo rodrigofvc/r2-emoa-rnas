@@ -1,9 +1,5 @@
 import random
-
-from pymoo.core.problem import Problem
-import numpy as np
 import torch
-
 from individual import Individual
 
 
@@ -16,22 +12,6 @@ def unpack_alphas(vec, shape_alphas, args):
         dtype=torch.float32, device=args.device
     ).requires_grad_(False)
     return [a_norm, a_reduction]
-class AlphaProblem(Problem):
-    def __init__(self, shape_alphas):
-        n_var = shape_alphas[0] * shape_alphas[1] * 2
-        xl = np.zeros(n_var)
-        xu = np.ones(n_var)
-        super().__init__(n_var=n_var, n_obj=4, n_constr=0, xl=xl, xu=xu)
-
-def tournament_r2(pop, P, **kwargs):
-    n_tournaments, _ = P.shape
-    winners = np.empty(P.shape[0], dtype=int)
-    for i in range(n_tournaments):
-        competitors = P[i]
-        winner = [(j, pop[j].get("c_r2")) for j in competitors]
-        winner = sorted(winner, key=lambda x: x[1], reverse=False)[0][0]
-        winners[i] = winner
-    return winners
 
 def tournament_selection(pop, n_select, tournament_size=5):
     winners = []
