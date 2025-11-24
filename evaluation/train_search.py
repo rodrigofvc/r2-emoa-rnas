@@ -105,7 +105,7 @@ def infer(valid_queue, model, criterion, attack, args):
     total_loss_mean = 0
     total = 0
     #inspect_model(model)
-    model.eval()
+    #model.eval()
     for step, (input, target) in enumerate(valid_queue):
         input  = input.to(args.device, non_blocking=True)
         target = target.to(args.device, non_blocking=True)
