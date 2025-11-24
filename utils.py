@@ -6,8 +6,7 @@ import matplotlib.pyplot as plt
 import torchprofile
 import numpy as np
 import torch
-from pymoo.indicators.hv import HV
-from pymoo.util.ref_dirs import get_reference_directions
+#from pymoo.indicators.hv import HV
 import torchvision.transforms as transforms
 import os
 import pickle
@@ -23,18 +22,6 @@ def get_weights_r2(n):
         weights_r2 = pickle.load(f)
     return weights_r2
 
-
-# Store R2 weights for the i-th population size
-def store_weights(n, k):
-    file = 'r2_weights' + os.sep + 'weights_' + str(n) + '.pkl'
-    directions_set = {}
-    for i in range(n):
-        w = get_reference_directions("energy", k, 2 * n - i, seed=1)
-        directions_set[i] = w
-    print(directions_set[0].shape)
-    print(directions_set[1].shape, type(directions_set[1]))
-    with open(file, 'wb') as f:
-        pickle.dump(directions_set, f)
 
 def save_archive_accuracy(archive, archive_path):
     archive_path += 'archive_accuracy'
