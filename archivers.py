@@ -30,16 +30,16 @@ def archive_update_pq_accuracy(archive, population):
         dominated = False
         to_remove = []
         for i, arch_ind in enumerate(archive):
-            if ((arch_ind.get("adv_acc") >= ind.get("adv_acc") and
-                arch_ind.get("std_acc") >= ind.get("std_acc")) and
-                    not np.isclose(arch_ind.get("adv_acc"), ind.get("adv_acc")) and
-                    not np.isclose(arch_ind.get("std_acc"), ind.get("std_acc"))):
+            if ((arch_ind.adv_acc >= ind.adv_acc and
+                arch_ind.std_acc >= ind.std_acc) and
+                    not np.isclose(arch_ind.adv_acc, ind.adv_acc) and
+                    not np.isclose(arch_ind.std_acc, ind.std_acc)):
                 dominated = True
                 break
-            elif ((ind.get("adv_acc") >= arch_ind.get("adv_acc") and
-                    ind.get("std_acc") >= arch_ind.get("std_acc")) and
-                  not np.isclose(arch_ind.get("adv_acc"), ind.get("adv_acc")) and
-                  not np.isclose(arch_ind.get("std_acc"), ind.get("std_acc"))):
+            elif ((ind.adv_acc >= arch_ind.adv_acc and
+                    ind.std_acc >= arch_ind.std_acc) and
+                  not np.isclose(arch_ind.adv_acc, ind.adv_acc) and
+                  not np.isclose(arch_ind.std_acc, ind.std_acc)):
                 to_remove.append(i)
         if not dominated:
             for i in reversed(to_remove):
