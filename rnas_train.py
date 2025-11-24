@@ -117,12 +117,13 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
 
     natural_loss = criterion(std_logits, target)
     total_loss = args.lambda_1 * natural_loss + args.lambda_2 * adv_loss
-
-    scaler.scale(total_loss).backward()
-    scaler.unscale_(optimizer)
+    total_loss.backward()
+    #scaler.scale(total_loss).backward()
+    #scaler.unscale_(optimizer)
     nn.utils.clip_grad_norm_(model.weight_parameters(), args.grad_clip)
-    scaler.step(optimizer)
-    scaler.update()
+    #scaler.step(optimizer)
+    #scaler.update()
+    optimizer.step()
 
     std_predicts = std_logits.argmax(dim=1)
     adv_predicts = logits_adv.argmax(dim=1)
