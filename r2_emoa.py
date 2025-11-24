@@ -89,7 +89,7 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
         offsprings = binary_crossover(parents, n_childs=len(pop), eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
-        print(f'>>>>> size parents: {len(parents)}, size offsprings: {len(offsprings)}')
+        print(f'>>>>> size parents: {len(parents)}, size offsprings: {len(mutation)}')
         # Evaluate offspring
         eval_population(model, mutation, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
         print(f"Tiempo total de entrenamiento/validacion {args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} (HH:MM:SS)")
