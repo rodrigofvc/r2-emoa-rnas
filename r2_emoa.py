@@ -72,7 +72,7 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     archive_accuracy = []
     pop = initial_population(args.n_population, model.alphas_dim, args.objectives)
     print(f">>>> Initial population of size {len(pop)} created.")
-    scaler = None
+    scaler = GradScaler()
     train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, scaler, args)
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'), 'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'r2_log': []}
     eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
