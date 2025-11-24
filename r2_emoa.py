@@ -116,6 +116,6 @@ def update_population_r2(pop, offspring, weights_r2):
         for ind in c:
             ind.c_r2 = contribution_r2(c, ind, weights_r2, z)
         worst = sorted(c, key=lambda x: x.c_r2, reverse=True)[0]
-        c = np.delete(c, np.where(c == worst)[0][0])
+        c.remove(worst)
     assert len(c) == n, f"len(c)={len(c)}, n={n}"
     return c
