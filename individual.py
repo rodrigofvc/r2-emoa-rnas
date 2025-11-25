@@ -1,9 +1,12 @@
 import numpy as np
-
+import torch
 
 class Individual:
     def __init__(self, X, k):
-        self.X = X
+        if isinstance(X, torch.Tensor):
+            self.X = X.detach().cpu().numpy().astype(np.float32).copy()
+        else:
+            self.X = X.astype(np.float32).copy()
         self.F = np.zeros(k)
         self.F_norm = np.zeros(k)
         self.k = k

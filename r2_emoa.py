@@ -32,7 +32,6 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
         model.update_arch_parameters(individual_architect)
         discrete = discretize(individual_architect, model.genotype(), device)
         model.update_arch_parameters(discrete)
-        individual.genotype = model.genotype()
         time_stamp = time.time()
         std_acc, adv_acc, std_loss, adv_loss, ws_loss = infer(valid_queue, model, criterion, attack, args)
         individual.std_acc = std_acc
