@@ -111,19 +111,19 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     optimizer.zero_grad(set_to_none=True)
     adv_X, std_logits = attack(input, target)
 
-    with amp.autocast("cuda", dtype=torch.float16):
-        logits_adv = model(adv_X)
-        adv_loss = criterion(logits_adv, target)
+    #with amp.autocast("cuda", dtype=torch.float16):
+    logits_adv = model(adv_X)
+    adv_loss = criterion(logits_adv, target)
 
     natural_loss = criterion(std_logits, target)
     total_loss = args.lambda_1 * natural_loss + args.lambda_2 * adv_loss
-    #total_loss.backward()
-    scaler.scale(total_loss).backward()
-    scaler.unscale_(optimizer)
+    total_loss.backward()
+    #scaler.scale(total_loss).backward()
+    #scaler.unscale_(optimizer)
     nn.utils.clip_grad_norm_(model.weight_parameters(), args.grad_clip)
-    scaler.step(optimizer)
-    scaler.update()
-    #optimizer.step()
+    #scaler.step(optimizer)
+    #scaler.update()
+    optimizer.step()
 
     std_predicts = std_logits.argmax(dim=1)
     adv_predicts = logits_adv.argmax(dim=1)
