@@ -76,9 +76,7 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'), 'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'r2_log': []}
     eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
     archive = archive_update_pq(archive, pop)
-    #utils.store_metrics(0, archive, args, weights_r2, statistics)
-    hyp_archive = 0
-    r2_archive = 0
+    utils.store_metrics(0, archive, args, weights_r2, statistics)
     time_search = time.time()
     for epoch in range(args.epochs):
         start = time.time()
@@ -98,7 +96,7 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
         archive = archive_update_pq(archive, pop + mutation)
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, pop + mutation)
         pop = update_population_r2(pop, mutation, weights_r2)
-        #hyp_archive, r2_archive = utils.store_metrics(epoch + 1, archive, args, weights_r2, statistics)
+        hyp_archive, r2_archive = utils.store_metrics(epoch + 1, archive, args, weights_r2, statistics)
         utils.save_supernet(model, args.save_path_final_model)
         utils.save_architectures(archive, args.save_path_final_architect)
         utils.plot_hypervolume(statistics, args.save_path_final_architect)

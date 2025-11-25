@@ -3,10 +3,10 @@ import json
 import lzma
 import time
 import matplotlib.pyplot as plt
-#import torchprofile
+from thop import profile
 import numpy as np
 import torch
-#from pymoo.indicators.hv import HV
+from pymoo.indicators.hv import HV
 import torchvision.transforms as transforms
 import os
 import pickle
@@ -231,10 +231,9 @@ def data_transforms_cifar10(args):
 def get_model_metrics(genotype, model):
     discretized_model = NetworkCIFAR(model.C, model.num_classes, model.layers, auxiliary=False, genotype=genotype)
     x = torch.randn(1, 3, 32, 32)
-    #macs = torchprofile.profile_macs(discretized_model, x) / 1e6
-    #flops = 2 * macs
+    macs, params = profile(discretized_model, inputs=(x,), verbose=False)
+    flops = (2 * macs) / 1e6
     params = sum(v.numel() for v in filter(lambda p: p.requires_grad, discretized_model.parameters())) / 1e6
-    flops = 0.0
     return round(flops, 4), round(params, 4)
 
 def get_best_architecture_adversarial(archs_path):
