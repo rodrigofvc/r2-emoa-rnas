@@ -130,7 +130,8 @@ if __name__ == '__main__':
             weights_r2=weights_r2,
             args=args
         )
-        utils.save_supernet(supernet, args.save_path_final_model)
+        #utils.save_supernet(supernet, args.save_path_final_model)
+        utils.save_model(supernet, args.save_path_final_model, f"super-net.pt")
         print("Final archive:")
         for individual in archive:
             print(individual.F, individual.std_acc, individual.adv_acc)
