@@ -114,9 +114,9 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     with amp.autocast("cuda", dtype=torch.float16):
         logits_adv = model(adv_X)
         adv_loss = criterion(logits_adv, target)
+        natural_loss = criterion(std_logits, target)
+        total_loss = args.lambda_1 * natural_loss + args.lambda_2 * adv_loss
 
-    natural_loss = criterion(std_logits, target)
-    total_loss = args.lambda_1 * natural_loss + args.lambda_2 * adv_loss
     #total_loss.backward()
     scaler.scale(total_loss).backward()
     scaler.unscale_(optimizer)
