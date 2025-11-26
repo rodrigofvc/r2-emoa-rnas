@@ -1,11 +1,18 @@
-torchprofile==0.0.4
-torchattacks==3.5.1
-pymoo==0.6.0.1
+#pip install -r requirements.txt --no-deps
+torch==2.5.1+cu124
+torchvision==0.20.1+cu124
+torchaudio==2.5.1+cu124
+--extra-index-url https://download.pytorch.org/whl/cu124
+
 numpy==1.26.4
 scipy==1.13.1
-pandas<2.2
-scikit-learn<1.5
-matplotlib
-kiwisolver
-tqdm
-pyyaml
+
+tqdm==4.66.4
+matplotlib==3.8.4
+pillow==10.4.0
+
+torchattacks==3.4.0
+
+thop==0.1.1.post2209072238
+
+pymoo==0.6.0.1
