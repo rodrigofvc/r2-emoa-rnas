@@ -41,6 +41,7 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
         model_flops, model_parameters = utils.get_model_metrics(model.genotype(), model)
         individual.F[args.flops_index] = model_flops
         individual.F[args.params_index] = model_parameters
+        individual.genotype = model.genotype()
         individual.F_norm = np.zeros(args.objectives)
         objective_space[i, :] = individual.F
         print(f"Evaluation {i + 1}/{len(pop)}: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, loss {ws_loss:.4f} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))}) (HH:MM:SS)")
