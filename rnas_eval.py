@@ -50,6 +50,45 @@ def prepare_args(args, model):
 
     return test_queue, criterion, attack_f_list, attack_names
 
+def eval(test_queue, model, criterion, attack_f, attack_name, args):
+    std_correct = 0
+    adv_correct = 0
+    std_loss_mean = 0
+    adv_loss_mean = 0
+    total_loss_mean = 0
+    total = 0
+    assert model.training is False
+    attack = attack_f(model)
+    for step, (input, target) in enumerate(test_queue):
+        input = input.to(args.device, non_blocking=True)
+        target = target.to(args.device, non_blocking=True)
+        if attack_name == 'FGSM':
+            adv_input, std_logits = attack(input, target)
+        else:
+            std_logits = model(input)
+            adv_input = attack(input, target)
+        adv_input = adv_input.to(args.device, non_blocking=True)
+
+        with torch.no_grad():
+            std_loss = criterion(std_logits, target)
+            adv_logits = model(adv_input)
+            adv_loss = criterion(adv_logits, target)
+            total_loss = args.lambda_1 * std_loss + args.lambda_2 * adv_loss
+
+        std_predicts = std_logits.argmax(dim=1)
+        adv_predicts = adv_logits.argmax(dim=1)
+        std_correct += (std_predicts == target).sum().item()
+        adv_correct += (adv_predicts == target).sum().item()
+        total += target.size(0)
+        std_loss_mean += std_loss.item()
+        adv_loss_mean += adv_loss.item()
+        total_loss_mean += total_loss.item()
+    std_accuracy = std_correct / total
+    adv_accuracy = adv_correct / total
+    std_loss_mean /= total
+    adv_loss_mean /= total
+    total_loss_mean /= total
+    return std_accuracy * 100.0, adv_accuracy * 100.0, std_loss_mean, adv_loss_mean, total_loss_mean
 
 
 if __name__ == '__main__':
@@ -79,7 +118,8 @@ if __name__ == '__main__':
     for i, attack_f in enumerate(attack_f_list):
         print(f"Starting evaluation with attack: {attack_names[i]}")
         time_stamp = time.time()
-        std_accuracy, adv_accuracy, _, _, _ = infer(test_queue, model, criterion, attack_f, args)
+        model.eval()
+        std_accuracy, adv_accuracy, _, _, _ = eval(test_queue, model, criterion, attack_f, attack_names[i], args)
         utils.save_params(args, args.model_path.replace('.pt', '_eval_params.json').replace('train', 'eval'))
         print('Evaluation DONE in', time.strftime('%HH:%MM:%SS', time.gmtime(time.time() - time_stamp)))
         print(f'Final Test Accuracy {attack_names[i]} : STD {std_accuracy:.3f} ADV {adv_accuracy:.3f}')
