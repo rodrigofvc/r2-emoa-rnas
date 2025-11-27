@@ -106,8 +106,6 @@ if __name__ == '__main__':
 
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = False
-        #torch.backends.cudnn.allow_tf32 = True
-        #torch.backends.cuda.matmul.allow_tf32 = True
         torch.backends.cudnn.deterministic = False
         torch.cuda.manual_seed(args.seed)
         torch.backends.cudnn.enabled = True
