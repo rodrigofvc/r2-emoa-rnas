@@ -104,12 +104,11 @@ def infer(valid_queue, model, criterion, attack, args):
     adv_loss_mean = 0
     total_loss_mean = 0
     total = 0
-    #inspect_model(model)
-    #model.eval()
+    assert model.training is False
     for step, (input, target) in enumerate(valid_queue):
         input  = input.to(args.device, non_blocking=True)
         target = target.to(args.device, non_blocking=True)
-        if args.attacks['name'] == 'FGSM':
+        if args.attack['name'] == 'FGSM':
             adv_input, std_logits = attack(input, target)
         else:
             std_logits = model(input)
