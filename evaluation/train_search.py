@@ -109,7 +109,11 @@ def infer(valid_queue, model, criterion, attack, args):
     for step, (input, target) in enumerate(valid_queue):
         input  = input.to(args.device, non_blocking=True)
         target = target.to(args.device, non_blocking=True)
-        adv_input, std_logits = attack(input, target)
+        if args.attack['name'] == 'FGSM':
+            adv_input, std_logits = attack(input, target)
+        else:
+            std_logits = model(input)
+            adv_input = attack(input, target)
         adv_input = adv_input.to(args.device, non_blocking=True)
 
         with torch.no_grad():
