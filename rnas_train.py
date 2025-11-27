@@ -11,7 +11,6 @@ import torchvision
 
 import utils
 from evaluation.model import NetworkCIFAR
-from evaluation.model_search import discretize
 from adversarial import get_attack_function
 
 def prepare_args(args):
@@ -40,7 +39,7 @@ def prepare_args(args):
     train_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-        num_workers=2, pin_memory=True)
+        num_workers=0, pin_memory=False)
 
     criterion = torch.nn.CrossEntropyLoss().to(args.device)
     attack_f = get_attack_function(args.attack)
@@ -48,7 +47,7 @@ def prepare_args(args):
     return train_queue, criterion, attack_f
 
 def prepare_arch_genotype(architecture):
-    genotype = architecture.get('genotype')
+    genotype = architecture.genotype
     model = NetworkCIFAR(args.init_channels, args.classes, args.layers, args.auxiliary, genotype).to(args.device)
 
     optimizer = torch.optim.SGD(
@@ -67,6 +66,7 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
     total_loss_mean = 0
     total = 0
     model.train()
+    attack = attack_f(model)
     for n_batch, (input, target) in enumerate(train_queue):
         times_stamp = time.time()
         input = input.to(args.device, non_blocking=True)
@@ -74,12 +74,15 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
 
         optimizer.zero_grad()
 
-        attack = attack_f(model)
-        adv_X = attack(input, target)
+        if args.attack['name'] == 'FGSM':
+            adv_X, logits = attack(input, target)
+        else:
+            logits = model(input)
+            adv_X = attack(input, target)
+
         logits_adv = model(adv_X)
         adv_loss = criterion(logits_adv, target)
 
-        logits = model(input)
         natural_loss = criterion(logits, target)
 
         total_loss = args.lambda_1 * natural_loss + args.lambda_2 * adv_loss
@@ -140,6 +143,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset for training')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
+    parser.add_argument('--epochs', type=int, default=100, help='number of epochs to train')
     parser.add_argument('--arch_path', type=str, required=True, help="Path to the saved architecture")
     parser.add_argument('--supernet_path', type=str, required=True, help="Path to the saved supernet model")
     parser.add_argument('--trained_arch_path', type=str, required=True, help='Path to store the trained architecture')
@@ -164,13 +168,13 @@ if __name__ == '__main__':
     if torch.cuda.is_available():
         torch.cuda.manual_seed(args.seed)
 
-    arch_genotype = utils.load_architecture(args.arch_path)
+    individual = utils.load_architecture(args.arch_path)
     supernet = utils.load_model(args.supernet_path)
     logs_architectures = []
 
     train_queue, criterion, attack_f = prepare_args(args)
 
-    optimizer, scheduler, model = prepare_arch_genotype(arch_genotype)
+    optimizer, scheduler, model = prepare_arch_genotype(individual)
     time_stamp_train = time.time()
     for epoch in range(args.epochs):
         print(f"Epoch {epoch+1}/{args.epochs}")
