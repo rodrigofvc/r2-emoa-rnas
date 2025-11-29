@@ -58,7 +58,7 @@ def store_statisctics(statistics, objective_space):
 def store_metrics(epoch, population, args, weights_r2, statistics):
     max_f1 = 2 * 1.5
     max_f2 = 2 * 1.5
-    max_f3 = 50 * 1.5
+    max_f3 = 80 * 1.5
     max_f4 = 2 * 1.5
     # compute hypervolume
     ind = HV(ref_point=np.array([max_f1, max_f2, max_f3, max_f4]))
@@ -233,7 +233,8 @@ def get_model_metrics(genotype, model):
     x = torch.randn(1, 3, 32, 32)
     macs, params = profile(discretized_model, inputs=(x,), verbose=False)
     flops = (2 * macs) / 1e6
-    params = sum(v.numel() for v in filter(lambda p: p.requires_grad, discretized_model.parameters())) / 1e6
+    params = params / 1e6
+    #params = sum(v.numel() for v in filter(lambda p: p.requires_grad, discretized_model.parameters())) / 1e6
     return round(flops, 4), round(params, 4)
 
 def get_best_architecture_adversarial(archs_path):
@@ -272,3 +273,21 @@ def save_params(args, trained_arch_path):
     with open(params_path, 'w') as f:
         json.dump(params_dict, f, indent=4)
 
+if __name__ == '__main__':
+    best_adv = "results/r2-emoa/cifar10/2025-11-26_21-14-55_18906049/search/architectures/arch_56.xz"
+    path = "results/r2-emoa/cifar10/2025-11-26_21-14-55_18906049/search/architectures/"
+    best_ind, best_path = get_best_architecture_adversarial(path)
+    # 22
+    print(f"8. Best adversarial architecture found in {best_path} with adv acc {best_ind.adv_acc} and std acc {best_ind.std_acc}")
+    best_ind, best_path = get_best_architecture_standard(path)
+    # 33
+    print(f"8. Best standard architecture found in {best_path} with std acc {best_ind.std_acc} and adv acc {best_ind.adv_acc}")
+
+    # Obtaining architectures for best-5
+    #path = "results/r2-emoa/cifar10/best-5/search/architectures/"
+    #best_ind, best_path = get_best_architecture_adversarial(path)
+    # 47
+    #print(f"5. Best adversarial architecture found in {best_path} with adv acc {best_ind.adv_acc} and std acc {best_ind.std_acc}")
+    # 36
+    #best_ind, best_path = get_best_architecture_standard(path)
+    #print(f"5. Best standard architecture found in {best_path} with std acc {best_ind.std_acc} and adv acc {best_ind.adv_acc}")
