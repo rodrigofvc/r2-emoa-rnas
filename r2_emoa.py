@@ -29,12 +29,17 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
     objective_space = np.empty((len(pop), args.objectives))
     attack = attack_f(model)
     for i, individual in enumerate(pop):
+        torch.cuda.synchronize()
         individual_architect = unpack_alphas(individual.X, model.alphas_dim, args)
+        torch.cuda.synchronize()
         model.update_arch_parameters(individual_architect)
+        torch.cuda.synchronize()
         discrete = discretize(individual_architect, model.genotype(), device)
+        torch.cuda.synchronize()
         model.update_arch_parameters(discrete)
         time_stamp = time.time()
         std_acc, adv_acc, std_loss, adv_loss, ws_loss = infer(valid_queue, model, criterion, attack, args)
+        torch.cuda.synchronize()
         individual.std_acc = std_acc
         individual.adv_acc = adv_acc
         individual.F[args.std_loss_index] = std_loss

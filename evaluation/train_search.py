@@ -121,7 +121,7 @@ def infer(valid_queue, model, criterion, attack, args):
             adv_logits = model(adv_input)
             adv_loss = criterion(adv_logits, target)
             total_loss = args.lambda_1 * std_loss + args.lambda_2 * adv_loss
-
+            torch.cuda.synchronize()
         std_predicts = std_logits.argmax(dim=1)
         adv_predicts = adv_logits.argmax(dim=1)
         std_correct += (std_predicts == target).sum().item()
@@ -135,6 +135,7 @@ def infer(valid_queue, model, criterion, attack, args):
     std_loss_mean /= total
     adv_loss_mean /= total
     total_loss_mean /= total
+    torch.cuda.synchronize()
     return std_accuracy * 100.0, adv_accuracy * 100.0, std_loss_mean, adv_loss_mean, total_loss_mean
 
 def setup_logger(debug_mode):
