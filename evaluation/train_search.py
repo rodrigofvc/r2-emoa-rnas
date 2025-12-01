@@ -106,14 +106,14 @@ def infer(valid_queue, model, criterion, attack, args):
     total = 0
     assert model.training is False
     for step, (input, target) in enumerate(valid_queue):
-        input  = input.to(args.device, non_blocking=True)
-        target = target.to(args.device, non_blocking=True)
+        input  = input.to(args.device)
+        target = target.to(args.device)
         if args.attack['name'] == 'FGSM':
             adv_input, std_logits = attack(input, target)
         else:
             std_logits = model(input)
             adv_input = attack(input, target)
-        adv_input = adv_input.to(args.device, non_blocking=True)
+        adv_input = adv_input.to(args.device)
 
         with torch.no_grad():
             #with torch.amp.autocast('cuda', dtype=torch.float16):

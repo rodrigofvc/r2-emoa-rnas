@@ -108,8 +108,8 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
 
 def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, args):
 
-    input = input.to(args.device, non_blocking=True)
-    target = target.to(args.device, non_blocking=True)
+    input = input.to(args.device)
+    target = target.to(args.device)
 
     optimizer.zero_grad(set_to_none=True)
     adv_X, std_logits = attack(input, target)

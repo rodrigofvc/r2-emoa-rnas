@@ -130,14 +130,17 @@ class Network(nn.Module):
         # i = 3, j = 0,1,2,3,4 sum(s_0,s_1,x0,x1,x2)
         k = sum(1 for i in range(self._steps) for _ in range(2 + i))
         num_ops = len(PRIMITIVES)
-        self.alphas_normal = nn.Parameter(1e-3 * torch.randn(k, num_ops).to(self._device), requires_grad=False)
-        self.alphas_reduce = nn.Parameter(1e-3 * torch.randn(k, num_ops).to(self._device), requires_grad=False)
+        self.register_buffer('alphas_normal', (1e-3 * torch.randn(k, num_ops)).to(self._device))
+        self.register_buffer('alphas_reduce', (1e-3 * torch.randn(k, num_ops)).to(self._device))
 
     def new(self):
-        model_new = Network(self._C, self._num_classes, self._layers, self._criterion,
-                            self._steps, self._multiplier, self._stem_multiplier, self._device).to(self._device)
-        for x, y in zip(model_new.arch_parameters(), self.arch_parameters()):
-            x.data.copy_(y.detach())
+        model_new = Network(self.C, self.num_classes, self.layers, self._criterion,
+                            self._steps, self._multiplier, self._stem_multiplier, self._device)
+        model_new.to(self._device)
+        with torch.no_grad():
+            if hasattr(model_new, 'alphas_normal') and hasattr(self, 'alphas_normal'):
+                model_new.alphas_normal.copy_(self.alphas_normal.detach())
+                model_new.alphas_reduce.copy_(self.alphas_reduce.detach())
         return model_new
 
     def arch_parameters(self):

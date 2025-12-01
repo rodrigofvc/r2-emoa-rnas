@@ -25,6 +25,7 @@ def initial_population(n_population, alphas_dim, k):
 
 def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, device, statisctics):
     model.eval()
+    torch.cuda.synchronize() if torch.cuda.is_available() else None
     objective_space = np.empty((len(pop), args.objectives))
     attack = attack_f(model)
     for i, individual in enumerate(pop):
