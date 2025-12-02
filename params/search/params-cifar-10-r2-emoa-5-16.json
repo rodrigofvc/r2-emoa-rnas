@@ -22,8 +22,8 @@
     "init_channels": 16,
     "reduction": true,
     "layers": 5,
-    "steps": 4,
-    "multiplier": 4,
+    "steps": 6,
+    "multiplier": 6,
     "attack": { "name": "FGSM",
         "params": {"eps": "8/255"}
     },
