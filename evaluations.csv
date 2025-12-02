@@ -1,4 +1,4 @@
-algorithm,dataset,attack,epoch,indicator,value,dir
+algorithm,dataset,attack,evaluations,indicator,value,dir
 r2-emoa,cifar10,FGSM,0,hv,1498.5722790543805,results/r2-emoa/cifar10/2025-11-20_17-00-38_18906049/search/
 r2-emoa,cifar10,FGSM,0,r2,0.6443599442789093,results/r2-emoa/cifar10/2025-11-20_17-00-38_18906049/search/
 r2-emoa,cifar10,FGSM,1,hv,1499.7053106965652,results/r2-emoa/cifar10/2025-11-20_17-00-38_18906049/search/

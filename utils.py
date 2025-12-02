@@ -55,7 +55,7 @@ def store_statisctics(statistics, objective_space):
     statistics['min_f3'] = min(statistics['min_f3'], np.min(objective_space[:, 2]))
     statistics['min_f4'] = min(statistics['min_f4'], np.min(objective_space[:, 3]))
 
-def store_metrics(epoch, population, args, weights_r2, statistics):
+def store_metrics(architectures_evaluated, population, args, weights_r2, statistics):
     max_f1 = 2 * 1.5
     max_f2 = 2 * 1.5
     max_f3 = 80 * 1.5
@@ -70,8 +70,8 @@ def store_metrics(epoch, population, args, weights_r2, statistics):
     z_ref = get_dynamic_r2_reference(population)
     r2_population = r2(population, weights_r2[args.n_population], z_ref)
     statistics['r2_log'].append(r2_population)
-    row_hyp = [args.algorithm, args.dataset, args.attack['name'], epoch, 'hv', hyp, args.save_path_final_model]
-    row_r2 = [args.algorithm, args.dataset, args.attack['name'], epoch, 'r2', r2_population, args.save_path_final_model]
+    row_hyp = [args.algorithm, args.dataset, args.attack['name'], architectures_evaluated, 'hv', hyp, args.save_path_final_model]
+    row_r2 = [args.algorithm, args.dataset, args.attack['name'], architectures_evaluated, 'r2', r2_population, args.save_path_final_model]
     file = open('evaluations.csv', 'a', newline='')
     writer = csv.writer(file)
     writer.writerow(row_hyp)
