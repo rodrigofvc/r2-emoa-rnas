@@ -58,7 +58,7 @@ def store_statisctics(statistics, objective_space):
 def store_metrics(architectures_evaluated, population, args, weights_r2, statistics):
     max_f1 = 2 * 1.5
     max_f2 = 2 * 1.5
-    max_f3 = 80 * 1.5
+    max_f3 = 110 * 1.5
     max_f4 = 2 * 1.5
     # compute hypervolume
     ind = HV(ref_point=np.array([max_f1, max_f2, max_f3, max_f4]))
