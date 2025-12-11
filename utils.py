@@ -64,12 +64,17 @@ def store_metrics(architectures_evaluated, population, args, weights_r2, statist
     ind = HV(ref_point=np.array([max_f1, max_f2, max_f3, max_f4]))
     population_array = np.array([ind.F for ind in population])
     hyp = ind(population_array)
-    statistics['hyp_log'].append(hyp)
+    statistics['hyp_log'].append(hyp.item())
+    # compute hypervolume 2 (std_loss, adv_loss)
+    ind2 = HV(ref_point=np.array([max_f1, max_f2]))
+    population_array2 = np.array([[ind.F[0], ind.F[1]] for ind in population])
+    hyp2 = ind2(population_array2)
+    statistics['hyp2_log'].append(hyp2.item())
     # compute r2
     normalize_objectives(population)
     z_ref = get_dynamic_r2_reference(population)
     r2_population = r2(population, weights_r2[args.n_population], z_ref)
-    statistics['r2_log'].append(r2_population)
+    statistics['r2_log'].append(r2_population.item())
     row_hyp = [args.algorithm, args.dataset, args.attack['name'], architectures_evaluated, 'hv', hyp, args.save_path_final_model]
     row_r2 = [args.algorithm, args.dataset, args.attack['name'], architectures_evaluated, 'r2', r2_population, args.save_path_final_model]
     file = open('evaluations.csv', 'a', newline='')
@@ -173,6 +178,17 @@ def plot_hypervolume(statistics, path):
     plt.savefig(path)
     plt.close()
 
+def plot_hypervolume2(statistics, path):
+    path += 'hypervolume2.pdf'
+    plt.figure(figsize=(8, 6))
+    plt.plot(statistics['hyp2_log'], marker='o', color='blue')
+    plt.title('Hypervolume over generations (std_loss, adv_loss)')
+    plt.xlabel('Generation')
+    plt.ylabel('Hypervolume')
+    plt.grid(True)
+    plt.savefig(path)
+    plt.close()
+
 def plot_r2(statistics, path):
     path += 'r2.pdf'
     plt.figure(figsize=(8, 6))
@@ -234,7 +250,6 @@ def get_model_metrics(genotype, model):
     macs, params = profile(discretized_model, inputs=(x,), verbose=False)
     flops = (2 * macs) / 1e6
     params = params / 1e6
-    #params = sum(v.numel() for v in filter(lambda p: p.requires_grad, discretized_model.parameters())) / 1e6
     return round(flops, 4), round(params, 4)
 
 def get_best_architecture_adversarial(archs_path):

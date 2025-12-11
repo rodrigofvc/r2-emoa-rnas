@@ -76,7 +76,7 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     print(f">>>> Initial population of size {len(pop)} created.")
     scaler = None
     train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, scaler, args)
-    statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'), 'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'r2_log': []}
+    statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'), 'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
     architectures_evaluated += eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
     archive = archive_update_pq(archive, pop)
     hyp_archive, r2_archive = utils.store_metrics(architectures_evaluated, archive, args, weights_r2, statistics)
