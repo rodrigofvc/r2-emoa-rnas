@@ -128,7 +128,6 @@ if __name__ == '__main__':
             weights_r2=weights_r2,
             args=args
         )
-        #utils.save_supernet(supernet, args.save_path_final_model)
         utils.save_model(supernet, args.save_path_final_model, f"super-net.pt")
         print("Final archive:")
         for individual in archive:
@@ -139,6 +138,7 @@ if __name__ == '__main__':
         utils.save_archive_accuracy(archive_accuracy, args.save_path_final_architect)
         utils.plot_archive_accuracy(archive_accuracy, args.save_path_final_architect)
         utils.plot_hypervolume(statistics, args.save_path_final_architect)
+        utils.plot_hypervolume2(statistics, args.save_path_final_architect)
         utils.plot_r2(statistics, args.save_path_final_architect)
         utils.save_statistics_to_csv(statistics, args.save_path_final_architect)
         utils.save_params(args, args.save_path_final_architect)
