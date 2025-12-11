@@ -82,6 +82,11 @@ def store_metrics(architectures_evaluated, population, args, weights_r2, statist
     writer.writerow(row_hyp)
     writer.writerow(row_r2)
     file.close()
+    row_hyp2 = [args.algorithm, args.dataset, args.attack['name'], architectures_evaluated, 'hv_2obj', hyp2, args.save_path_final_model]
+    file2 = open('evaluations-2.csv', 'a', newline='')
+    writer2 = csv.writer(file2)
+    writer2.writerow(row_hyp2)
+    file2.close()
     return hyp, r2_population
 
 
