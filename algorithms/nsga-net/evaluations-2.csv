@@ -1,3 +1,1 @@
 algorithm,dataset,attack,evaluations,indicator,value,dir
-nsga-net,cifar10,FGSM,40,hv_2obj,8.715966675666989,search-NSGA-Net-micro-20251211-114254
-nsga-net,cifar10,FGSM,80,hv_2obj,8.715966678196104,search-NSGA-Net-micro-20251211-114254

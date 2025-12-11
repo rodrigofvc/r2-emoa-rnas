@@ -152,12 +152,15 @@ def main(genome, epochs, search_space='micro',
 
     attack_f = get_attack_function(attack_params)
 
+    start = time.time()
     for epoch in range(epochs):
         train(train_queue, model, criterion, optimizer, attack_f, train_params)
         scheduler.step()
+    print('Training time: {} seconds'.format(time.strftime('%H:%M:%S', time.gmtime(time.time() - start))))
+
     start = time.time()
     valid_acc, valid_std_loss, valid_adv_loss = infer(valid_queue, model, criterion, attack_f, train_params)
-    print('Inference time: {} seconds'.format(time.strftime('%HH:%MM:%SS', time.gmtime(time.time() - start))))
+    print('Inference time: {} seconds'.format(time.strftime('%H:%M:%S', time.gmtime(time.time() - start))))
     #logging.info('valid_acc %f', valid_acc)
 
     # calculate for flops

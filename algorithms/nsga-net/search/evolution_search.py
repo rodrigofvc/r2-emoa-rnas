@@ -117,7 +117,6 @@ def do_every_generations(algorithm):
     # it has access to the whole algorithm class
     gen = algorithm.n_gen
     pop_obj = algorithm.pop.get("F")
-    #print(pop_obj)
     #store_non_dominated_solutions
     algorithm.problem.archive = archive_update_pq(algorithm.problem.archive, pop_obj)
     hyp, r2 = store_metrics(algorithm.evaluator.n_eval, np.array(algorithm.problem.archive), algorithm.problem.save_dir, algorithm.problem.statistics)
@@ -150,7 +149,7 @@ def main():
         ub = np.ones(n_var)
     else:
         raise NameError('Unknown search space type')
-
+    start = time.time()
     problem = NAS(n_var=n_var, search_space=args.search_space,
                   n_obj=4, n_constr=0, lb=lb, ub=ub,
                   init_channels=args.init_channels, layers=args.layers,
@@ -165,6 +164,8 @@ def main():
                    method,
                    callback=do_every_generations,
                    termination=('n_gen', args.n_gens))
+    args.time_taken = time.time() - start
+    print('Total search time: {}'.format(time.strftime('%H:%M:%S', time.gmtime(time.time() - start))))
     # store non-dominated solutions
     architectures = []
     for i, arch in enumerate(res.X):
