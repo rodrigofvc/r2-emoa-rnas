@@ -224,7 +224,7 @@ def infer(valid_queue, net, criterion, attack_f, params):
         adv_loss = criterion(outputs_adv, targets)
 
         std_loss += std_loss.item()
-        adv_loss += adv_loss.item()
+        adv_loss += adv_loss.detach().item()
         _, predicted = std_logits.max(1)
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
