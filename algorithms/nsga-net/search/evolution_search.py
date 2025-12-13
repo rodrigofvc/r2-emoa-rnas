@@ -173,7 +173,7 @@ def main():
         genotype = micro_encoding.decode(genome) if args.search_space == 'micro' else macro_encoding.decode(genome)
         model = Network(args.init_channels, 10, args.layers, False, genotype)
         architectures.append(model)
-        save_architecture(i, model, args.save)
+        save_architecture(i, model, res.F[i], args.save)
     save_archive(res.F, args.save)
     plot_hypervolume(problem.statistics, args.save)
     plot_hypervolume2(problem.statistics, args.save)

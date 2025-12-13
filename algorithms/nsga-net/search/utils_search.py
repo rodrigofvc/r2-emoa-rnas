@@ -102,13 +102,13 @@ def store_metrics(architectures_evaluated, pop_obj, save_dir, statistics):
     file2.close()
     return hyp, r2_population
 
-def save_architecture(i, individual, save_dir):
+def save_architecture(i, individual, objectives, save_dir):
     architect_path = save_dir + os.sep + 'architectures' + os.sep
     if not os.path.exists(architect_path):
         os.makedirs(architect_path)
     architect_path += f'arch_{i}.xz'
     with lzma.open(architect_path, 'wb') as f:
-        pickle.dump(individual, f)
+        pickle.dump((individual, objectives), f)
 
 def save_archive(archive, save_dir):
     save_dir += os.sep + 'archive'
