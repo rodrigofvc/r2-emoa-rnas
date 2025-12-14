@@ -182,8 +182,8 @@ def main(genome, epochs, search_space='micro',
 # Training
 def train(train_queue, net, criterion, optimizer, attack_f, params):
     net.train()
-    std_loss = 0
-    adv_loss = 0
+    std_loss_mean = 0
+    adv_loss_mean = 0
     correct = 0
     total = 0
     attack = attack_f(net)
@@ -201,17 +201,17 @@ def train(train_queue, net, criterion, optimizer, attack_f, params):
         nn.utils.clip_grad_norm_(net.parameters(), params['grad_clip'])
         optimizer.step()
 
-        std_loss += std_loss.item()
-        adv_loss += adv_loss.item()
+        std_loss_mean += std_loss.item()
+        adv_loss_mean += adv_loss.item()
         _, predicted = std_logits.max(1)
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
-    return 100*correct/total, std_loss/total, adv_loss/total
+    return 100*correct/total, std_loss_mean/total, adv_loss_mean/total
 
 def infer(valid_queue, net, criterion, attack_f, params):
     net.eval()
-    std_loss = 0
-    adv_loss = 0
+    std_loss_mean = 0
+    adv_loss_mean = 0
     correct = 0
     total = 0
     attack = attack_f(net)
@@ -223,15 +223,15 @@ def infer(valid_queue, net, criterion, attack_f, params):
         std_loss = criterion(std_logits, targets)
         adv_loss = criterion(outputs_adv, targets)
 
-        std_loss += std_loss.item()
-        adv_loss += adv_loss.item()
+        std_loss_mean += std_loss.item()
+        adv_loss_mean += adv_loss.item()
         _, predicted = std_logits.max(1)
         total += targets.size(0)
         correct += predicted.eq(targets).sum().item()
 
     acc = 100.*correct/total
 
-    return acc, std_loss/total, adv_loss/total
+    return acc, std_loss_mean/total, adv_loss_mean/total
 
 
 if __name__ == "__main__":
