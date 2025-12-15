@@ -1,8 +1,10 @@
 
 torch==1.13.1+cu117 torchvision==0.14.1+cu117 torchaudio==0.13.1 --extra-index-url https://download.pytorch.org/whl/cu117
+# CUDA_LAUNCH_BLOCKING=1 PYTHONMALLOC=debug python3 -X dev search/evolution_search.py --seed 18906049 --search_space micro --init_channels 16 --layers 5 --epochs 25 --pop_size 40  --n_offspring 40 --n_gens 30 --n_cells 5 --n_blocks 6
 
-numpy==1.26.4
-scipy==1.13.1
+
+numpy==1.24.4
+scipy==1.10.1
 
 tqdm==4.66.4
 matplotlib==3.8.4

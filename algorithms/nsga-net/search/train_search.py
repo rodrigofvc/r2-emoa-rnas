@@ -219,9 +219,10 @@ def infer(valid_queue, net, criterion, attack_f, params):
         inputs, targets = inputs.to(device), targets.to(device)
 
         adv_inputs, std_logits = attack(inputs, targets)
-        outputs_adv, _ = net(adv_inputs)
-        std_loss = criterion(std_logits, targets)
-        adv_loss = criterion(outputs_adv, targets)
+        with torch.no_grad():
+            outputs_adv, _ = net(adv_inputs)
+            std_loss = criterion(std_logits, targets)
+            adv_loss = criterion(outputs_adv, targets)
 
         std_loss_mean += std_loss.item()
         adv_loss_mean += adv_loss.item()
