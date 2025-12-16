@@ -1,7 +1,6 @@
 import time
 
 import numpy as np
-from torch.amp import GradScaler
 
 import utils
 from archivers import archive_update_pq, archive_update_pq_accuracy
@@ -52,21 +51,22 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
     utils.store_statisctics(statisctics, objective_space)
     return len(pop)
 
-def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoch, scheduler, scaler, args):
+def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, gen, scheduler, scaler, args):
     model.train()
     attack = attack_f(model)
-    for n_batch, (input, target) in enumerate(train_queue):
-        individual = pop[n_batch % args.n_population]
-        individual_architect = unpack_alphas(individual.X, model.alphas_dim, args)
-        model.update_arch_parameters(individual_architect)
-        discrete = discretize(individual_architect, model.genotype(), args.device)
-        model.update_arch_parameters(discrete)
-        time_stamp = time.time()
-        std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, args)
-        if n_batch % args.report_freq == 0:
-            print(
-                f">>>> Epoch {epoch}/{args.epochs} Batch {n_batch + 1}/{len(train_queue)} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))}) (HH:MM:SS): std_acc {std_acc / args.batch_size * 100:.2f}%, adv_acc {adv_acc / args.batch_size * 100:.2f}%, loss {loss:.4f}")
-    scheduler.step()
+    epochs = args.epochs_train_supernet
+    for epoch in range(epochs):
+        for n_batch, (input, target) in enumerate(train_queue):
+            individual = pop[n_batch % args.n_population]
+            individual_architect = unpack_alphas(individual.X, model.alphas_dim, args)
+            model.update_arch_parameters(individual_architect)
+            discrete = discretize(individual_architect, model.genotype(), args.device)
+            model.update_arch_parameters(discrete)
+            time_stamp = time.time()
+            std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, args)
+            if n_batch % args.report_freq == 0:
+                print(f'>>>> Gen {gen}/{args.epochs} | Epoch {epoch}/{epochs} | Batch {n_batch}/{len(train_queue)} | Loss {loss:.4f} | Std Acc {std_acc:.2f}% | Adv Acc {adv_acc:.2f}% | Time {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_stamp))} (HH:MM:SS)')
+        scheduler.step()
 
 def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, scheduler, attack_f, weights_r2):
     archive = []
@@ -86,13 +86,12 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
         start = time.time()
         time_stamp_epoch = time.time()
         train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoch + 1, scheduler, scaler, args)
-        print(f">>>> Epoch {epoch + 1} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_epoch))} (HH:MM:SS)")
+        print(f">>>> Gen {epoch + 1} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_epoch))} (HH:MM:SS)")
 
         parents = tournament_selection(pop, n_select=len(pop)//2, tournament_size=5)
         offsprings = binary_crossover(parents, n_childs=len(pop), eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
-        print(f'>>>>> size parents: {len(parents)}, size offsprings: {len(mutation)}')
         # Evaluate offspring
         architectures_evaluated += eval_population(model, mutation, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
         print(f"Tiempo total de entrenamiento/validacion {args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} (HH:MM:SS)")

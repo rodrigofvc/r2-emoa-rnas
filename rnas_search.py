@@ -86,6 +86,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset to use')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--epochs', type=int, default=30, help='number of epochs to search')
+    parser.add_argument('--epochs_train_supernet', type=int, default=1, help='number of epochs to train supernet per generation')
     parser.add_argument('--params_dir', type=str, required=True, help="params json dir")
     args = parser.parse_args()
 
