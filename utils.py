@@ -82,17 +82,14 @@ def store_metrics(architectures_evaluated, population, population_2, args, weigh
     r2_population = r2(population, weights_r2[args.n_population], z_ref)
     statistics['r2_log'].append(r2_population.item())
     row_hyp = [args.algorithm, args.dataset, args.attack['name'], architectures_evaluated, 'hv', hyp, args.save_path_final_model]
+    row_hyp2 = [args.algorithm, args.dataset, args.attack['name'], architectures_evaluated, 'hv_2obj', hyp2, args.save_path_final_model]
     row_r2 = [args.algorithm, args.dataset, args.attack['name'], architectures_evaluated, 'r2', r2_population, args.save_path_final_model]
     file = open('evaluations.csv', 'a', newline='')
     writer = csv.writer(file)
     writer.writerow(row_hyp)
     writer.writerow(row_r2)
+    writer.writerow(row_hyp2)
     file.close()
-    row_hyp2 = [args.algorithm, args.dataset, args.attack['name'], architectures_evaluated, 'hv_2obj', hyp2, args.save_path_final_model]
-    file2 = open('evaluations-2.csv', 'a', newline='')
-    writer2 = csv.writer(file2)
-    writer2.writerow(row_hyp2)
-    file2.close()
     return hyp, hyp2, r2_population
 
 
