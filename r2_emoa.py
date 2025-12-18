@@ -99,11 +99,13 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
         archive = archive_update_pq(archive, pop + mutation)
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, pop + mutation)
         pop = update_population_r2(pop, mutation, weights_r2)
-        hyp_archive, r2_archive = utils.store_metrics(architectures_evaluated, archive, args, weights_r2, statistics)
+        hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_accuracy, args, weights_r2, statistics)
         utils.save_model(model, args.save_path_final_model, f"super-net.pt")
         utils.save_architectures(archive, args.save_path_final_architect)
         utils.plot_hypervolume(statistics, args.save_path_final_architect)
-        print(f"Hypervolume: {hyp_archive}, R2: {r2_archive}")
+        utils.plot_hypervolume2(statistics, args.save_path_final_architect)
+        utils.plot_r2(statistics, args.save_path_final_architect)
+        print(f"Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
     print(f">>>> Total search time: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_search))} (HH:MM:SS)")
     return model, archive, archive_accuracy, statistics
 
