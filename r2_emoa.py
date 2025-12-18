@@ -1,10 +1,9 @@
 import time
 
 import numpy as np
-from torch.amp import GradScaler
 
 import utils
-from archivers import archive_update_pq, archive_update_pq_accuracy
+from archivers import archive_update_pq, archive_update_pq_accuracy, archive_update_pq_losses
 from evaluation.model_search import discretize
 from evaluation.train_search import infer
 from individual import Individual
@@ -52,25 +51,27 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
     utils.store_statisctics(statisctics, objective_space)
     return len(pop)
 
-def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoch, scheduler, scaler, args):
+def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, gen, scheduler, scaler, args):
     model.train()
     attack = attack_f(model)
-    for n_batch, (input, target) in enumerate(train_queue):
-        individual = pop[n_batch % args.n_population]
-        individual_architect = unpack_alphas(individual.X, model.alphas_dim, args)
-        model.update_arch_parameters(individual_architect)
-        discrete = discretize(individual_architect, model.genotype(), args.device)
-        model.update_arch_parameters(discrete)
-        time_stamp = time.time()
-        std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, args)
-        if n_batch % args.report_freq == 0:
-            print(
-                f">>>> Epoch {epoch}/{args.epochs} Batch {n_batch + 1}/{len(train_queue)} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))}) (HH:MM:SS): std_acc {std_acc / args.batch_size * 100:.2f}%, adv_acc {adv_acc / args.batch_size * 100:.2f}%, loss {loss:.4f}")
-    scheduler.step()
+    epochs = args.epochs_train_supernet
+    for epoch in range(epochs):
+        for n_batch, (input, target) in enumerate(train_queue):
+            individual = pop[n_batch % args.n_population]
+            individual_architect = unpack_alphas(individual.X, model.alphas_dim, args)
+            model.update_arch_parameters(individual_architect)
+            discrete = discretize(individual_architect, model.genotype(), args.device)
+            model.update_arch_parameters(discrete)
+            time_stamp = time.time()
+            std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, args)
+            if n_batch % args.report_freq == 0:
+                print(f'>>>> Gen {gen}/{args.epochs} | Epoch {epoch}/{epochs} | Batch {n_batch}/{len(train_queue)} | Loss {loss:.4f} | Std Acc {std_acc:.2f}% | Adv Acc {adv_acc:.2f}% | Time {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_stamp))} (HH:MM:SS)')
+        scheduler.step()
 
 def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, scheduler, attack_f, weights_r2):
     archive = []
     archive_accuracy = []
+    archive_losses = []
     architectures_evaluated = 0
     pop = initial_population(args.n_population, model.alphas_dim, args.objectives)
     print(f">>>> Initial population of size {len(pop)} created.")
@@ -79,34 +80,37 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'), 'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
     architectures_evaluated += eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
     archive = archive_update_pq(archive, pop)
-    hyp_archive, r2_archive = utils.store_metrics(architectures_evaluated, archive, args, weights_r2, statistics)
-    print(f"Hypervolume: {hyp_archive}, R2: {r2_archive}")
+    archive_losses = archive_update_pq_losses(archive_losses, pop)
+    hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args, weights_r2, statistics)
+    print(f"Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
     time_search = time.time()
     for epoch in range(args.epochs):
         start = time.time()
         time_stamp_epoch = time.time()
         train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoch + 1, scheduler, scaler, args)
-        print(f">>>> Epoch {epoch + 1} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_epoch))} (HH:MM:SS)")
+        print(f">>>> Gen {epoch + 1} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_epoch))} (HH:MM:SS)")
 
         parents = tournament_selection(pop, n_select=len(pop)//2, tournament_size=5)
         offsprings = binary_crossover(parents, n_childs=len(pop), eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
-        print(f'>>>>> size parents: {len(parents)}, size offsprings: {len(mutation)}')
         # Evaluate offspring
         architectures_evaluated += eval_population(model, mutation, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
         print(f"Tiempo total de entrenamiento/validacion {args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} (HH:MM:SS)")
 
         archive = archive_update_pq(archive, pop + mutation)
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, pop + mutation)
+        archive_losses = archive_update_pq_losses(archive_losses, pop + mutation)
         pop = update_population_r2(pop, mutation, weights_r2)
-        hyp_archive, r2_archive = utils.store_metrics(architectures_evaluated, archive, args, weights_r2, statistics)
+        hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args, weights_r2, statistics)
         utils.save_model(model, args.save_path_final_model, f"super-net.pt")
         utils.save_architectures(archive, args.save_path_final_architect)
         utils.plot_hypervolume(statistics, args.save_path_final_architect)
-        print(f"Hypervolume: {hyp_archive}, R2: {r2_archive}")
+        utils.plot_hypervolume2(statistics, args.save_path_final_architect)
+        utils.plot_r2(statistics, args.save_path_final_architect)
+        print(f"Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
     print(f">>>> Total search time: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_search))} (HH:MM:SS)")
-    return model, archive, archive_accuracy, statistics
+    return model, archive, archive_accuracy, archive_losses, statistics
 
 def update_population_r2(pop, offspring, weights_r2):
     c = pop + offspring

@@ -29,6 +29,12 @@ def save_archive_accuracy(archive, archive_path):
     np_archive = np.array(np_archive)
     np.savez_compressed(archive_path, np_archive)
 
+def save_archive_losses(archive, archive_path):
+    archive_path += 'archive_losses'
+    np_archive = [[p.std_loss, p.adv_loss] for p in archive]
+    np_archive = np.array(np_archive)
+    np.savez_compressed(archive_path, np_archive)
+
 def save_archive(archive, archive_path):
     archive_path += 'archive'
     np_archive = [p.F for p in archive]
@@ -55,7 +61,7 @@ def store_statisctics(statistics, objective_space):
     statistics['min_f3'] = min(statistics['min_f3'], np.min(objective_space[:, 2]))
     statistics['min_f4'] = min(statistics['min_f4'], np.min(objective_space[:, 3]))
 
-def store_metrics(architectures_evaluated, population, args, weights_r2, statistics):
+def store_metrics(architectures_evaluated, population, population_2, args, weights_r2, statistics):
     max_f1 = 2 * 1.5
     max_f2 = 2 * 1.5
     max_f3 = 110 * 1.5
@@ -67,7 +73,7 @@ def store_metrics(architectures_evaluated, population, args, weights_r2, statist
     statistics['hyp_log'].append(hyp.item())
     # compute hypervolume 2 (std_loss, adv_loss)
     ind2 = HV(ref_point=np.array([max_f1, max_f2]))
-    population_array2 = np.array([[ind.F[0], ind.F[1]] for ind in population])
+    population_array2 = np.array([[ind.F[0], ind.F[1]] for ind in population_2])
     hyp2 = ind2(population_array2)
     statistics['hyp2_log'].append(hyp2.item())
     # compute r2
@@ -76,18 +82,15 @@ def store_metrics(architectures_evaluated, population, args, weights_r2, statist
     r2_population = r2(population, weights_r2[args.n_population], z_ref)
     statistics['r2_log'].append(r2_population.item())
     row_hyp = [args.algorithm, args.dataset, args.attack['name'], architectures_evaluated, 'hv', hyp, args.save_path_final_model]
+    row_hyp2 = [args.algorithm, args.dataset, args.attack['name'], architectures_evaluated, 'hv_2obj', hyp2, args.save_path_final_model]
     row_r2 = [args.algorithm, args.dataset, args.attack['name'], architectures_evaluated, 'r2', r2_population, args.save_path_final_model]
     file = open('evaluations.csv', 'a', newline='')
     writer = csv.writer(file)
     writer.writerow(row_hyp)
     writer.writerow(row_r2)
+    writer.writerow(row_hyp2)
     file.close()
-    row_hyp2 = [args.algorithm, args.dataset, args.attack['name'], architectures_evaluated, 'hv_2obj', hyp2, args.save_path_final_model]
-    file2 = open('evaluations-2.csv', 'a', newline='')
-    writer2 = csv.writer(file2)
-    writer2.writerow(row_hyp2)
-    file2.close()
-    return hyp, r2_population
+    return hyp, hyp2, r2_population
 
 
 def save_supernet(model, model_path):
@@ -159,6 +162,19 @@ def read_architectures(architect_path):
         print(l_tensor[1].shape)
     return architectures
 
+def plot_archive_losses(archive_losses, archive_path):
+    archive_path += 'archive_losses.pdf'
+    std_loss = [p.std_loss for p in archive_losses]
+    adv_loss = [p.adv_loss for p in archive_losses]
+    plt.figure(figsize=(8, 6))
+    plt.scatter(std_loss, adv_loss, c='blue', marker='o')
+    plt.title('Archive Losses')
+    plt.xlabel('Standard Loss')
+    plt.ylabel('Adversarial Loss')
+    plt.grid(True)
+    plt.savefig(archive_path)
+    plt.close()
+
 def plot_archive_accuracy(archive_accuracy, archive_path):
     archive_path += 'archive_accuracy.pdf'
     std_acc = [p.std_acc for p in archive_accuracy]
@@ -176,7 +192,7 @@ def plot_hypervolume(statistics, path):
     path += 'hypervolume.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['hyp_log'], marker='o', color='blue')
-    plt.title('Hypervolume over generations')
+    plt.title('Hypervolume per evaluations (std_loss, adv_loss, flops, n_params)')
     plt.xlabel('Generation')
     plt.ylabel('Hypervolume')
     plt.grid(True)
@@ -187,7 +203,7 @@ def plot_hypervolume2(statistics, path):
     path += 'hypervolume2.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['hyp2_log'], marker='o', color='blue')
-    plt.title('Hypervolume over generations (std_loss, adv_loss)')
+    plt.title('Hypervolume per evaluations (std_loss, adv_loss)')
     plt.xlabel('Generation')
     plt.ylabel('Hypervolume')
     plt.grid(True)
@@ -198,7 +214,7 @@ def plot_r2(statistics, path):
     path += 'r2.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['r2_log'], marker='o', color='red')
-    plt.title('R2 over Generations')
+    plt.title('R2 per evaluations (std_loss, adv_loss, flops, n_params)')
     plt.xlabel('Generation')
     plt.ylabel('R2 Indicator')
     plt.grid(True)

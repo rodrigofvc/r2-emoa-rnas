@@ -86,6 +86,7 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset to use')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--epochs', type=int, default=30, help='number of epochs to search')
+    parser.add_argument('--epochs_train_supernet', type=int, default=1, help='number of epochs to train supernet per generation')
     parser.add_argument('--params_dir', type=str, required=True, help="params json dir")
     args = parser.parse_args()
 
@@ -117,7 +118,7 @@ if __name__ == '__main__':
 
     model, criterion, optimizer, scheduler, train_queue, valid_queue, attack_f, weights_r2 = prepare_args(args)
     if args.algorithm == 'r2-emoa':
-        supernet, archive, archive_accuracy, statistics = r2_emoa_rnas(
+        supernet, archive, archive_accuracy, archive_losses, statistics = r2_emoa_rnas(
             model=model,
             criterion=criterion,
             optimizer=optimizer,
@@ -136,6 +137,8 @@ if __name__ == '__main__':
             utils.save_architecture(i, individual, args.save_path_final_architect)
         utils.save_archive(archive, args.save_path_final_architect)
         utils.save_archive_accuracy(archive_accuracy, args.save_path_final_architect)
+        utils.save_archive_losses(archive_losses, args.save_path_final_architect)
+        utils.plot_archive_losses(archive_losses, args.save_path_final_architect)
         utils.plot_archive_accuracy(archive_accuracy, args.save_path_final_architect)
         utils.plot_hypervolume(statistics, args.save_path_final_architect)
         utils.plot_hypervolume2(statistics, args.save_path_final_architect)
