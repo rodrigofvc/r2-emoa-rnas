@@ -25,6 +25,28 @@ def archive_update_pq(archive, population):
             archive.append(ind)
     return archive
 
+def archive_update_pq_losses(archive, population):
+    for ind in population:
+        dominated = False
+        to_remove = []
+        for i, arch_ind in enumerate(archive):
+            if ((arch_ind.adv_loss <= ind.adv_loss and
+                arch_ind.std_loss <= ind.std_loss) and
+                    not np.isclose(arch_ind.adv_loss, ind.adv_loss) and
+                    not np.isclose(arch_ind.std_loss, ind.std_loss)):
+                dominated = True
+                break
+            elif ((ind.adv_loss <= arch_ind.adv_loss and
+                    ind.std_loss <= arch_ind.std_loss) and
+                    not np.isclose(arch_ind.adv_loss, ind.adv_loss) and
+                    not np.isclose(arch_ind.std_loss, ind.std_loss)):
+                to_remove.append(i)
+        if not dominated:
+            for i in reversed(to_remove):
+                archive.pop(i)
+            archive.append(ind)
+    return archive
+
 def archive_update_pq_accuracy(archive, population):
     for ind in population:
         dominated = False

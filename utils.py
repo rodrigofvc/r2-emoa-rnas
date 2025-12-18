@@ -29,6 +29,12 @@ def save_archive_accuracy(archive, archive_path):
     np_archive = np.array(np_archive)
     np.savez_compressed(archive_path, np_archive)
 
+def save_archive_losses(archive, archive_path):
+    archive_path += 'archive_losses'
+    np_archive = [[p.std_loss, p.adv_loss] for p in archive]
+    np_archive = np.array(np_archive)
+    np.savez_compressed(archive_path, np_archive)
+
 def save_archive(archive, archive_path):
     archive_path += 'archive'
     np_archive = [p.F for p in archive]
@@ -158,6 +164,19 @@ def read_architectures(architect_path):
         print(l_tensor[0].shape)
         print(l_tensor[1].shape)
     return architectures
+
+def plot_archive_losses(archive_losses, archive_path):
+    archive_path += 'archive_losses.pdf'
+    std_loss = [p.std_loss for p in archive_losses]
+    adv_loss = [p.adv_loss for p in archive_losses]
+    plt.figure(figsize=(8, 6))
+    plt.scatter(std_loss, adv_loss, c='blue', marker='o')
+    plt.title('Archive Losses')
+    plt.xlabel('Standard Loss')
+    plt.ylabel('Adversarial Loss')
+    plt.grid(True)
+    plt.savefig(archive_path)
+    plt.close()
 
 def plot_archive_accuracy(archive_accuracy, archive_path):
     archive_path += 'archive_accuracy.pdf'
