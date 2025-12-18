@@ -122,6 +122,11 @@ def do_every_generations(algorithm):
     algorithm.problem.archive = archive_update_pq(algorithm.problem.archive, pop_obj)
     algorithm.problem.archive_2 = archive_update_pq(algorithm.problem.archive_2, pop_obj[:, :2])
     hyp, hyp_2, r2 = store_metrics(algorithm.evaluator.n_eval, np.array(algorithm.problem.archive), np.array(algorithm.problem.archive_2), algorithm.problem.save_dir, algorithm.problem.statistics)
+
+    plot_hypervolume(algorithm.problem.statistics, algorithm.problem.save_dir)
+    plot_hypervolume2(algorithm.problem.statistics, algorithm.problem.save_dir)
+    plot_r2(algorithm.problem.statistics, algorithm.problem.save_dir)
+
     # report generation info to files
     logging.info(">>>>>> generation = {}".format(gen))
     logging.info("       hyp_4 = {}, hyp_2 = {} r2 = {}".format(hyp, hyp_2, r2))
