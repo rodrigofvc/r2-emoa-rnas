@@ -68,7 +68,7 @@ def get_dynamic_r2_reference(population):
         assert np.isfinite(min_f_i), "Non-finite min_f_i encountered in dynamic R2 reference point calculation"
     return z_ref
 
-def store_metrics(architectures_evaluated, pop_obj, save_dir, statistics):
+def store_metrics(architectures_evaluated, pop_obj, pop_obj_2, save_dir, statistics):
     max_f1 = 2 * 1.5
     max_f2 = 2 * 1.5
     max_f3 = 110 * 1.5
@@ -79,7 +79,7 @@ def store_metrics(architectures_evaluated, pop_obj, save_dir, statistics):
     statistics['hyp_log'].append(hyp.item())
     # compute hypervolume 2 objectives (std_loss and adv_loss)
     ind_2obj = HV(ref_point=np.array([max_f1, max_f2]))
-    hyp_2obj = ind_2obj(pop_obj[:, :2])
+    hyp_2obj = ind_2obj(pop_obj_2)
     statistics['hyp2_log'].append(hyp_2obj.item())
     # compute r2
     weights_r2 = get_weights_r2(40)
@@ -100,7 +100,7 @@ def store_metrics(architectures_evaluated, pop_obj, save_dir, statistics):
     writer2 = csv.writer(file2)
     writer2.writerow(row_hyp2)
     file2.close()
-    return hyp, r2_population
+    return hyp, hyp_2obj, r2_population
 
 def save_architecture(i, individual, objectives, save_dir):
     architect_path = save_dir + os.sep + 'architectures' + os.sep

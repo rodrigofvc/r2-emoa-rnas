@@ -77,6 +77,7 @@ class NAS(Problem):
         self._n_evaluated = 0  # keep track of how many architectures are sampled
         self.statistics = {'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
         self.archive = []
+        self.archive_2 = []
 
     def _evaluate(self, x, out, *args, **kwargs):
 
@@ -119,10 +120,11 @@ def do_every_generations(algorithm):
     pop_obj = algorithm.pop.get("F")
     #store_non_dominated_solutions
     algorithm.problem.archive = archive_update_pq(algorithm.problem.archive, pop_obj)
-    hyp, r2 = store_metrics(algorithm.evaluator.n_eval, np.array(algorithm.problem.archive), algorithm.problem.save_dir, algorithm.problem.statistics)
+    algorithm.problem.archive_2 = archive_update_pq(algorithm.problem.archive_2, pop_obj[:, :2])
+    hyp, hyp_2, r2 = store_metrics(algorithm.evaluator.n_eval, np.array(algorithm.problem.archive), np.array(algorithm.problem.archive_2), algorithm.problem.save_dir, algorithm.problem.statistics)
     # report generation info to files
     logging.info(">>>>>> generation = {}".format(gen))
-    logging.info("       hypervolume = {}, r2 = {}".format(hyp, r2))
+    logging.info("       hyp_4 = {}, hyp_2 = {} r2 = {}".format(hyp, hyp_2, r2))
     logging.info('       evaluated so far {} architectures'.format(algorithm.evaluator.n_eval))
 
 def main():
