@@ -3,7 +3,7 @@ import sys
 
 from archivers import archive_update_pq
 from utils_search import store_metrics, save_architecture, save_archive, plot_hypervolume, plot_hypervolume2, plot_r2, \
-    save_statistics_to_csv, save_params
+    save_statistics_to_csv, save_params, save_archive_2, plot_archive
 
 # update your projecty root path before running
 if os.path.exists('/Users/rodrigofvc/Documents/doctorado/r2-emoa-rnas/algorithms/nsga-net'):
@@ -180,7 +180,9 @@ def main():
         # check architecture
         model = Network(args.init_channels, 10, args.layers, False, genotype)
         save_architecture(i, genotype, res.F[i], args.save)
-    save_archive(res.F, args.save)
+    save_archive(np.array(problem.archive), args.save)
+    save_archive_2(np.array(problem.archive_2), args.save)
+    plot_archive(np.array(problem.archive_2), args.save)
     plot_hypervolume(problem.statistics, args.save)
     plot_hypervolume2(problem.statistics, args.save)
     plot_r2(problem.statistics, args.save)

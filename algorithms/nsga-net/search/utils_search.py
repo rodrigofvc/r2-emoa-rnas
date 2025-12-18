@@ -88,18 +88,15 @@ def store_metrics(architectures_evaluated, pop_obj, pop_obj_2, save_dir, statist
     z_ref = get_dynamic_r2_reference(norm_obj)
     r2_population = r2(norm_obj, weights_r2[40], z_ref)
     statistics['r2_log'].append(r2_population)
-    row_hyp = ['nsga-net', 'cifar10', 'FGSM', architectures_evaluated, 'hv', hyp, save_dir]
-    row_r2 = ['nsga-net', 'cifar10', 'FGSM', architectures_evaluated, 'r2', r2_population, save_dir]
+    row_hyp =  ['nsga-net', 'cifar10', 'FGSM', architectures_evaluated, 'hv', hyp, save_dir]
+    row_r2 =   ['nsga-net', 'cifar10', 'FGSM', architectures_evaluated, 'r2', r2_population, save_dir]
+    row_hyp2 = ['nsga-net', 'cifar10', 'FGSM', architectures_evaluated, 'hv_2obj', hyp_2obj, save_dir]
     file = open('evaluations.csv', 'a', newline='')
     writer = csv.writer(file)
     writer.writerow(row_hyp)
     writer.writerow(row_r2)
+    writer.writerow(row_hyp2)
     file.close()
-    row_hyp2 = ['nsga-net', 'cifar10', 'FGSM', architectures_evaluated, 'hv_2obj', hyp_2obj, save_dir]
-    file2 = open('evaluations-2.csv', 'a', newline='')
-    writer2 = csv.writer(file2)
-    writer2.writerow(row_hyp2)
-    file2.close()
     return hyp, hyp_2obj, r2_population
 
 def save_architecture(i, individual, objectives, save_dir):
@@ -114,6 +111,24 @@ def save_archive(archive, save_dir):
     save_dir += os.sep + 'archive'
     np_archive = np.array(archive)
     np.savez_compressed(save_dir, np_archive)
+
+def save_archive_2(archive, save_dir):
+    save_dir += os.sep + 'archive_2'
+    np_archive = np.array(archive)
+    np.savez_compressed(save_dir, np_archive)
+
+def plot_archive(archive, save_dir):
+    save_dir += os.sep + 'archive.pdf'
+    archive = np.array(archive)
+    plt.figure(figsize=(8, 6))
+    plt.scatter(archive[:, 0], archive[:, 1], c='blue', marker='o')
+    plt.title('Non-dominated solutions')
+    plt.xlabel('std_error')
+    plt.ylabel('adv_error')
+    plt.grid(True)
+    plt.savefig(save_dir)
+    plt.close()
+
 def plot_hypervolume(statistics, save_dir):
     save_dir += os.sep + 'hypervolume.pdf'
     plt.figure(figsize=(8, 6))
