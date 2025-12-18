@@ -167,13 +167,12 @@ def main():
     args.time_taken = time.time() - start
     print('Total search time: {}'.format(time.strftime('%H:%M:%S', time.gmtime(time.time() - start))))
     # store non-dominated solutions
-    architectures = []
     for i, arch in enumerate(res.X):
         genome = micro_encoding.convert(arch) if args.search_space == 'micro' else macro_encoding.convert(arch)
         genotype = micro_encoding.decode(genome) if args.search_space == 'micro' else macro_encoding.decode(genome)
+        # check architecture
         model = Network(args.init_channels, 10, args.layers, False, genotype)
-        architectures.append(model)
-        save_architecture(i, model, res.F[i], args.save)
+        save_architecture(i, genotype, res.F[i], args.save)
     save_archive(res.F, args.save)
     plot_hypervolume(problem.statistics, args.save)
     plot_hypervolume2(problem.statistics, args.save)
