@@ -3,7 +3,7 @@ import time
 import numpy as np
 
 import utils
-from archivers import archive_update_pq, archive_update_pq_accuracy, archive_update_pq_losses
+from archivers import archive_update_pq, archive_update_pq_accuracy
 from evaluation.model_search import discretize
 from evaluation.train_search import infer
 from individual import Individual
@@ -80,7 +80,7 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'), 'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
     architectures_evaluated += eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
     archive = archive_update_pq(archive, pop)
-    archive_losses = archive_update_pq_losses(archive_losses, pop)
+    archive_losses = archive_update_pq(archive_losses, pop, k=2)
     hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args, weights_r2, statistics)
     print(f"Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
     time_search = time.time()
@@ -100,7 +100,7 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
 
         archive = archive_update_pq(archive, pop + mutation)
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, pop + mutation)
-        archive_losses = archive_update_pq_losses(archive_losses, pop + mutation)
+        archive_losses = archive_update_pq(archive_losses, pop + mutation, k=2)
         pop = update_population_r2(pop, mutation, weights_r2)
         hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args, weights_r2, statistics)
         utils.save_model(model, args.save_path_final_model, f"super-net.pt")
