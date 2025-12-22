@@ -54,7 +54,7 @@ parser.add_argument('--mutate_rate',       type = float, default = 0.1, help = '
 parser.add_argument('--output_dir',        type = str, default = None, help = 'location of trials')
 parser.add_argument('--pop_size',          type = int, default = 40, help = 'population size')
 parser.add_argument('--report_freq',       type = float, default = 50, help = 'report frequency')
-parser.add_argument('--seed',              type = int, default = 1, help = 'random seed')
+parser.add_argument('--seed',              type = int, default = 18906049, help = 'random seed')
 parser.add_argument('--split_option',      type = int, default = 0.5, help = 'split option for CIFAR100')
 parser.add_argument('--train_discrete',    default=False, action='store_true')
 parser.add_argument('--train_epochs',      type = int, default = 10, help = 'num of training epochs')
