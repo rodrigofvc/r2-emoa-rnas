@@ -57,7 +57,7 @@ parser.add_argument('--report_freq',       type = float, default = 50, help = 'r
 parser.add_argument('--seed',              type = int, default = 1, help = 'random seed')
 parser.add_argument('--split_option',      type = int, default = 0.5, help = 'split option for CIFAR100')
 parser.add_argument('--train_discrete',    default=False, action='store_true')
-parser.add_argument('--train_epochs',      type = int, default = 0, help = 'num of training epochs')
+parser.add_argument('--train_epochs',      type = int, default = 10, help = 'num of training epochs')
 parser.add_argument('--valid_batch_size',  type = int, default = 64, help = 'validation batch size')
 parser.add_argument('--weight_decay',      type = float, default = 3e-4, help = 'weight decay')
 parser.add_argument('--train_portion',     type = float, default = 0.5, help = 'portion of training data')
