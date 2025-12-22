@@ -8,3 +8,6 @@ params/eval/params-cifar-10-r2-emoa-light.json
 params/search/params-cifar-10-r2-emoa-light.json
 evaluation_deprecated/
 *.sh
+r2_weights/
+rnas_search.err
+rnas_search.out
