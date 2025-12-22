@@ -101,7 +101,6 @@ if __name__ == '__main__':
     print("Running with config:")
     for key, value in vars(args).items():
         print(f"{key}: {value}")
-
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
 
@@ -113,6 +112,7 @@ if __name__ == '__main__':
 
 
     results_dir = utils.create_experiment_dir(args.algorithm, args.dataset, args.seed)
+    print(f'Results dir: {results_dir}' )
     args.save_path_final_model = results_dir
     args.save_path_final_architect = results_dir
 
