@@ -10,3 +10,5 @@ evaluation_deprecated/
 evaluations.csv
 *.sh
 r2_weights/
+rnas_search.err
+rnas_search.out
