@@ -25,6 +25,8 @@ class PoolUnit(Unit):
 class Individual(object):
     def __init__(self, params, indi_no):
         self.acc = -1.0
+        self.F = np.zeros(4)
+        self.F_norm = np.zeros(4)
         self.id = indi_no # for record the id of current individual
         self.number_id = 0 # for record the latest number of basic unit
         self.min_conv = params['min_conv']

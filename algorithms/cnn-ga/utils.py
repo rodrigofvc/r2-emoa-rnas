@@ -85,6 +85,11 @@ class StatusUpdateTool(object):
         return int(rs)
 
     @classmethod
+    def get_dataset(cls):
+        rs = cls.__read_ini_file('network', 'dataset')
+        return rs
+
+    @classmethod
     def get_num_class(cls):
         rs = cls.__read_ini_file('network', 'num_class')
         return int(rs)
@@ -270,7 +275,7 @@ class Utils(object):
             if _key not in _map:
                 Log.info('Add record into cache, id:%s, acc:%.5f' % (_key, _acc))
                 f = open('./populations/cache.txt', 'a+')
-                _str = '%s;%.5f;%s\n' % (_key, _acc, _str)
+                _str = '%s;%.5f;%s;%s\n' % (_key, _acc, np.array_str(indi.F), _str)
                 f.write(_str)
                 f.close()
                 _map[_key] = _acc
@@ -404,7 +409,7 @@ class Utils(object):
         return part1, part2, part3
 
     @classmethod
-    def generate_pytorch_file(cls, indi):
+    def generate_pytorch_file(cls, indi, dir='./scripts'):
         # query convolution unit
         conv_name_list = []
         conv_list = []
@@ -469,7 +474,7 @@ class Utils(object):
             _str.append('        %s' % (s))
         _str.extend(part3)
         # print('\n'.join(_str))
-        file_name = './scripts/%s.py' % (indi.id)
+        file_name = dir + os.sep + str(indi.uuid()[0]) + '.py'
         script_file_handler = open(file_name, 'w')
         script_file_handler.write('\n'.join(_str))
         script_file_handler.flush()

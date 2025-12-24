@@ -1,6 +1,9 @@
-"""
+
 from __future__ import print_function
+
+import numpy as np
 import torch
+from thop import profile
 from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
@@ -10,6 +13,8 @@ import data_loader
 import os
 from datetime import datetime
 import multiprocessing
+
+from adversarial import get_attack_function
 from utils import StatusUpdateTool
 
 class BasicBlock(nn.Module):
@@ -44,30 +49,41 @@ class EvoCNNModel(nn.Module):
     def forward(self, x):
         #generate_forward
 
-        out = out.view(out.size(0), -1)
+        out = x.view(x.size(0), -1)
         out = self.linear(out)
         return out
 
 
 class TrainModel(object):
     def __init__(self):
-        data_dir = os.path.expanduser('./dataset')
-        trainloader, validate_loader = data_loader.get_train_valid_loader(data_dir, batch_size=128, augment=True, valid_size=0.1, shuffle=True, random_seed=2312390, show_sample=False, num_workers=1, pin_memory=True)
-        #testloader = data_loader.get_test_loader(data_dir, batch_size=128, shuffle=False, num_workers=1, pin_memory=True)
+        data_dir = os.path.expanduser('../../data')
+        trainloader, validate_loader = data_loader.get_train_valid_loader(data_dir, batch_size=96, num_workers=0, pin_memory=False)
         net = EvoCNNModel()
-        cudnn.benchmark = True
-        net = net.cuda()
+        if torch.cuda.is_available():
+            cudnn.benchmark = True
+            net = net.cuda()
         criterion = nn.CrossEntropyLoss()
-        best_acc = 0.0
         self.net = net
         self.criterion = criterion
-        self.best_acc = best_acc
+        # objectives (std_loss, adv_loss, flops, params)
+        self.F = np.zeros(4,)
         self.trainloader = trainloader
         self.validate_loader = validate_loader
         self.file_id = os.path.basename(__file__).split('.')[0]
-        #self.testloader = testloader
-        #self.log_record(net, first_time=True)
-        #self.log_record('+'*50, first_time=False)
+        attack_params = {
+            'name': 'FGSM',
+            'params': {
+                'epsilon': '8/255',
+            }
+        }
+        self.attack_f = get_attack_function(attack_params)
+        self.lambda_1 = 0.5
+        self.lambda_2 = 0.5
+        if torch.cuda.is_available():
+            self.device = torch.device('cuda')
+        elif torch.backends.mps.is_available():
+            self.device = torch.device('mps')
+
 
     def log_record(self, _str, first_time=None):
         dt = datetime.now()
@@ -88,71 +104,105 @@ class TrainModel(object):
         if epoch > 148: lr = 0.01
         if epoch > 248: lr = 0.001
         optimizer = optim.SGD(self.net.parameters(), lr=lr, momentum = 0.9, weight_decay=5e-4)
-        running_loss = 0.0
         total = 0
-        correct = 0
-        for _, data in enumerate(self.trainloader, 0):
-            inputs, labels = data
-            inputs, labels = Variable(inputs.cuda()), Variable(labels.cuda())
+        std_correct = 0
+        adv_correct = 0
+        std_loss_mean = 0
+        adv_loss_mean = 0
+        total_loss_mean = 0
+        attack = self.attack_f(self.net)
+        for _, (inputs, labels) in enumerate(self.trainloader, 0):
+            inputs = inputs.to(self.device)
+            labels = labels.to(self.device)
+
             optimizer.zero_grad()
-            outputs = self.net(inputs)
-            loss = self.criterion(outputs, labels)
-            loss.backward()
+            adv_inputs, std_logits = attack(inputs, labels)
+            adv_logits = self.net(adv_inputs)
+            std_loss = self.criterion(std_logits, labels)
+            adv_loss = self.criterion(adv_logits, labels)
+            total_loss = self.lambda_1 * std_loss + self.lambda_2 * adv_loss
+            total_loss.backward()
             optimizer.step()
-            running_loss += loss.item()*labels.size(0)
-            _, predicted = torch.max(outputs.data, 1)
+
+            std_predicts = std_logits.argmax(dim=1)
+            adv_predicts = adv_logits.argmax(dim=1)
+            std_correct += (std_predicts == labels).sum().item()
+            adv_correct += (adv_predicts == labels).sum().item()
             total += labels.size(0)
-            correct += (predicted == labels.data).sum()
-        self.log_record('Train-Epoch:%3d,  Loss: %.3f, Acc:%.3f'% (epoch+1, running_loss/total, (correct/total)))
+            std_loss_mean += std_loss.item()
+            adv_loss_mean += adv_loss.item()
+            total_loss_mean += total_loss.item()
+        self.log_record('Trsin-Epoch:%3d,  Std_Acc: %.3f, Adv_Acc: %.3f, Std_Loss: %.3f, Adv_Loss: %.3f, Total_Loss: %.3f'% (epoch+1, std_correct/total, adv_correct/total, std_loss_mean/total, adv_loss_mean/total, total_loss_mean/total))
 
     def test(self, epoch):
         self.net.eval()
         test_loss = 0.0
-        total = 0
         correct = 0
-        for _, data in enumerate(self.validate_loader, 0):
-            inputs, labels = data
-            inputs, labels = Variable(inputs.cuda()), Variable(labels.cuda())
-            outputs = self.net(inputs)
-            loss = self.criterion(outputs, labels)
-            test_loss += loss.item()*labels.size(0)
-            _, predicted = torch.max(outputs.data, 1)
+        std_correct = 0
+        adv_correct = 0
+        std_loss_mean = 0
+        adv_loss_mean = 0
+        total_loss_mean = 0
+        total = 0
+        attack = self.attack_f(self.net)
+        for _, (inputs, labels) in enumerate(self.validate_loader, 0):
+            inputs = inputs.to(self.device)
+            labels = labels.to(self.device)
+
+            adv_inputs, std_logits = attack(inputs, labels)
+            adv_logits = self.net(adv_inputs)
+            std_loss = self.criterion(std_logits, labels)
+            adv_loss = self.criterion(adv_logits, labels)
+            total_loss = self.lambda_1 * std_loss + self.lambda_2 * adv_loss
+
+            std_predicts = std_logits.argmax(dim=1)
+            adv_predicts = adv_logits.argmax(dim=1)
+            std_correct += (std_predicts == labels).sum().item()
+            adv_correct += (adv_predicts == labels).sum().item()
             total += labels.size(0)
-            correct += (predicted == labels.data).sum()
-        if correct/total > self.best_acc:
-            self.best_acc = correct/total
-            #print('*'*100, self.best_acc)
-        self.log_record('Validate-Loss:%.3f, Acc:%.3f'%(test_loss/total, correct/total))
+            std_loss_mean += std_loss.item()
+            adv_loss_mean += adv_loss.item()
+            total_loss_mean += total_loss.item()
+
+        self.F[0] = std_loss_mean / total
+        self.F[1] = adv_loss_mean / total
+
+        x = torch.randn(1, 3, 32, 32)
+        macs, params = profile(self.net, inputs=(x,), verbose=False)
+        flops = (2 * macs) / 1e6
+        params = params / 1e6
+
+        self.F[2] = round(flops, 4)
+        self.F[3] = round(params, 4)
+        self.log_record('Validate-Epoch:%3d,  Std_Acc: %.3f, Adv_Acc: %.3f, Std_Loss: %.3f, Adv_Loss: %.3f, Total_Loss: %.3f, Flops: %.3fM, Params: %.3fM'% (epoch+1, std_correct/total, adv_correct/total, std_loss_mean/total, adv_loss_mean/total, total_loss_mean/total, flops, params))
 
 
     def process(self):
         total_epoch = StatusUpdateTool.get_epoch_size()
         for p in range(total_epoch):
             self.train(p)
-            self.test(total_epoch)
-        return self.best_acc
+            self.test(p)
+        return self.F
 
 
 class RunModel(object):
     def do_work(self, gpu_id, file_id):
         os.environ['CUDA_VISIBLE_DEVICES'] = gpu_id
-        best_acc = 0.0
+        F = np.zeros(4)
         m = TrainModel()
         try:
             m.log_record('Used GPU#%s, worker name:%s[%d]'%(gpu_id, multiprocessing.current_process().name, os.getpid()), first_time=True)
-            best_acc = m.process()
-            #import random
-            #best_acc = random.random()
+            F = m.process()
         except BaseException as e:
             print('Exception occurs, file:%s, pid:%d...%s'%(file_id, os.getpid(), str(e)))
             m.log_record('Exception occur:%s'%(str(e)))
         finally:
-            m.log_record('Finished-Acc:%.3f'%best_acc)
+            m.log_record('Objectives: Std_Loss: %.5f, Adv_Loss: %.5f, Flops: %.3fM, Params: %.3fM'% (F[0], F[1], F[2], F[3]))
 
             f = open('./populations/after_%s.txt'%(file_id[4:6]), 'a+')
-            f.write('%s=%.5f\n'%(file_id, best_acc))
+            f.write('%s=%s\n'%(file_id, np.array_str(F)))
             f.flush()
             f.close()
-"""
+
 
 

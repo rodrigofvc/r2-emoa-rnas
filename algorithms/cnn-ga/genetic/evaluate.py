@@ -1,3 +1,5 @@
+import numpy as np
+
 from utils import Utils, GPUTools
 import importlib
 from multiprocessing import Process
@@ -16,6 +18,9 @@ class FitnessEvaluate(object):
             Utils.generate_pytorch_file(indi)
         self.log.info('Finish the generation of python files')
 
+    def scalar_fitness(self, F):
+        return F[0] * 0.5 + F[1] * 0.5
+
     def evaluate(self):
         """
         load fitness from cache file
@@ -28,8 +33,12 @@ class FitnessEvaluate(object):
             if _key in _map:
                 _count += 1
                 _acc = _map[_key]
-                self.log.info('Hit the cache for %s, key:%s, acc:%.5f, assigned_acc:%.5f'%(indi.id, _key, float(_acc), indi.acc))
+                self.log.info('Hit the cache for %s, key:%s, F:%s, weighted fitness:%.5f'%(indi.id, _key, _acc, indi.acc))
+                F = np.fromstring(_acc.strip('[]'), sep=' ')
+                indi.F = F
+                indi.acc = self.scalar_fitness(F)
                 indi.acc = float(_acc)
+
         self.log.info('Total hit %d individuals for fitness'%(_count))
 
         has_evaluated_offspring = False

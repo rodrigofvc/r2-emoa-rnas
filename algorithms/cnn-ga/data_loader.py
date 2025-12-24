@@ -11,7 +11,7 @@ from torchvision import datasets
 from torchvision import transforms
 from torch.utils.data.sampler import SubsetRandomSampler
 import torch.utils.data as tdata
-
+import torch
 
 def get_train_valid_loader(data_dir,
                            batch_size,
@@ -87,9 +87,11 @@ def get_train_valid_loader(data_dir,
     indices = list(range(num_train))
     split = int(np.floor(valid_size * num_train))
 
-    if shuffle:
-        #np.random.seed(random_seed)
-        np.random.shuffle(indices)
+    if torch.backends.mps.is_available():
+        # testing
+        split = 96
+        num_train = split + 96
+    print(f"Training samples: {split}, Validation samples: {num_train - split}")
 
     train_idx, valid_idx = indices[split:], indices[:split]
     train_sampler = SubsetRandomSampler(train_idx)
@@ -103,17 +105,6 @@ def get_train_valid_loader(data_dir,
         valid_dataset, batch_size=batch_size, sampler=valid_sampler,
         num_workers=num_workers, pin_memory=pin_memory,
     )
-
-    # visualize some images
-#     if show_sample:
-#         sample_loader = torch.utils.data.DataLoader(
-#             train_dataset, batch_size=9, shuffle=shuffle,
-#             num_workers=num_workers, pin_memory=pin_memory,
-#         )
-#         data_iter = iter(sample_loader)
-#         images, labels = data_iter.next()
-#         X = images.numpy().transpose([0, 2, 3, 1])
-#         plot_images(X, labels)
 
     return (train_loader, valid_loader)
 

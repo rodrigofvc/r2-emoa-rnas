@@ -1,8 +1,15 @@
+import os
+from datetime import time
+
+from archivers import archive_update_pq
+from utils_search import store_metrics, save_archive, save_archive_losses, plot_archive_losses, plot_hypervolume, \
+    plot_r2, plot_hypervolume2, save_statistics_to_csv, save_params, save_architecture
 from utils import StatusUpdateTool, Utils, Log
 from genetic.population import Population
 from genetic.evaluate import FitnessEvaluate
 from genetic.crossover_and_mutation import CrossoverAndMutation
 from genetic.selection_operator import Selection
+import torch
 import numpy as np
 import copy
 
@@ -10,6 +17,11 @@ class EvolveCNN(object):
     def __init__(self, params):
         self.params = params
         self.pops = None
+        # non-dominated solutions (4 objs)
+        self.archive = []
+        # non-dominated solutions (2 objs)
+        self.archive_2 = []
+        self.statistics = {}
 
     def initialize_population(self):
         StatusUpdateTool.begin_evolution()
@@ -93,6 +105,7 @@ class EvolveCNN(object):
         self.fitness_evaluate()
         Log.info('EVOLVE[%d-gen]-Finish the evaluation'%(gen_no))
         gen_no += 1
+        evaluated_solutions = 0
         for curr_gen in range(gen_no, max_gen):
             self.params['gen_no'] = curr_gen
             #step 3
@@ -104,14 +117,48 @@ class EvolveCNN(object):
             self.fitness_evaluate()
             Log.info('EVOLVE[%d-gen]-Finish the evaluation'%(curr_gen))
 
+            # store the non-dominated solutions
+            # guarda los individuos
+            self.archive = archive_update_pq(self.archive, self.pops.individuals)
+            # store the non-dominated solutions (2 objs)
+            self.archive_2 = archive_update_pq(self.archive_2, self.pops.individuals, k=2)
+            evaluated_solutions += len(self.pops.individuals)
             self.environment_selection()
             Log.info('EVOLVE[%d-gen]-Finish the environment selection'%(curr_gen))
+            hyp, hyp_2, r2 = store_metrics(evaluated_solutions, self.archive, self.archive_2, self.params['save_dir'], self.statistics)
+            print('>>>>>>> Gen {}: hyp={}, hyp_2={}, r2={}'.format(curr_gen, hyp, hyp_2, r2))
+            plot_hypervolume(self.statistics, self.params['save_dir'])
+            plot_hypervolume2(self.statistics, self.params['save_dir'])
+            plot_r2(self.statistics, self.params['save_dir'])
+
+        dir_arch = self.params['save_dir'] + os.sep + 'architectures' + os.sep + 'scripts' + os.sep
+        if not os.path.exists(dir_arch):
+            os.makedirs(dir_arch)
+        for i, ind in enumerate(self.archive):
+            # Store the architecture as a pytorch file
+            Utils.generate_pytorch_file(ind, dir_arch)
+            # store F values
+            save_architecture(ind.uuid()[0], ind, self.params['save_dir'])
+
+        save_archive(self.archive, self.params['save_dir'])
+        save_archive_losses(self.archive_2, self.params['save_dir'])
+        plot_archive_losses(self.archive_2, self.params['save_dir'])
+        plot_hypervolume(self.statistics, self.params['save_dir'])
+        plot_hypervolume2(self.statistics, self.params['save_dir'])
+        plot_r2(self.statistics, self.params['save_dir'])
+        save_statistics_to_csv(self.statistics, self.params['save_dir'])
+        save_params(self.params, self.params['save_dir'])
 
         StatusUpdateTool.end_evolution()
 if __name__ == '__main__':
     params = StatusUpdateTool.get_init_params()
+    params['save_dir'] = 'search--{}'.format(time.strftime("%Y%m%d-%H%M%S"))
+    if not os.path.exists(params['save_dir']):
+        os.mkdir(params['save_dir'])
+    if torch.cuda.is_available():
+        params['device'] = 'cuda'
+    elif torch.backends.mps.is_available():
+        params['device'] = 'mps'
     evoCNN = EvolveCNN(params)
-    evoCNN.do_work(max_gen=20)
-
-
-
+    evoCNN.do_work(max_gen=30)
+    print('>>>>>> Results stored in {}'.format(params['save_dir']))
