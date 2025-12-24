@@ -47,8 +47,12 @@ def prepare_args(args):
 
     ssl._create_default_https_context = ssl._create_unverified_context
     train_transform, valid_transform = utils.data_transforms_cifar10(args)
-    train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
-
+    if args.dataset == 'cifar10':
+        train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
+    elif args.dataset == 'cifar100':
+        train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
+    else:
+        raise ValueError(f"Unknown dataset: {args.dataset}")
     num_train = len(train_data)
     indices = list(range(num_train))
     split = int(np.floor(args.train_portion * num_train))
@@ -83,7 +87,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Running R2-EMOA for RNAS")
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument('--algorithm', type=str, choices=['r2-emoa'], help='algorithm to run')
-    parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset to use')
+    parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'], help='dataset to use')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--epochs', type=int, default=30, help='number of epochs to search')
     parser.add_argument('--epochs_train_supernet', type=int, default=1, help='number of epochs to train supernet per generation')
