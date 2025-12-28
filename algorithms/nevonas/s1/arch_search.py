@@ -36,7 +36,7 @@ parser.add_argument('--config_root',       type=str, help='The root path of the 
 parser.add_argument('--cutout',            action = 'store_true', default = False, help = 'use cutout')
 parser.add_argument('--cutout_length',     type = int, default = 16, help = 'cutout length')
 parser.add_argument('--data_dir',          type = str, default = '../../data', help = 'location of the data corpus')
-parser.add_argument('--dataset',           type = str, default = 'cifar10', help = '["cifar10", "cifar100"]')
+parser.add_argument('--dataset',           type = str, default = '', help = '["cifar10", "cifar100"]')
 parser.add_argument('--epochs',            type = int, default = 30, help = 'num of generations')
 parser.add_argument('--gpu',               type = int, default = 0, help = 'gpu device id')
 parser.add_argument('--grad_clip',         type = float, default = 5, help = 'gradient clipping')

@@ -28,9 +28,9 @@ if [ $train_discrete -gt 0 ]
 then
   CUDA_LAUNCH_BLOCKING=1 PYTHONMALLOC=debug python3 -X dev ./s1/arch_search.py --gpu ${gpu} --init_channel ${init_channel} --layers ${layers} --dataset ${dataset} \
                                  --epochs ${epochs} --train_epochs ${train_epochs} --knn ${knn} \
-                                 --mutate_rate ${mutate_rate} --pop_size ${pop_size} --train_discrete
+                                 --mutate_rate ${mutate_rate} --pop_size ${pop_size} --train_discrete --dataset ${dataset}
 else
   CUDA_LAUNCH_BLOCKING=1 PYTHONMALLOC=debug python3 -X dev ./s1/arch_search.py --gpu ${gpu} --init_channel ${init_channel} --layers ${layers} --dataset ${dataset} \
                                  --epochs ${epochs} --train_epochs ${train_epochs} --knn ${knn} \
-                                 --mutate_rate ${mutate_rate} --pop_size ${pop_size}
+                                 --mutate_rate ${mutate_rate} --pop_size ${pop_size} --dataset ${dataset}
 fi
