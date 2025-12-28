@@ -58,5 +58,7 @@ def get_dataloader(args):
       train_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
         num_workers=0, pin_memory=False, drop_last=True)
+  else:
+    raise ValueError("Unrecognized dataset: {}".format(args.dataset))
 
   return train_transform, valid_transform, train_queue, valid_queue
