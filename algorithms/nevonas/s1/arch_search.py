@@ -62,7 +62,7 @@ parser.add_argument('--valid_batch_size',  type = int, default = 64, help = 'val
 parser.add_argument('--weight_decay',      type = float, default = 3e-4, help = 'weight decay')
 parser.add_argument('--train_portion',     type = float, default = 0.5, help = 'portion of training data')
 parser.add_argument('--workers',           type=int, default=0, help='number of data loading workers (default: 2)')
-args = parser.parse_args([])
+args = parser.parse_args()
 
 def train(model, train_queue, criterion, optimizer, gen, attack_f, device, pop=None):
   model.train()
