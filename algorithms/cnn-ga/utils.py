@@ -475,6 +475,7 @@ class Utils(object):
         _str.extend(part3)
         # print('\n'.join(_str))
         file_name = dir + os.sep + str(indi.uuid()[0]) + '.py'
+        print('Generate pytorch file: %s' % (file_name))
         script_file_handler = open(file_name, 'w')
         script_file_handler.write('\n'.join(_str))
         script_file_handler.flush()
