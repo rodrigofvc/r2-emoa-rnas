@@ -1,5 +1,5 @@
 import os
-from datetime import time
+from datetime import datetime
 
 from archivers import archive_update_pq
 from utils_search import store_metrics, save_archive, save_archive_losses, plot_archive_losses, plot_hypervolume, \
@@ -21,7 +21,7 @@ class EvolveCNN(object):
         self.archive = []
         # non-dominated solutions (2 objs)
         self.archive_2 = []
-        self.statistics = {}
+        self.statistics = {'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
 
     def initialize_population(self):
         StatusUpdateTool.begin_evolution()
@@ -152,7 +152,7 @@ class EvolveCNN(object):
         StatusUpdateTool.end_evolution()
 if __name__ == '__main__':
     params = StatusUpdateTool.get_init_params()
-    params['save_dir'] = 'search--{}'.format(time.strftime("%Y%m%d-%H%M%S"))
+    params['save_dir'] = 'search--{}'.format(datetime.now().strftime("%Y%m%d-%H%M%S"))
     if not os.path.exists(params['save_dir']):
         os.mkdir(params['save_dir'])
     if torch.cuda.is_available():

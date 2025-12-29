@@ -11,7 +11,6 @@ import torchvision.transforms as transforms
 import os
 import pickle
 
-from evaluation.model import NetworkCIFAR
 from indicators import r2, normalize_objectives, get_dynamic_r2_reference
 
 
@@ -264,14 +263,6 @@ def data_transforms_cifar10(args):
     ])
   return train_transform, valid_transform
 
-# Returns the flops and number of parameters of a model given its genotype
-def get_model_metrics(genotype, model):
-    discretized_model = NetworkCIFAR(model.C, model.num_classes, model.layers, auxiliary=False, genotype=genotype)
-    x = torch.randn(1, 3, 32, 32)
-    macs, params = profile(discretized_model, inputs=(x,), verbose=False)
-    flops = (2 * macs) / 1e6
-    params = params / 1e6
-    return round(flops, 4), round(params, 4)
 
 def get_best_architecture_adversarial(archs_path):
     best_adv_acc = -1.0

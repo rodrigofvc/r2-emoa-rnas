@@ -1,10 +1,9 @@
-
+"""
 from __future__ import print_function
 
 import numpy as np
 import torch
 from thop import profile
-from torch.autograd import Variable
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
@@ -203,6 +202,4 @@ class RunModel(object):
             f.write('%s=%s\n'%(file_id, np.array_str(F)))
             f.flush()
             f.close()
-
-
-
+"""
