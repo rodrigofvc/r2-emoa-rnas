@@ -37,7 +37,6 @@ class FitnessEvaluate(object):
                 F = np.fromstring(_acc.strip('[]'), sep=' ')
                 indi.F = F
                 indi.acc = self.scalar_fitness(F)
-                indi.acc = float(_acc)
 
         self.log.info('Total hit %d individuals for fitness'%(_count))
 
