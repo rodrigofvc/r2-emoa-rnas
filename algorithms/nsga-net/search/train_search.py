@@ -31,7 +31,7 @@ elif torch.cuda.is_available():
     device = 'cuda'
 
 
-def main(genome, epochs, search_space='micro',
+def main(dataset, n_classes, genome, epochs, search_space='micro',
          save='Design_1', expr_root='search', seed=0, gpu=0, init_channels=16,
          layers=11, auxiliary=False, cutout=False, drop_path_prob=0.0):
 
@@ -46,7 +46,7 @@ def main(genome, epochs, search_space='micro',
     # logging.getLogger().addHandler(fh)
 
     # ---- parameter values setting ----- #
-    CIFAR_CLASSES = 10
+    CIFAR_CLASSES = n_classes
     learning_rate = 0.025
     momentum = 0.9
     weight_decay = 3e-4
@@ -116,8 +116,12 @@ def main(genome, epochs, search_space='micro',
     if cutout:
         train_transform.transforms.append(utils.Cutout(cutout_length))
 
-
-    train_data = torchvision.datasets.CIFAR10(root=data_root, train=True, download=False, transform=train_transform)
+    if dataset == 'cifar10':
+        train_data = torchvision.datasets.CIFAR10(root=data_root, train=True, download=False, transform=train_transform)
+    elif dataset == 'cifar100':
+        train_data = torchvision.datasets.CIFAR100(root=data_root, train=True, download=True, transform=train_transform)
+    else:
+        raise ValueError('Dataset {} is not supported.'.format(dataset))
 
     train_portion = 0.5
     num_train = len(train_data)

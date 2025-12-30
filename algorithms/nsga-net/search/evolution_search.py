@@ -29,6 +29,8 @@ from pymoo.optimize import minimize
 
 parser = argparse.ArgumentParser("Multi-objetive Genetic Algorithm for NAS")
 parser.add_argument('--save', type=str, default='NSGA-Net', help='experiment name')
+parser.add_argument('--dataset', type=str, default='cifar10', choices=['cifar10', 'cifar100'], help='dataset name')
+parser.add_argument('--n_classes', type=int, choices=[10, 100], help='number of classes')
 parser.add_argument('--seed', type=int, default=0, help='random seed')
 parser.add_argument('--search_space', type=str, default='micro', help='macro or micro search space')
 # arguments for micro search space
@@ -64,11 +66,13 @@ pop_hist = []  # keep track of every evaluated architecture
 # ---------------------------------------------------------------------------------------------------------
 class NAS(Problem):
     # first define the NAS problem (inherit from pymop)
-    def __init__(self, search_space='micro', n_var=20, n_obj=4, n_constr=0, lb=None, ub=None,
+    def __init__(self, dataset, n_classes, search_space='micro', n_var=20, n_obj=4, n_constr=0, lb=None, ub=None,
                  init_channels=16, layers=5, epochs=25, save_dir=None):
         super().__init__(n_var=n_var, n_obj=n_obj, n_constr=n_constr)
         self.xl = lb
         self.xu = ub
+        self.dataset = dataset
+        self.n_classes = n_classes
         self._search_space = search_space
         self._init_channels = init_channels
         self._layers = layers
@@ -91,7 +95,9 @@ class NAS(Problem):
                 genome = micro_encoding.convert(x[i, :])
             elif self._search_space == 'macro':
                 genome = macro_encoding.convert(x[i, :])
-            performance = train_search.main(genome=genome,
+            performance = train_search.main(dataset=self.dataset,
+                                            n_classes=self.n_classes,
+                                            genome=genome,
                                             search_space=self._search_space,
                                             init_channels=self._init_channels,
                                             layers=self._layers, cutout=False,
@@ -121,7 +127,7 @@ def do_every_generations(algorithm):
     #store_non_dominated_solutions
     algorithm.problem.archive = archive_update_pq(algorithm.problem.archive, pop_obj)
     algorithm.problem.archive_2 = archive_update_pq(algorithm.problem.archive_2, pop_obj[:, :2])
-    hyp, hyp_2, r2 = store_metrics(algorithm.evaluator.n_eval, np.array(algorithm.problem.archive), np.array(algorithm.problem.archive_2), algorithm.problem.save_dir, algorithm.problem.statistics)
+    hyp, hyp_2, r2 = store_metrics(algorithm.problem.dataset, algorithm.evaluator.n_eval, np.array(algorithm.problem.archive), np.array(algorithm.problem.archive_2), algorithm.problem.save_dir, algorithm.problem.statistics)
 
     plot_hypervolume(algorithm.problem.statistics, algorithm.problem.save_dir)
     plot_hypervolume2(algorithm.problem.statistics, algorithm.problem.save_dir)
@@ -157,7 +163,7 @@ def main():
     else:
         raise NameError('Unknown search space type')
     start = time.time()
-    problem = NAS(n_var=n_var, search_space=args.search_space,
+    problem = NAS(dataset=args.dataset, n_classes=args.n_classes, n_var=n_var, search_space=args.search_space,
                   n_obj=4, n_constr=0, lb=lb, ub=ub,
                   init_channels=args.init_channels, layers=args.layers,
                   epochs=args.epochs, save_dir=args.save)
