@@ -69,17 +69,30 @@ def store_metrics(architectures_evaluated, population, population_2, args, weigh
     ind = HV(ref_point=np.array([max_f1, max_f2, max_f3, max_f4]))
     population_array = np.array([ind.F for ind in population])
     hyp = ind(population_array)
-    statistics['hyp_log'].append(hyp.item())
+    print('hypervolume: ', hyp)
+    print(type(hyp))
+    print(population_array)
+    print(type(population_array))
+    if type(hyp) is np.ndarray:
+        statistics['hyp_log'].append(hyp.item())
+    else:
+        statistics['hyp_log'].append(hyp)
     # compute hypervolume 2 (std_loss, adv_loss)
     ind2 = HV(ref_point=np.array([max_f1, max_f2]))
     population_array2 = np.array([[ind.F[0], ind.F[1]] for ind in population_2])
     hyp2 = ind2(population_array2)
-    statistics['hyp2_log'].append(hyp2.item())
+    if type(hyp2) is np.ndarray:
+        statistics['hyp2_log'].append(hyp2.item())
+    else:
+        statistics['hyp2_log'].append(hyp2)
     # compute r2
     normalize_objectives(population)
     z_ref = get_dynamic_r2_reference(population)
     r2_population = r2(population, weights_r2[args['pop_size']], z_ref)
-    statistics['r2_log'].append(r2_population.item())
+    if type(r2_population) is np.ndarray:
+        statistics['r2_log'].append(r2_population.item())
+    else:
+        statistics['r2_log'].append(r2_population)
     row_hyp = ['cnn-ga', args['dataset'], 'FGSM', architectures_evaluated, 'hv', hyp, args['save_dir']]
     row_hyp2 = ['cnn-ga', args['dataset'], 'FGSM', architectures_evaluated, 'hv_2obj', hyp2, args['save_dir']]
     row_r2 = ['cnn-ga', args['dataset'], 'FGSM', architectures_evaluated, 'r2', r2_population, args['save_dir']]
@@ -292,7 +305,7 @@ def get_best_architecture_standard(archs_path):
 
 def save_params(args, trained_arch_path):
     params_path = trained_arch_path + os.sep
-    params_dict = vars(args)
+    params_dict = args
     params_dict['device'] = str(params_dict['device'])
     if not os.path.exists(os.path.dirname(params_path)):
         os.makedirs(os.path.dirname(params_path))

@@ -66,7 +66,7 @@ class Crossover(object):
         while idx2 == idx1:
             idx2 = int(np.floor(np.random.random()*count_))
 
-        if self.individuals[idx1].acc > self.individuals[idx2].acc:
+        if self.individuals[idx1].scalar_fitness() < self.individuals[idx2].scalar_fitness():
             return idx1
         else:
             return idx2
@@ -395,7 +395,7 @@ class Mutation(object):
         idx = np.argsort(a)
         idx = idx[::-1]
         sort_a = a[idx]
-        sum_a = np.sum(a).astype(np.float)
+        sum_a = np.sum(a).astype(float)
         selected_index = []
         for i in range(k):
             u = np.random.rand()*sum_a

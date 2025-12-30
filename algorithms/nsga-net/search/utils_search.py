@@ -68,7 +68,7 @@ def get_dynamic_r2_reference(population):
         assert np.isfinite(min_f_i), "Non-finite min_f_i encountered in dynamic R2 reference point calculation"
     return z_ref
 
-def store_metrics(architectures_evaluated, pop_obj, pop_obj_2, save_dir, statistics):
+def store_metrics(dataset, architectures_evaluated, pop_obj, pop_obj_2, save_dir, statistics):
     max_f1 = 2 * 1.5
     max_f2 = 2 * 1.5
     max_f3 = 110 * 1.5
@@ -88,9 +88,9 @@ def store_metrics(architectures_evaluated, pop_obj, pop_obj_2, save_dir, statist
     z_ref = get_dynamic_r2_reference(norm_obj)
     r2_population = r2(norm_obj, weights_r2[40], z_ref)
     statistics['r2_log'].append(r2_population)
-    row_hyp =  ['nsga-net', 'cifar10', 'FGSM', architectures_evaluated, 'hv', hyp, save_dir]
-    row_r2 =   ['nsga-net', 'cifar10', 'FGSM', architectures_evaluated, 'r2', r2_population, save_dir]
-    row_hyp2 = ['nsga-net', 'cifar10', 'FGSM', architectures_evaluated, 'hv_2obj', hyp_2obj, save_dir]
+    row_hyp =  ['nsga-net', dataset, 'FGSM', architectures_evaluated, 'hv', hyp, save_dir]
+    row_r2 =   ['nsga-net', dataset, 'FGSM', architectures_evaluated, 'r2', r2_population, save_dir]
+    row_hyp2 = ['nsga-net', dataset, 'FGSM', architectures_evaluated, 'hv_2obj', hyp_2obj, save_dir]
     file = open('evaluations.csv', 'a', newline='')
     writer = csv.writer(file)
     writer.writerow(row_hyp)

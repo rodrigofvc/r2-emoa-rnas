@@ -116,9 +116,16 @@ class StatusUpdateTool(object):
         return p
 
     @classmethod
+    def get_seed(cls):
+        rs = cls.__read_ini_file('settings', 'seed')
+        return int(rs)
+
+    @classmethod
     def get_init_params(cls):
         params = {}
+        params['seed'] = cls.get_seed()
         params['pop_size'] = cls.get_pop_size()
+        params['dataset'] = cls.get_dataset()
         params['min_conv'], params['max_conv'] = cls.get_conv_limit()
         params['min_pool'], params['max_pool'] = cls.get_pool_limit()
         params['max_len'] = cls.get_individual_max_length()
@@ -262,7 +269,7 @@ class Utils(object):
             f = open(file_name, 'r')
             for each_line in f:
                 rs_ = each_line.strip().split(';')
-                _map[rs_[0]] = '%.5f' % (float(rs_[1]))
+                _map[rs_[0]] = rs_[1]
             f.close()
         return _map
 
@@ -271,11 +278,11 @@ class Utils(object):
         _map = cls.load_cache_data()
         for indi in individuals:
             _key, _str = indi.uuid()
-            _acc = indi.acc
+            _acc = indi.F
             if _key not in _map:
-                Log.info('Add record into cache, id:%s, acc:%.5f' % (_key, _acc))
+                Log.info('Add record into cache, id:%s, acc:%s' % (_key, np.array_str(_acc)))
                 f = open('./populations/cache.txt', 'a+')
-                _str = '%s;%.5f;%s;%s\n' % (_key, _acc, np.array_str(indi.F), _str)
+                _str = '%s;%s;%s;%s\n' % (_key, np.array_str(_acc), np.array_str(indi.F), _str)
                 f.write(_str)
                 f.close()
                 _map[_key] = _acc
@@ -371,12 +378,12 @@ class Utils(object):
             for line in f:
                 if len(line.strip()) > 0:
                     line = line.strip().split('=')
-                    fitness_map[line[0]] = float(line[1])
+                    fitness_map[line[0]] = np.fromstring(line[1].strip('[]'), sep=' ')
             f.close()
 
             for indi in pop.individuals:
                 if indi.id in fitness_map:
-                    indi.acc = fitness_map[indi.id]
+                    indi.F = fitness_map[indi.id]
 
         return pop
 
@@ -474,12 +481,13 @@ class Utils(object):
             _str.append('        %s' % (s))
         _str.extend(part3)
         # print('\n'.join(_str))
-        file_name = dir + os.sep + str(indi.uuid()[0]) + '.py'
+        file_name = dir + os.sep + str(indi.id) + '.py'
         print('Generate pytorch file: %s' % (file_name))
         script_file_handler = open(file_name, 'w')
         script_file_handler.write('\n'.join(_str))
         script_file_handler.flush()
         script_file_handler.close()
+        return str(indi.id) + '.py'
 
     @classmethod
     def write_to_file(cls, _str, _file):
