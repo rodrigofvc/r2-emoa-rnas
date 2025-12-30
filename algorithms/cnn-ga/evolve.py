@@ -1,3 +1,5 @@
+import torch
+import torch.multiprocessing as mp
 import os
 import time
 from datetime import datetime
@@ -10,7 +12,6 @@ from genetic.population import Population
 from genetic.evaluate import FitnessEvaluate, store_model_script
 from genetic.crossover_and_mutation import CrossoverAndMutation
 from genetic.selection_operator import Selection
-import torch
 import numpy as np
 import copy
 
@@ -153,6 +154,7 @@ class EvolveCNN(object):
 
         StatusUpdateTool.end_evolution()
 if __name__ == '__main__':
+    mp.set_start_method("spawn", force=True)
     params = StatusUpdateTool.get_init_params()
     params['save_dir'] = 'search_{}'.format(datetime.now().strftime("%Y%m%d-%H%M%S")) + os.sep
     if not os.path.exists(params['save_dir']):
