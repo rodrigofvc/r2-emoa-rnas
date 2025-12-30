@@ -1,6 +1,9 @@
 """
 from __future__ import print_function
 
+import lzma
+import pickle
+
 import numpy as np
 import torch
 from thop import profile
@@ -42,27 +45,28 @@ class BasicBlock(nn.Module):
 class EvoCNNModel(nn.Module):
     def __init__(self):
         super(EvoCNNModel, self).__init__()
+        #self.stem = nn.Conv2d(3, 16, kernel_size=3, padding=1, bias=False)
         #generated_init
 
 
     def forward(self, x):
+        #x = self.stem(x)
         #generate_forward
 
-        out = x.view(x.size(0), -1)
+        out = out.view(out.size(0), -1)
         out = self.linear(out)
         return out
 
 
 class TrainModel(object):
     def __init__(self):
-        data_dir = os.path.expanduser('../../data')
-        trainloader, validate_loader = data_loader.get_train_valid_loader(data_dir, batch_size=96, num_workers=0, pin_memory=False)
+        data_dir = os.path.expanduser('../../../data')
+        trainloader, validate_loader = data_loader.get_train_valid_loader(data_dir, random_seed=18906049, augment=False,batch_size=96, num_workers=0, pin_memory=False)
         net = EvoCNNModel()
         if torch.cuda.is_available():
             cudnn.benchmark = True
             net = net.cuda()
         criterion = nn.CrossEntropyLoss()
-        self.net = net
         self.criterion = criterion
         # objectives (std_loss, adv_loss, flops, params)
         self.F = np.zeros(4,)
@@ -72,7 +76,7 @@ class TrainModel(object):
         attack_params = {
             'name': 'FGSM',
             'params': {
-                'epsilon': '8/255',
+                'eps': '8/255',
             }
         }
         self.attack_f = get_attack_function(attack_params)
@@ -82,7 +86,8 @@ class TrainModel(object):
             self.device = torch.device('cuda')
         elif torch.backends.mps.is_available():
             self.device = torch.device('mps')
-
+        net = net.to(self.device)
+        self.net = net
 
     def log_record(self, _str, first_time=None):
         dt = datetime.now()
@@ -131,7 +136,8 @@ class TrainModel(object):
             std_loss_mean += std_loss.item()
             adv_loss_mean += adv_loss.item()
             total_loss_mean += total_loss.item()
-        self.log_record('Trsin-Epoch:%3d,  Std_Acc: %.3f, Adv_Acc: %.3f, Std_Loss: %.3f, Adv_Loss: %.3f, Total_Loss: %.3f'% (epoch+1, std_correct/total, adv_correct/total, std_loss_mean/total, adv_loss_mean/total, total_loss_mean/total))
+            #print('Training Epoch:%d, Batch:%d/%d'% (epoch+1, _+1, len(self.trainloader)), end='\r')
+        self.log_record('Train-Epoch:%3d,  Std_Acc: %.3f, Adv_Acc: %.3f, Std_Loss: %.3f, Adv_Loss: %.3f, Total_Loss: %.3f'% (epoch+1, std_correct/total, adv_correct/total, std_loss_mean/total, adv_loss_mean/total, total_loss_mean/total))
 
     def test(self, epoch):
         self.net.eval()
@@ -166,14 +172,14 @@ class TrainModel(object):
         self.F[0] = std_loss_mean / total
         self.F[1] = adv_loss_mean / total
 
-        x = torch.randn(1, 3, 32, 32)
+        x = torch.randn(1, 3, 32, 32).to(self.device)
         macs, params = profile(self.net, inputs=(x,), verbose=False)
         flops = (2 * macs) / 1e6
         params = params / 1e6
 
         self.F[2] = round(flops, 4)
         self.F[3] = round(params, 4)
-        self.log_record('Validate-Epoch:%3d,  Std_Acc: %.3f, Adv_Acc: %.3f, Std_Loss: %.3f, Adv_Loss: %.3f, Total_Loss: %.3f, Flops: %.3fM, Params: %.3fM'% (epoch+1, std_correct/total, adv_correct/total, std_loss_mean/total, adv_loss_mean/total, total_loss_mean/total, flops, params))
+        self.log_record('Validate-Epoch:%3d,  Std_Acc: %.3f, Adv_Acc: %.3f, Std_Loss: %.3f, Adv_Loss: %.3f, Total_Loss: %.3f, Flops: %.4f, Params: %.4f'% (epoch+1, std_correct/total, adv_correct/total, std_loss_mean/total, adv_loss_mean/total, total_loss_mean/total, round(flops, 4), round(params, 4)))
 
 
     def process(self):
@@ -182,6 +188,16 @@ class TrainModel(object):
             self.train(p)
             self.test(p)
         return self.F
+
+class StoreModel(object):
+    def save_architect(self, i, objectives, save_dir):
+        model = EvoCNNModel().to('cpu')
+        architect_path = save_dir + os.sep + 'architectures' + os.sep
+        if not os.path.exists(architect_path):
+            os.makedirs(architect_path)
+        architect_path += f'arch_{i}.xz'
+        with lzma.open(architect_path, 'wb') as f:
+            pickle.dump((model, objectives), f)
 
 
 class RunModel(object):
@@ -196,7 +212,7 @@ class RunModel(object):
             print('Exception occurs, file:%s, pid:%d...%s'%(file_id, os.getpid(), str(e)))
             m.log_record('Exception occur:%s'%(str(e)))
         finally:
-            m.log_record('Objectives: Std_Loss: %.5f, Adv_Loss: %.5f, Flops: %.3fM, Params: %.3fM'% (F[0], F[1], F[2], F[3]))
+            m.log_record('Objectives: Std_Loss: %.5f, Adv_Loss: %.5f, Flops: %.4f, Params: %.4f'% (F[0], F[1], F[2], F[3]))
 
             f = open('./populations/after_%s.txt'%(file_id[4:6]), 'a+')
             f.write('%s=%s\n'%(file_id, np.array_str(F)))

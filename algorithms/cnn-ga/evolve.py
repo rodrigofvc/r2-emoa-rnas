@@ -1,12 +1,13 @@
 import os
+import time
 from datetime import datetime
 
 from archivers import archive_update_pq
 from utils_search import store_metrics, save_archive, save_archive_losses, plot_archive_losses, plot_hypervolume, \
-    plot_r2, plot_hypervolume2, save_statistics_to_csv, save_params, save_architecture
+    plot_r2, plot_hypervolume2, save_statistics_to_csv, save_params, save_architecture, get_weights_r2
 from utils import StatusUpdateTool, Utils, Log
 from genetic.population import Population
-from genetic.evaluate import FitnessEvaluate
+from genetic.evaluate import FitnessEvaluate, store_model_script
 from genetic.crossover_and_mutation import CrossoverAndMutation
 from genetic.selection_operator import Selection
 import torch
@@ -22,9 +23,10 @@ class EvolveCNN(object):
         # non-dominated solutions (2 objs)
         self.archive_2 = []
         self.statistics = {'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
+        self.weights_r2 = get_weights_r2(params['pop_size'])
 
     def initialize_population(self):
-        StatusUpdateTool.begin_evolution()
+        #StatusUpdateTool.begin_evolution()
         pops = Population(params, 0)
         pops.initialize()
         self.pops = pops
@@ -47,17 +49,17 @@ class EvolveCNN(object):
         indi_list = []
         for indi in self.pops.individuals:
             indi_list.append(indi)
-            v_list.append(indi.acc)
+            v_list.append(indi.scalar_fitness())
         for indi in self.parent_pops.individuals:
             indi_list.append(indi)
-            v_list.append(indi.acc)
+            v_list.append(indi.scalar_fitness())
 
         _str = []
         for _, indi in enumerate(self.pops.individuals):
-            _t_str = 'Indi-%s-%.5f-%s'%(indi.id, indi.acc, indi.uuid()[0])
+            _t_str = 'Indi-%s-%s-%s'%(indi.id, np.array_str(indi.F), indi.uuid()[0])
             _str.append(_t_str)
         for _, indi in enumerate(self.parent_pops.individuals):
-            _t_str = 'Pare-%s-%.5f-%s'%(indi.id, indi.acc, indi.uuid()[0])
+            _t_str = 'Pare-%s-%s-%s'%(indi.id, np.array_str(indi.F), indi.uuid()[0])
             _str.append(_t_str)
 
 
@@ -78,7 +80,7 @@ class EvolveCNN(object):
         next_gen_pops.create_from_offspring(next_individuals)
         self.pops = next_gen_pops
         for _, indi in enumerate(self.pops.individuals):
-            _t_str = 'new -%s-%.5f-%s'%(indi.id, indi.acc, indi.uuid()[0])
+            _t_str = 'new -%s-%s-%s'%(indi.id, np.array_str(indi.F), indi.uuid()[0])
             _str.append(_t_str)
         _file = './populations/ENVI_%2d.txt'%(self.pops.gen_no)
         Utils.write_to_file('\n'.join(_str), _file)
@@ -125,20 +127,20 @@ class EvolveCNN(object):
             evaluated_solutions += len(self.pops.individuals)
             self.environment_selection()
             Log.info('EVOLVE[%d-gen]-Finish the environment selection'%(curr_gen))
-            hyp, hyp_2, r2 = store_metrics(evaluated_solutions, self.archive, self.archive_2, self.params['save_dir'], self.statistics)
+            hyp, hyp_2, r2 = store_metrics(evaluated_solutions, self.archive, self.archive_2, self.params, self.weights_r2, self.statistics)
             print('>>>>>>> Gen {}: hyp={}, hyp_2={}, r2={}'.format(curr_gen, hyp, hyp_2, r2))
             plot_hypervolume(self.statistics, self.params['save_dir'])
             plot_hypervolume2(self.statistics, self.params['save_dir'])
             plot_r2(self.statistics, self.params['save_dir'])
 
-        dir_arch = self.params['save_dir'] + os.sep + 'architectures' + os.sep + 'scripts' + os.sep
+        dir_arch = self.params['save_dir'] + 'architectures' + os.sep + 'scripts'
         if not os.path.exists(dir_arch):
             os.makedirs(dir_arch)
         for i, ind in enumerate(self.archive):
             # Store the architecture as a pytorch file
-            Utils.generate_pytorch_file(ind, dir_arch)
-            # store F values
-            save_architecture(ind.uuid()[0], ind, self.params['save_dir'])
+            file_name = Utils.generate_pytorch_file(ind, dir_arch)
+            # Run the generated script for storing the model
+            store_model_script(file_name, i, self.params['save_dir'], dir_arch, ind.F)
 
         save_archive(self.archive, self.params['save_dir'])
         save_archive_losses(self.archive_2, self.params['save_dir'])
@@ -152,13 +154,17 @@ class EvolveCNN(object):
         StatusUpdateTool.end_evolution()
 if __name__ == '__main__':
     params = StatusUpdateTool.get_init_params()
-    params['save_dir'] = 'search--{}'.format(datetime.now().strftime("%Y%m%d-%H%M%S"))
+    params['save_dir'] = 'search_{}'.format(datetime.now().strftime("%Y%m%d-%H%M%S")) + os.sep
     if not os.path.exists(params['save_dir']):
         os.mkdir(params['save_dir'])
     if torch.cuda.is_available():
         params['device'] = 'cuda'
     elif torch.backends.mps.is_available():
         params['device'] = 'mps'
+    np.random.seed(params['seed'])
+    torch.manual_seed(params['seed'])
+    start = time.time()
     evoCNN = EvolveCNN(params)
     evoCNN.do_work(max_gen=30)
     print('>>>>>> Results stored in {}'.format(params['save_dir']))
+    print('Total time: {:.2f} HOURS'.format((time.time() - start)/3600))

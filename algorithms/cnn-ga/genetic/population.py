@@ -38,6 +38,9 @@ class Individual(object):
         self.output_channles = params['output_channel']
         self.units = []
 
+    def scalar_fitness(self):
+        return self.F[0] * 0.5 + self.F[1] * 0.5
+
     def reset_acc(self):
         self.acc = -1.0
 
@@ -124,7 +127,8 @@ class Individual(object):
     def __str__(self):
         _str = []
         _str.append('indi:%s'%(self.id))
-        _str.append('Acc:%.5f'%(self.acc))
+        # print the fitness values
+        _str.append('Acc:%s' % (np.array_str(self.F)))
         for unit in self.units:
             _sub_str = []
             if unit.type == 1:

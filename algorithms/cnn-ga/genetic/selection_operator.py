@@ -7,15 +7,15 @@ class Selection(object):
         idx = np.argsort(a)
         idx = idx[::-1]
         sort_a = a[idx]
-        sum_a = np.sum(a).astype(np.float)
+        sum_a = np.sum(a).astype(float)
         selected_index = []
         for i in range(k):
             u = np.random.rand()*sum_a
             sum_ = 0
-            for i in range(sort_a.shape[0]):
-                sum_ +=sort_a[i]
+            for j in range(sort_a.shape[0]):
+                sum_ += sort_a[j]
                 if sum_ > u:
-                    selected_index.append(idx[i])
+                    selected_index.append(idx[j])
                     break
         return selected_index
 

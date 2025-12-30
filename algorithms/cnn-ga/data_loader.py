@@ -93,7 +93,7 @@ def get_train_valid_loader(data_dir,
         num_train = split + 96
     print(f"Training samples: {split}, Validation samples: {num_train - split}")
 
-    train_idx, valid_idx = indices[split:], indices[:split]
+    train_idx, valid_idx = indices[:split], indices[split:num_train]
     train_sampler = SubsetRandomSampler(train_idx)
     valid_sampler = SubsetRandomSampler(valid_idx)
 
