@@ -10,7 +10,9 @@ if os.path.exists('/Users/rodrigofvc/Documents/doctorado/r2-emoa-rnas/algorithms
     sys.path.insert(0, '/Users/rodrigofvc/Documents/doctorado/r2-emoa-rnas/algorithms/nsga-net')
 elif os.path.exists('/home/rvelazquez/r2-emoa-rnas/algorithms/nsga-net'):
     sys.path.insert(0, '/home/rvelazquez/r2-emoa-rnas/algorithms/nsga-net')
-else:
+elif os.path.exists("C:" + os.sep + "Users" + os.sep + "USER" + os.sep + "Documents" + os.sep + "r2-emoa-rnas" + os.sep + "algorithms" + os.sep + "nsga-net"):
+    sys.path.insert(0, "C:" + os.sep + "Users" + os.sep + "USER" + os.sep + "Documents" + os.sep + "r2-emoa-rnas" + os.sep + "algorithms" + os.sep + "nsga-net")
+else:  
     raise FileNotFoundError('Project path not found, please update the path in the script before running')
 
 import time
