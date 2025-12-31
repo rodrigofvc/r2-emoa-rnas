@@ -45,12 +45,10 @@ class BasicBlock(nn.Module):
 class EvoCNNModel(nn.Module):
     def __init__(self):
         super(EvoCNNModel, self).__init__()
-        #self.stem = nn.Conv2d(3, 16, kernel_size=3, padding=1, bias=False)
         #generated_init
 
 
     def forward(self, x):
-        #x = self.stem(x)
         #generate_forward
 
         out = out.view(out.size(0), -1)

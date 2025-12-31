@@ -394,24 +394,24 @@ class Utils(object):
         part2 = []
         part3 = []
 
-        f = open(_path)
-        f.readline()  # skip this comment
-        line = f.readline().rstrip()
-        while line.strip() != '#generated_init':
-            part1.append(line)
+        with open(_path, 'r') as f:
+            f.readline()  # skip this comment
             line = f.readline().rstrip()
-        # print('\n'.join(part1))
+            while line.strip() != '#generated_init':
+                part1.append(line)
+                line = f.readline().rstrip()
+            # print('\n'.join(part1))
 
-        line = f.readline().rstrip()  # skip the comment '#generated_init'
-        while line.strip() != '#generate_forward':
-            part2.append(line)
-            line = f.readline().rstrip()
-        # print('\n'.join(part2))
+            line = f.readline().rstrip()  # skip the comment '#generated_init'
+            while line.strip() != '#generate_forward':
+                part2.append(line)
+                line = f.readline().rstrip()
+            # print('\n'.join(part2))
 
-        line = f.readline().rstrip()  # skip the comment '#generate_forward'
-        while line.strip() != '"""':
-            part3.append(line)
-            line = f.readline().rstrip()
+            line = f.readline().rstrip()  # skip the comment '#generate_forward'
+            while line.strip() != '"""':
+                part3.append(line)
+                line = f.readline().rstrip()
         # print('\n'.join(part3))
         return part1, part2, part3
 
