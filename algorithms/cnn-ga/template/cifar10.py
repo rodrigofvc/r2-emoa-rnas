@@ -205,17 +205,20 @@ class RunModel(object):
         os.environ['CUDA_VISIBLE_DEVICES'] = gpu_id
         F = np.zeros(4)
         m = TrainModel()
+        process_failed = False
         try:
             m.log_record('Used GPU#%s, worker name:%s[%d]'%(gpu_id, multiprocessing.current_process().name, os.getpid()), first_time=True)
             F = m.process()
         except BaseException as e:
             print('Exception occurs, file:%s, pid:%d...%s'%(file_id, os.getpid(), str(e)))
             m.log_record('Exception occur:%s'%(str(e)))
+            process_failed = True
         finally:
-            m.log_record('Objectives: Std_Loss: %.5f, Adv_Loss: %.5f, Flops: %.4f, Params: %.4f'% (F[0], F[1], F[2], F[3]))
-
-            f = open('./populations/after_%s.txt'%(file_id[4:6]), 'a+')
-            f.write('%s=%s\n'%(file_id, np.array_str(F)))
-            f.flush()
-            f.close()
+            # only store the fitness when the process is successful
+            if not process_failed:
+                m.log_record('Objectives: Std_Loss: %.5f, Adv_Loss: %.5f, Flops: %.4f, Params: %.4f'% (F[0], F[1], F[2], F[3]))
+                f = open('./populations/after_%s.txt'%(file_id[4:6]), 'a+')
+                f.write('%s=%s\n'%(file_id, np.array_str(F)))
+                f.flush()
+                f.close()
 """

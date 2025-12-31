@@ -100,10 +100,17 @@ class FitnessEvaluate(object):
                 #reading the numpy array
                 fitness_map[line[0]] = np.fromstring(line[1].strip('[]'), sep=' ')
         f.close()
+        to_remove = []
         for indi in self.individuals:
-            indi.F = fitness_map[indi.id]
-            #print('individual %s has fitness %s'%(indi.id, np.array_str(indi.F)))
-
+            if indi.id not in fitness_map.keys():
+                # remove from individuals
+                to_remove.append(indi.id)
+                print('Individual %s has not been evaluated properly, deleting.. '%(indi.id))
+            else:
+                indi.F = fitness_map[indi.id]
+                print('Individual %s has fitness %s'%(indi.id, np.array_str(indi.F)))
+        for rm_id in to_remove:
+            self.individuals = [indi for indi in self.individuals if indi.id != rm_id]
         Utils.save_fitness_to_cache(self.individuals)
 
 

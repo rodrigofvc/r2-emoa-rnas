@@ -119,9 +119,9 @@ class EvolveCNN(object):
             Log.info('EVOLVE[%d-gen]-Begin to evaluate the fitness'%(curr_gen))
             self.fitness_evaluate()
             Log.info('EVOLVE[%d-gen]-Finish the evaluation'%(curr_gen))
-
+            for ind in self.pops.individuals:
+                print('Indi-{}: F={}'.format(ind.id, ind.F))
             # store the non-dominated solutions
-            # guarda los individuos
             self.archive = archive_update_pq(self.archive, self.pops.individuals)
             # store the non-dominated solutions (2 objs)
             self.archive_2 = archive_update_pq(self.archive_2, self.pops.individuals, k=2)
