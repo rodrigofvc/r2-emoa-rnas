@@ -4,15 +4,16 @@ import json
 import yaml
 import numpy as np
 from collections import OrderedDict
-from torchprofile import profile_macs
+
+from thop import profile
 
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
 
-from pymoo.model.mutation import Mutation
-from pymoo.model.sampling import Sampling
-from pymoo.model.crossover import Crossover
+from pymoo.core.mutation import Mutation
+from pymoo.core.sampling import Sampling
+from pymoo.core.crossover import Crossover
 
 DEFAULT_CFG = {
     'gpus': '0', 'config': None, 'init': None, 'trn_batch_size': 128, 'vld_batch_size': 250, 'num_workers': 4,
@@ -54,10 +55,17 @@ def bash_command_template(**kwargs):
     cfg['classifier_only'] = kwargs.pop('classifier_only', DEFAULT_CFG['classifier_only'])
     cfg['reset_running_statistics'] = kwargs.pop(
         'reset_running_statistics', DEFAULT_CFG['reset_running_statistics'])
+    cfg['sync_cuda'] = kwargs.pop('sync_cuda', True)
 
-    execution_line = "CUDA_VISIBLE_DEVICES={} python evaluator.py".format(gpus)
+    if not cfg['sync_cuda']:
+        execution_line = "CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES={} python3 evaluator.py".format(gpus)
+    else:
+        execution_line = "CUDA_VISIBLE_DEVICES={} python evaluator.py".format(gpus)
+
     for k, v in cfg.items():
         if v is not None:
+            if k == 'sync_cuda':
+                continue
             if isinstance(v, bool):
                 if v:
                     execution_line += " --{}".format(k)
@@ -268,11 +276,13 @@ def get_net_info(net, input_shape=(3, 224, 224), measure_latency=None, print_inf
     if isinstance(net, nn.DataParallel):
         net = net.module
 
-    # parameters
-    net_info['params'] = count_parameters(net)
+    macs, params = profile(copy.deepcopy(net), inputs=(inputs,), verbose=False)
+    flops = (2 * macs) / 1e6
+    params = params / 1e6
 
-    # flops
-    net_info['flops'] = int(profile_macs(copy.deepcopy(net), inputs))
+    net_info['flops'] = round(flops, 4)
+    net_info['params'] = round(params, 4)
+
 
     # latencies
     latency_types = [] if measure_latency is None else measure_latency.split('#')
@@ -293,8 +303,8 @@ def get_net_info(net, input_shape=(3, 224, 224), measure_latency=None, print_inf
 
     if print_info:
         # print(net)
-        print('Total training params: %.2fM' % (net_info['params'] / 1e6))
-        print('Total FLOPs: %.2fM' % (net_info['flops'] / 1e6))
+        print('Total training params: %.2fM' % (net_info['params'] ))
+        print('Total FLOPs: %.2fM' % (net_info['flops'] ))
         for l_type in latency_types:
             print('Estimated %s latency: %.3fms' % (l_type, net_info['%s latency' % l_type]['val']))
 

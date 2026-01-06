@@ -1,20 +1,25 @@
+import copy
 import os
 import json
+
 import torch
 import argparse
-import numpy as np
+from thop import profile
 
-import utils
+
+from adversarial import get_attack_function
+from adversarial_running import AdvRunManager
 from codebase.networks import NSGANetV2
 from codebase.run_manager import get_run_config
-from ofa.elastic_nn.networks import OFAMobileNetV3
-from ofa.imagenet_codebase.run_manager import RunManager
-from ofa.elastic_nn.modules.dynamic_op import DynamicSeparableConv2d
+from ofa.imagenet_classification.elastic_nn.networks.ofa_mbv3 import OFAMobileNetV3
+#from ofa.imagenet_classification.networks.mobilenet_v3 import MobileNetV3, MobileNetV3Large
+#from ofa.imagenet_classification.run_manager import RunManager
+#from ofa.elastic_nn.modules.dynamic_op import DynamicSeparableConv2d
 
 import warnings
 warnings.simplefilter("ignore")
 
-DynamicSeparableConv2d.KERNEL_TRANSFORM_MODE = 1
+#DynamicSeparableConv2d.KERNEL_TRANSFORM_MODE = 1
 
 
 def parse_string_list(string):
@@ -29,8 +34,9 @@ def pad_none(x, depth, max_depth):
     new_x, counter = [], 0
     for d in depth:
         for _ in range(d):
-            new_x.append(x[counter])
-            counter += 1
+            if counter < len(x):
+                new_x.append(x[counter])
+                counter += 1
         if d < max_depth:
             new_x += [None] * (max_depth - d)
     return new_x
@@ -38,20 +44,29 @@ def pad_none(x, depth, max_depth):
 
 def get_net_info(net, data_shape, measure_latency=None, print_info=True, clean=False, lut=None):
 
-    net_info = utils.get_net_info(
-        net, data_shape, measure_latency, print_info=print_info, clean=clean, lut=lut)
+    #net_info = utils.get_net_info(
+    #    net, data_shape, measure_latency, print_info=print_info, clean=clean, lut=lut)
+    inputs = torch.randn(1, *data_shape)
+    macs, params = profile(copy.deepcopy(net), inputs=(inputs,), verbose=False)
+    flops = (2 * macs) / 1e6
+    params = params / 1e6
+    net_info = {'gpu_latency': {'val': None}, 'cpu_latency': {'val': None}}
+    net_info['flops'] = round(flops, 4)
+    net_info['params'] = round(params, 4)
 
+    """
     gpu_latency, cpu_latency = None, None
     for k in net_info.keys():
         if 'gpu' in k:
             gpu_latency = np.round(net_info[k]['val'], 2)
         if 'cpu' in k:
             cpu_latency = np.round(net_info[k]['val'], 2)
+    """
 
     return {
-        'params': np.round(net_info['params'] / 1e6, 2),
-        'flops': np.round(net_info['flops'] / 1e6, 2),
-        'gpu': gpu_latency, 'cpu': cpu_latency
+        'params': net_info['params'],
+        'flops': net_info['flops'],
+        #'gpu': gpu_latency, 'cpu': cpu_latency
     }
 
 
@@ -95,11 +110,12 @@ class OFAEvaluator:
 
         self.engine = OFAMobileNetV3(
             n_classes=n_classes,
-            dropout_rate=0, width_mult_list=self.width_mult, ks_list=self.kernel_size,
+            dropout_rate=0, width_mult=self.width_mult, ks_list=self.kernel_size,
             expand_ratio_list=self.exp_ratio, depth_list=self.depth)
 
-        init = torch.load(model_path, map_location='cpu')['state_dict']
-        self.engine.load_weights_from_net(init)
+        # not found pretrained model
+        #init = torch.load(model_path, map_location='cpu')['state_dict']
+        #self.engine.load_weights_from_net(init)
 
     def sample(self, config=None):
         """ randomly sample a sub-network """
@@ -149,24 +165,36 @@ class OFAEvaluator:
         # set the image size. You can set any image size from 192 to 256 here
         run_config.data_provider.assign_active_img_size(resolution)
 
-        if n_epochs > 0:
+        #if n_epochs > 0:
             # for datasets other than the one supernet was trained on (ImageNet)
             # a few epochs of training need to be applied
-            subnet.reset_classifier(
-                last_channel=subnet.classifier.in_features,
-                n_classes=run_config.data_provider.n_classes, dropout_rate=cfgs.drop_rate)
+            #subnet.reset_classifier(
+            #    last_channel=subnet.classifier.in_features,
+            #    n_classes=run_config.data_provider.n_classes, dropout_rate=cfgs.drop_rate)
+            #pass
 
-        run_manager = RunManager(log_dir, subnet, run_config, init=False)
+        params_attack = {
+            "name" : "FGSM",
+            "params": {
+                "eps" : "8/255",
+            }
+        }
+        attack_f = get_attack_function(params_attack)
+
+        run_manager = AdvRunManager(log_dir, subnet, run_config, init=False)
         if reset_running_statistics:
             # run_manager.reset_running_statistics(net=subnet, batch_size=vld_batch_size)
             run_manager.reset_running_statistics(net=subnet)
 
+        # train and validate the subnet
         if n_epochs > 0:
-            subnet = run_manager.train(cfgs)
+            subnet = run_manager.train_adv(cfgs, attack_f)
 
-        loss, top1, top5 = run_manager.validate(net=subnet, is_test=is_test, no_logs=no_logs)
+        total_loss_mean, std_loss, adv_loss, flops, params, (top1, top5) = run_manager.validate_adv(net=subnet, is_test=is_test, no_logs=no_logs, attack_f=attack_f)
 
-        info['loss'], info['top1'], info['top5'] = loss, top1, top5
+        info['loss'], info['top1'], info['top5'] = total_loss_mean, top1, top5
+        info['std_loss'], info['adv_loss'] = std_loss, adv_loss
+        info['flops'], info['params'] = flops, params
 
         save_path = os.path.join(log_dir, 'net.stats') if cfgs.save is None else cfgs.save
         if cfgs.save_config:
@@ -243,7 +271,7 @@ if __name__ == '__main__':
                         help='location to save the evaluated metrics')
     parser.add_argument('--resolution', type=int, default=224,
                         help='input resolution (192 -> 256)')
-    parser.add_argument('--valid_size', type=int, default=None,
+    parser.add_argument('--valid_size', type=float, default=None,
                         help='validation set size, randomly sampled from training set')
     parser.add_argument('--test', action='store_true', default=False,
                         help='evaluation performance on testing set')

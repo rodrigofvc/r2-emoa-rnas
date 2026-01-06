@@ -26,7 +26,7 @@ class RBF:
             raise NotImplementedError("unknown RBF tail")
 
         self.model = RBFInterpolant(
-            dim=train_data.shape[1], kernel=kernel(), tail=tail(train_data.shape[1]))
+            dim=train_data.shape[1], kernel=kernel(), tail=tail(train_data.shape[1]), lb=train_data.min(axis=0), ub=train_data.max(axis=0))
 
         for i in range(len(train_data)):
             self.model.add_points(train_data[i, :], train_label[i])

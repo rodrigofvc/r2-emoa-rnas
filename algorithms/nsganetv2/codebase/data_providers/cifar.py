@@ -9,11 +9,13 @@ import torchvision.transforms as transforms
 from ofa.utils.my_dataloader import MyRandomResizedCrop, MyDistributedSampler
 from ofa.imagenet_classification.data_providers.base_provider import DataProvider
 
+import ssl
+ssl._create_default_https_context = ssl._create_unverified_context
 
 class CIFAR10DataProvider(DataProvider):
     
-    def __init__(self, save_path=None, train_batch_size=96, test_batch_size=256, valid_size=None,
-                 n_worker=2, resize_scale=0.08, distort_color=None, image_size=224, num_replicas=None, rank=None):
+    def __init__(self, save_path=None, train_batch_size=96, test_batch_size=96, valid_size=None,
+                 n_worker=0, resize_scale=0.08, distort_color=None, image_size=224, num_replicas=None, rank=None):
 
         self._save_path = save_path
         
@@ -46,24 +48,36 @@ class CIFAR10DataProvider(DataProvider):
             if not isinstance(valid_size, int):
                 assert isinstance(valid_size, float) and 0 < valid_size < 1
                 valid_size = int(len(train_dataset.data) * valid_size)
-            
+
             valid_dataset = self.train_dataset(valid_transforms)
             train_indexes, valid_indexes = self.random_sample_valid_set(len(train_dataset.data), valid_size)
-            
+
             if num_replicas is not None:
                 train_sampler = MyDistributedSampler(train_dataset, num_replicas, rank, np.array(train_indexes))
                 valid_sampler = MyDistributedSampler(valid_dataset, num_replicas, rank, np.array(valid_indexes))
             else:
                 train_sampler = torch.utils.data.sampler.SubsetRandomSampler(train_indexes)
                 valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(valid_indexes)
-            
+
+            if torch.mps.is_available():
+                # Testing
+                num_train = len(train_dataset.data)
+                indices = list(range(num_train))
+                split = 32
+                num_train = split + 32
+                train_sampler = torch.utils.data.sampler.SubsetRandomSampler(indices[:split])
+                valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train])
+                print(f"Training samples: {split}, Validation samples: {num_train - split}")
+            else:
+                print(f"Training samples: {len(train_indexes)}, Validation samples: {len(valid_indexes)}")
+
             self.train = train_loader_class(
                 train_dataset, batch_size=train_batch_size, sampler=train_sampler,
-                num_workers=n_worker, pin_memory=True,
+                num_workers=n_worker, pin_memory=False,
             )
             self.valid = torch.utils.data.DataLoader(
                 valid_dataset, batch_size=test_batch_size, sampler=valid_sampler,
-                num_workers=n_worker, pin_memory=True,
+                num_workers=n_worker, pin_memory=False,
             )
         else:
             if num_replicas is not None:
@@ -121,13 +135,13 @@ class CIFAR10DataProvider(DataProvider):
     def train_dataset(self, _transforms):
         # dataset = datasets.ImageFolder(self.train_path, _transforms)
         dataset = torchvision.datasets.CIFAR10(
-            root=self.valid_path, train=True, download=False, transform=_transforms)
+            root='../../../../data', train=True, download=True, transform=_transforms)
         return dataset
     
     def test_dataset(self, _transforms):
         # dataset = datasets.ImageFolder(self.valid_path, _transforms)
         dataset = torchvision.datasets.CIFAR10(
-            root=self.valid_path, train=False, download=False, transform=_transforms)
+            root='../../../../data', train=False, download=True, transform=_transforms)
         return dataset
     
     @property

@@ -45,13 +45,16 @@ class OFASearchSpace:
         new_x, counter = [], 0
         for d in depth:
             for _ in range(d):
-                new_x.append(x[counter])
-                counter += 1
+                if counter < len(x):
+                    new_x.append(x[counter])
+                    counter += 1
             if d < max(self.depth):
                 new_x += [0] * (max(self.depth) - d)
         return new_x
 
     def encode(self, config):
+        if isinstance(config, np.ndarray):
+            config = config[0]
         # encode config ({'ks': , 'd': , etc}) to integer bit-string [1, 0, 2, 1, ...]
         x = []
         depth = [np.argwhere(_x == np.array(self.depth))[0, 0] for _x in config['d']]
@@ -75,9 +78,35 @@ class OFASearchSpace:
         block_i = [depth, kernel_size, exp_rate]
         """
         depth, kernel_size, exp_rate = [], [], []
+        print('>>>>>>>>>>>   Decoding architecture: ', x, type(x), x.shape)
+        print('<<<<<<<<<<<<<<<<<<<<<<<<<<<')
+        x = x.astype(int)
+
         for i in range(0, len(x) - 2, 9):
-            depth.append(self.depth[x[i]])
-            kernel_size.extend(np.array(self.kernel_size)[x[i + 1:i + 1 + self.depth[x[i]]]].tolist())
-            exp_rate.extend(np.array(self.exp_ratio)[x[i + 5:i + 5 + self.depth[x[i]]]].tolist())
+            if i < len(x):
+                x = np.squeeze(x)
+                depth_index = x[i]
+                if depth_index < len(self.depth):
+                    depth.append(self.depth[depth_index])
+                    if i + 1 < len(x):
+                        ks_start = i + 1
+                        ks_end = ks_start + self.depth[depth_index]
+                        if ks_end < len(x) and ks_start < len(x):
+                            if len(self.kernel_size) > max(x[ks_start:ks_end]):
+                                kernel_size.extend(np.array(self.kernel_size)[x[ks_start:ks_end]].tolist())
+                    if i + 5 < len(x):
+                        exp_start = i + 5
+                        exp_end = exp_start + self.depth[depth_index]
+                        if exp_end < len(x) and exp_start < len(x):
+                            if len(self.exp_ratio) > max(x[exp_start:exp_end]):
+                                exp_rate.extend(np.array(self.exp_ratio)[x[exp_start:exp_end]].tolist())
+            """
+            if i < len(x):
+                depth.append(self.depth[x[i]])
+            if i + 1 + self.depth[x[i]] < len(x) and i + 1 < len(x):
+                kernel_size.extend(np.array(self.kernel_size)[x[i + 1:i + 1 + self.depth[x[i]]]].tolist())
+            if i + 5 + self.depth[x[i]] < len(x) and i + 5 < len(x):
+                exp_rate.extend(np.array(self.exp_ratio)[x[i + 5:i + 5 + self.depth[x[i]]]].tolist())
+            """
         return {'ks': kernel_size, 'e': exp_rate, 'd': depth, 'r': self.resolution[x[-1]]}
 
