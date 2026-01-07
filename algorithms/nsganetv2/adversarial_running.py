@@ -108,8 +108,10 @@ class AdvRunManager(RunManager):
             total_loss_mean /= total
 
         batch = next(iter(data_loader))
+        model = net.module if isinstance(net, torch.nn.DataParallel) else net
+        model = copy.deepcopy(model).cuda()
         x = torch.rand((1, 3, batch[0].shape[-2], batch[0].shape[-1])).cuda()
-        macs, params = thop.profile(copy.deepcopy(net).cuda(), inputs=(x,), verbose=False)
+        macs, params = thop.profile(model, inputs=(x,), verbose=False)
         flops = round((2 * macs) / 1e6, 4)
         params = round(params / 1e6, 4)
 
