@@ -46,8 +46,8 @@ def get_net_info(net, data_shape, measure_latency=None, print_info=True, clean=F
 
     #net_info = utils.get_net_info(
     #    net, data_shape, measure_latency, print_info=print_info, clean=clean, lut=lut)
-    inputs = torch.randn(1, *data_shape)
-    macs, params = profile(copy.deepcopy(net), inputs=(inputs,), verbose=False)
+    inputs = torch.randn(1, *data_shape).cuda()
+    macs, params = profile(copy.deepcopy(net).cuda(), inputs=(inputs,), verbose=False)
     flops = (2 * macs) / 1e6
     params = params / 1e6
     net_info = {'gpu_latency': {'val': None}, 'cpu_latency': {'val': None}}
