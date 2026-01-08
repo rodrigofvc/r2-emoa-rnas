@@ -252,14 +252,14 @@ class MSuNAS:
         inputs = [self.search_space.encode(x[0]) for x in archive]
         # remove bad samples from inputs
         ignore_input = []
-        #for i, x in enumerate(inputs):
-        #    if len(x) != 46:
-        #        ignore_input.append(i)
-        #for i in sorted(ignore_input, reverse=True):
-        #    del inputs[i]
-        #    del archive[i]
-        #for i, x in enumerate(inputs):
-        #    assert len(x) == 46, f"input length must be 46 but got {len(x)} at index {i}"
+        for i, x in enumerate(inputs):
+            if len(x) != 16:
+                ignore_input.append(i)
+        for i in sorted(ignore_input, reverse=True):
+            del inputs[i]
+            del archive[i]
+        for i, x in enumerate(inputs):
+            assert len(x) == 16, f"input length must be 16 but got {len(x)} at index {i}"
         print('>>>>>>>> LEN INPUTS: ')
         print([len(x) for x in inputs])
         inputs = np.array(inputs)
