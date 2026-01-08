@@ -383,7 +383,7 @@ class SubsetProblem(Problem):
     """ select a subset to diversify the pareto front """
     def __init__(self, candidates, archive, K):
         super().__init__(n_var=len(candidates), n_obj=1,
-                         n_constr=1, xl=0, xu=1, type_var=np.bool)
+                         n_constr=1, xl=0, xu=1, type_var=bool)
         self.archive = archive
         self.candidates = candidates
         self.n_max = K
