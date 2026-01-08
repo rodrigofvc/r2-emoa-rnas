@@ -287,6 +287,19 @@ class CIFAR100DataProvider(DataProvider):
                 train_sampler = torch.utils.data.sampler.SubsetRandomSampler(train_indexes)
                 valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(valid_indexes)
 
+            if torch.mps.is_available():
+                # Testing
+                num_train = len(train_dataset.data)
+                indices = list(range(num_train))
+                split = 32
+                num_train = split + 32
+                train_sampler = torch.utils.data.sampler.SubsetRandomSampler(indices[:split])
+                valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train])
+                print(f"Training samples: {split}, Validation samples: {num_train - split}")
+            else:
+                print(f"Training samples: {len(train_indexes)}, Validation samples: {len(valid_indexes)}")
+
+
             self.train = train_loader_class(
                 train_dataset, batch_size=train_batch_size, sampler=train_sampler,
                 num_workers=n_worker, pin_memory=True,

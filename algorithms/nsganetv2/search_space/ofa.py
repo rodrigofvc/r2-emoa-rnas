@@ -6,7 +6,8 @@ class OFASearchSpace:
         self.num_blocks = 5  # number of blocks
         self.kernel_size = [3, 5, 7]  # depth-wise conv kernel size
         self.exp_ratio = [3, 4, 6]  # expansion rate
-        self.depth = [2, 3, 4]  # number of Inverted Residual Bottleneck layers repetition
+        #self.depth = [2, 3, 4]  # number of Inverted Residual Bottleneck layers repetition
+        self.depth = [1]
         self.resolution = list(range(192, 257, 4))  # input image resolutions
 
     def sample(self, n_samples=1, nb=None, ks=None, e=None, d=None, r=None):

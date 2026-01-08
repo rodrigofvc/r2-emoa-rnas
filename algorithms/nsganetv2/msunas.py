@@ -139,7 +139,7 @@ class MSuNAS:
             population = wrap_individuals(candidates, std_loss, adv_loss, flops, params)
             evaluations += len(candidates)
             self.archive = archive_update_pq(self.archive, population)
-            self.archive_2 = archive_update_pq(self.archive_2, population)
+            self.archive_2 = archive_update_pq(self.archive_2, population, k=2)
             args = {'n_population': self.n_doe,
                     'dataset': self.dataset,
                     'save_path': self.save_path}
@@ -252,14 +252,16 @@ class MSuNAS:
         inputs = [self.search_space.encode(x[0]) for x in archive]
         # remove bad samples from inputs
         ignore_input = []
-        for i, x in enumerate(inputs):
-            if len(x) != 46:
-                ignore_input.append(i)
-        for i in sorted(ignore_input, reverse=True):
-            del inputs[i]
-            del archive[i]
-        for i, x in enumerate(inputs):
-            assert len(x) == 46, f"input length must be 46 but got {len(x)} at index {i}"
+        #for i, x in enumerate(inputs):
+        #    if len(x) != 46:
+        #        ignore_input.append(i)
+        #for i in sorted(ignore_input, reverse=True):
+        #    del inputs[i]
+        #    del archive[i]
+        #for i, x in enumerate(inputs):
+        #    assert len(x) == 46, f"input length must be 46 but got {len(x)} at index {i}"
+        print('>>>>>>>> LEN INPUTS: ')
+        print([len(x) for x in inputs])
         inputs = np.array(inputs)
         targets = np.array([x[1] for x in archive]) # std_loss
         # TODO assert len(inputs) > len(inputs[0]), f"# of training samples have to be > # of dimensions {len(inputs[0])} but got {len(inputs)}"
@@ -343,7 +345,7 @@ class AuxiliarySingleLevelProblem(Problem):
     """ The optimization problem for finding the next N candidate architectures """
 
     def __init__(self, search_space, predictor, predictor_adv, sec_obj='flops', supernet=None):
-        super().__init__(n_var=46, n_obj=4, n_constr=0, type_var=np.int32)
+        super().__init__(n_var=16, n_obj=4, n_constr=0, type_var=np.int32)
 
         self.ss = search_space
         self.predictor = predictor
@@ -408,6 +410,7 @@ def main(args):
     engine = MSuNAS(vars(args))
     engine.search()
     print("Total search time: {:.2f} hrs".format((time.time() - start) / 3600))
+    print("Results stored in {}".format(engine.save_path))
     return
 
 
@@ -458,4 +461,6 @@ if __name__ == '__main__':
                         help='set this flag to false for disabling cuda synchronization')
     cfgs = parser.parse_args()
     main(cfgs)
+# python3 msunas.py --seed 18906049 --iterations 1 --n_doe 4 --n_iter 4 --dataset cifar100 --n_classes 100 --n_epochs 1 --sync_cuda True --data ../../data --save search-cifar100-18906049
 
+# nohup env CUDA_LAUNCH_BLOCKING=1 PYTHONMALLOC=debug python3 msunas.py --seed 18906049 --iterations 30 --n_doe 40 --n_iter 40 --dataset cifar10 --n_classes 10 --n_epochs 10 --sync_cuda False --data ../../data --save search-cifar10-18906049 > msunas.out 2> msunas.err < /dev/null &

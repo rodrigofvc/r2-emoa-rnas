@@ -109,8 +109,14 @@ class AdvRunManager(RunManager):
 
         batch = next(iter(data_loader))
         model = net.module if isinstance(net, torch.nn.DataParallel) else net
-        model = copy.deepcopy(model).cuda()
-        x = torch.rand((1, 3, batch[0].shape[-2], batch[0].shape[-1])).cuda()
+
+        if torch.cuda.is_available():
+            device = 'cuda'
+        else:
+            device = 'cpu'
+
+        model = copy.deepcopy(model).to(device)
+        x = torch.rand((1, 3, batch[0].shape[-2], batch[0].shape[-1])).to(self.device)
         macs, params = thop.profile(model, inputs=(x,), verbose=False)
         flops = round((2 * macs) / 1e6, 4)
         params = round(params / 1e6, 4)

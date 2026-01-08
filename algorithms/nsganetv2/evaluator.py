@@ -44,11 +44,13 @@ def pad_none(x, depth, max_depth):
 
 def get_net_info(net, data_shape, measure_latency=None, print_info=True, clean=False, lut=None):
 
-    #net_info = utils.get_net_info(
-    #    net, data_shape, measure_latency, print_info=print_info, clean=clean, lut=lut)
+    if torch.cuda.is_available():
+        device = 'cuda'
+    else:
+        device = 'cpu'
     model = net.module if isinstance(net, torch.nn.DataParallel) else net
-    model = copy.deepcopy(model).cuda()
-    inputs = torch.randn(1, *data_shape).cuda()
+    model = copy.deepcopy(model).to(device)
+    inputs = torch.randn(1, *data_shape).to(device)
     macs, params = profile(model, inputs=(inputs,), verbose=False)
     flops = (2 * macs) / 1e6
     params = params / 1e6
@@ -101,7 +103,8 @@ class OFAEvaluator:
         # default configurations
         self.kernel_size = [3, 5, 7] if kernel_size is None else kernel_size  # depth-wise conv kernel size
         self.exp_ratio = [3, 4, 6] if exp_ratio is None else exp_ratio  # expansion rate
-        self.depth = [2, 3, 4] if depth is None else depth  # number of MB block repetition
+        #self.depth = [2, 3, 4] if depth is None else depth  # number of MB block repetition
+        self.depth = [1]
 
         if 'w1.0' in model_path:
             self.width_mult = 1.0
