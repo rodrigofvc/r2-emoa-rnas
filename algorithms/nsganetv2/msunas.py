@@ -409,7 +409,7 @@ def main(args):
     start = time.time()
     engine = MSuNAS(vars(args))
     engine.search()
-    print("Total search time: {:.2f} hrs".format((time.time() - start) / 3600))
+    print('Total search time: {}'.format(time.strftime('%H:%M:%S', time.gmtime(time.time() - start))))
     print("Results stored in {}".format(engine.save_path))
     return
 

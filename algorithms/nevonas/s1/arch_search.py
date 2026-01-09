@@ -295,6 +295,8 @@ attack_params = {
   }
 }
 
+execution_time = time.time()
+
 attack_f = get_attack_function(attack_params)
 
 # STAGE 1
@@ -367,6 +369,8 @@ for n_gen in range(args.epochs):
   last = time.time() - start_time
   logging.info("[INFO] {}/{} generation finished in {} minutes".format(n_gen + 1, args.epochs, last / 60))
 
+print('Total search time: {}'.format(time.strftime('%H:%M:%S', time.gmtime(time.time() - execution_time))))
+
 # obtain the result objective from the algorithm
 res = algorithm.result()
 
@@ -387,5 +391,6 @@ plot_hypervolume2(nas.statistics, DIR)
 plot_r2(nas.statistics, DIR)
 save_statistics_to_csv(nas.statistics, DIR)
 save_params(args, DIR)
+print('Results stored in {}'.format(DIR))
 
 

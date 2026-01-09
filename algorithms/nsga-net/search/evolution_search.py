@@ -196,6 +196,7 @@ def main():
     plot_r2(problem.statistics, args.save)
     save_statistics_to_csv(problem.statistics, args.save)
     save_params(args, args.save)
+    print('Results stored in {}'.format(args.save))
 
 if __name__ == "__main__":
     main()
