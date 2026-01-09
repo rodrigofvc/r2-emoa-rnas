@@ -24,10 +24,10 @@ def save_archive_losses(archive, archive_path):
     np.savez_compressed(archive_path, np_archive)
 
 def store_metrics(architectures_evaluated, args, population, population_2, weights_r2, statistics):
-    max_f1 = 2 * 1.5
-    max_f2 = 2 * 1.5
-    max_f3 = 110 * 1.5
-    max_f4 = 2 * 1.5
+    max_f1 = 4 * 1.5
+    max_f2 = 4 * 1.5
+    max_f3 = 450 * 1.5
+    max_f4 = 5 * 1.5
     # compute hypervolume
     ind = HV(ref_point=np.array([max_f1, max_f2, max_f3, max_f4]))
     population_array = np.array([ind.F for ind in population])

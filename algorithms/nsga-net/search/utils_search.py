@@ -69,10 +69,10 @@ def get_dynamic_r2_reference(population):
     return z_ref
 
 def store_metrics(dataset, architectures_evaluated, pop_obj, pop_obj_2, save_dir, statistics):
-    max_f1 = 2 * 1.5
-    max_f2 = 2 * 1.5
-    max_f3 = 110 * 1.5
-    max_f4 = 2 * 1.5
+    max_f1 = 4 * 1.5
+    max_f2 = 4 * 1.5
+    max_f3 = 450 * 1.5
+    max_f4 = 5 * 1.5
     # compute hypervolume 4 objectives
     ind = HV(ref_point=np.array([max_f1, max_f2, max_f3, max_f4]))
     hyp = ind(pop_obj)
