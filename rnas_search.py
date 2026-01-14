@@ -90,10 +90,11 @@ if __name__ == '__main__':
     parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'], help='dataset to use')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--epochs', type=int, default=30, help='number of epochs to search')
+    parser.add_argument('--epochs_warmup', type=int, default=2, help='number of epochs to warmup supernet')
     parser.add_argument('--epochs_train_supernet', type=int, default=1, help='number of epochs to train supernet per generation')
     parser.add_argument('--params_dir', type=str, required=True, help="params json dir")
     args = parser.parse_args()
-
+    #python3 rnas_search.py --seed 18906049 --dataset cifar10 --batch_size 64 --epochs 1 --epochs_warmup 2 --epochs_train_supernet 2 --params_dir params/search/params-cifar-10-r2-emoa-5-16-light.json --algorithm r2-emoa
     with open(args.params_dir, 'r') as f:
         config = json.load(f)
 
@@ -131,7 +132,8 @@ if __name__ == '__main__':
             valid_queue=valid_queue,
             attack_f=attack_f,
             weights_r2=weights_r2,
-            args=args
+            args=args,
+            warmup=True
         )
         utils.save_model(supernet, args.save_path_final_model, f"super-net.pt")
         print("Final archive:")

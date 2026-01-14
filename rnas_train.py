@@ -106,7 +106,34 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
     total_loss_mean /= total
     return std_accuracy * 100.0, adv_accuracy * 100.0, total_loss_mean
 
-def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, args):
+def smooth_tchebycheff_sc_loss(std_loss, adv_loss, flops, params, r2_weights, z_ref_stch, nadir_point, ideal_point):
+    mu = 0.1
+    losses = torch.stack([std_loss, adv_loss, torch.tensor(float(flops), device=std_loss.device), torch.tensor(float(params), device=std_loss.device)])
+    values = torch.abs(losses - ideal_point) / torch.clamp(torch.abs(nadir_point - ideal_point), 1e-6)
+    stch_value = mu * torch.logsumexp(torch.tensor(r2_weights, dtype=torch.float32).to(std_loss.device) * (values - z_ref_stch) / mu, dim=-1)
+    return stch_value
+
+def update_ref_points(nadir_point, ideal_point, natural_loss, adv_loss, model_flops, model_parameters):
+    if nadir_point[0] < natural_loss:
+        nadir_point[0] = natural_loss
+    if nadir_point[1] < adv_loss:
+        nadir_point[1] = adv_loss
+    if nadir_point[2] < model_flops:
+        nadir_point[2] = model_flops
+    if nadir_point[3] < model_parameters:
+        nadir_point[3] = model_parameters
+    if ideal_point[0] > natural_loss:
+        ideal_point[0] = natural_loss
+    if ideal_point[1] > adv_loss:
+        ideal_point[1] = adv_loss
+    if ideal_point[2] > model_flops:
+        ideal_point[2] = model_flops
+    if ideal_point[3] > model_parameters:
+        ideal_point[3] = model_parameters
+
+
+
+def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
 
     input = input.to(args.device)
     target = target.to(args.device)
@@ -118,7 +145,9 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     logits_adv = model(adv_X)
     adv_loss = criterion(logits_adv, target)
     natural_loss = criterion(std_logits, target)
-    total_loss = args.lambda_1 * natural_loss + args.lambda_2 * adv_loss
+    update_ref_points(nadir_point, ideal_point, natural_loss.item(), adv_loss.item(), model_flops, model_parameters)
+    total_loss = smooth_tchebycheff_sc_loss(natural_loss, adv_loss, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point)
+    #total_loss = args.lambda_1 * natural_loss + args.lambda_2 * adv_loss
 
     total_loss.backward()
     #scaler.scale(total_loss).backward()
