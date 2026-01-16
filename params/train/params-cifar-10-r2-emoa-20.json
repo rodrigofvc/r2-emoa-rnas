@@ -1,6 +1,6 @@
 {
     "classes": 10,
-    "data": "../data",
+    "data": "data",
     "lambda_1": 0.5,
     "lambda_2": 0.5,
     "learning_rate": 0.025,
@@ -12,8 +12,8 @@
     "init_channels": 36,
     "reduction": true,
     "layers": 20,
-    "steps": 4,
-    "multiplier": 4,
+    "steps": 6,
+    "multiplier": 6,
     "attack": { "name": "FGSM",
         "params": {"eps": "8/255"}
     },
