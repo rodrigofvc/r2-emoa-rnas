@@ -206,7 +206,7 @@ if __name__ == '__main__':
 
     best_ind, best_path = utils_train.get_best_architecture_adversarial(args.arch_path, args.algorithm)
 
-    individual = utils_train.load_architecture(args.arch_path)
+    individual = utils_train.load_architecture(best_path)
     #supernet = utils.load_model(args.supernet_path)
     logs_architectures = []
 

@@ -8,7 +8,7 @@
     "momentum": 0.9,
     "weight_decay": 0.0003,
     "report_freq": 50,
-    "freq_save": 30,
+    "freq_save": 25,
     "init_channels": 36,
     "reduction": true,
     "layers": 20,
