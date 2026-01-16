@@ -149,10 +149,6 @@ def save_statistics_to_csv(statistics, csv_path):
         for key, value in statistics.items():
             writer.writerow([key, value])
 
-def load_architecture(architect_path):
-    with lzma.open(architect_path, 'rb') as f:
-        architectures = pickle.load(f)
-    return architectures
 
 def read_architectures(architect_path):
     with lzma.open(architect_path, 'rb') as f:
@@ -273,18 +269,6 @@ def get_model_metrics(genotype, model):
     params = params / 1e6
     return round(flops, 4), round(params, 4)
 
-def get_best_architecture_adversarial(archs_path):
-    best_adv_acc = -1.0
-    best_individual = None
-    best_path = ""
-    for arch_path in os.listdir(archs_path):
-        with lzma.open(archs_path + os.sep + arch_path, 'rb') as f:
-            individual = pickle.load(f)
-            if individual.adv_acc > best_adv_acc:
-                best_adv_acc = individual.adv_acc
-                best_individual = individual
-                best_path = archs_path + os.sep + arch_path
-    return best_individual, best_path
 
 def get_best_architecture_standard(archs_path):
     best_std_acc = -1.0
@@ -310,6 +294,7 @@ def save_params(args, trained_arch_path):
         json.dump(params_dict, f, indent=4)
 
 if __name__ == '__main__':
+    """
     best_adv = "results/r2-emoa/cifar10/2025-11-26_21-14-55_18906049/search/architectures/arch_56.xz"
     path = "results/r2-emoa/cifar10/2025-11-26_21-14-55_18906049/search/architectures/"
     best_ind, best_path = get_best_architecture_adversarial(path)
@@ -327,3 +312,4 @@ if __name__ == '__main__':
     # 36
     #best_ind, best_path = get_best_architecture_standard(path)
     #print(f"5. Best standard architecture found in {best_path} with std acc {best_ind.std_acc} and adv acc {best_ind.adv_acc}")
+    """

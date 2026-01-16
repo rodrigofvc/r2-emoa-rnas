@@ -10,6 +10,7 @@ import numpy as np
 import torchvision
 
 import utils
+import utils_train
 from evaluation.model import NetworkCIFAR
 from adversarial import get_attack_function
 
@@ -46,8 +47,13 @@ def prepare_args(args):
 
     return train_queue, criterion, attack_f
 
-def prepare_arch_genotype(architecture):
-    genotype = architecture.genotype
+def prepare_arch_genotype(architecture, algorithm):
+    if algorithm == 'r2-emoa' or algorithm == 'nevonas':
+        genotype = architecture.genotype
+    elif algorithm == 'nsganet':
+        genotype = architecture
+    else:
+        raise ValueError(f"Unknown algorithm: {algorithm}")
     model = NetworkCIFAR(args.init_channels, args.classes, args.layers, args.auxiliary, genotype).to(args.device)
 
     optimizer = torch.optim.SGD(
@@ -169,17 +175,18 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
 if __name__ == '__main__':
 
     parser = argparse.ArgumentParser(description="Training architectures found by RNAS")
-    parser.add_argument('--seed', type=int, default=0, help='random seed')
+    parser.add_argument('--seed', type=int, default=18906049, help='random seed')
+    parser.add_argument('--algorithm', type=str, default='[r2-emoa, nevonas, nsganet]', help='which algorithm was used to search')
     parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset for training')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs to train')
     parser.add_argument('--arch_path', type=str, required=True, help="Path to the saved architecture")
-    parser.add_argument('--supernet_path', type=str, required=True, help="Path to the saved supernet model")
+    parser.add_argument('--supernet_path', type=str, help="Path to the saved supernet model")
     parser.add_argument('--trained_arch_path', type=str, required=True, help='Path to store the trained architecture')
     parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary tower')
     parser.add_argument('--params_dir', type=str, required=True, help="params json dir")
     args = parser.parse_args()
-
+    # python3 rnas_train.py --seed 18906049 --algorithm nevonas --dataset cifar10 --batch_size 32 --epochs 10 --arch_path ./results/nevonas/cifar10/search-S1-20260109-190243-cifar10/architectures --trained_arch_path /results/nevonas/cifar10/search-S1-20260109-190243-cifar10/train --params_dir params/train/params-cifar-10-r2-emoa-20.json
     with open(args.params_dir, 'r') as f:
         config = json.load(f)
 
@@ -197,13 +204,16 @@ if __name__ == '__main__':
     if torch.cuda.is_available():
         torch.cuda.manual_seed(args.seed)
 
-    individual = utils.load_architecture(args.arch_path)
-    supernet = utils.load_model(args.supernet_path)
+    best_ind, best_path = utils_train.get_best_architecture_adversarial(args.arch_path, args.algorithm)
+
+    individual = utils_train.load_architecture(best_path)
+    #supernet = utils.load_model(args.supernet_path)
     logs_architectures = []
+
 
     train_queue, criterion, attack_f = prepare_args(args)
 
-    optimizer, scheduler, model = prepare_arch_genotype(individual)
+    optimizer, scheduler, model = prepare_arch_genotype(individual, args.algorithm)
     time_stamp_train = time.time()
     for epoch in range(args.epochs):
         print(f"Epoch {epoch+1}/{args.epochs}")
