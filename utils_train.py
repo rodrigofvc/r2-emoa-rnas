@@ -1,7 +1,24 @@
+import json
 import lzma
 import os
 import pickle
+import torch
 
+def save_params(args, trained_arch_path):
+    params_path = trained_arch_path + os.sep
+    params_dict = vars(args)
+    params_dict['device'] = str(params_dict['device'])
+    if not os.path.exists(os.path.dirname(params_path)):
+        os.makedirs(os.path.dirname(params_path))
+    params_path += 'params.json'
+    with open(params_path, 'w') as f:
+        json.dump(params_dict, f, indent=4)
+
+def save_model(model, model_path, name):
+    if not os.path.exists(model_path):
+        os.makedirs(model_path)
+    model_path += os.sep + name
+    torch.save(model, model_path)
 
 def load_architecture(architect_path):
     with lzma.open(architect_path, 'rb') as f:
