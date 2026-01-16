@@ -51,24 +51,34 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
     utils.store_statisctics(statisctics, objective_space)
     return len(pop)
 
-def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, gen, scheduler, scaler, args):
+def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, gen, scheduler, scaler, args, r2_weights, warmup=False):
     model.train()
     attack = attack_f(model)
-    epochs = args.epochs_train_supernet
+    if warmup:
+        epochs = args.epochs_warmup
+    else:
+        epochs = args.epochs_train_supernet
+    r2_weights_pop = r2_weights[len(pop)]
+    assert r2_weights_pop.shape[0] == len(pop)
+    nadir_point = torch.zeros(4, device=args.device)
+    ideal_point = torch.tensor([float('inf')] * 4, device=args.device)
+    z_ref_stch = torch.zeros(4, device=args.device)
     for epoch in range(epochs):
         for n_batch, (input, target) in enumerate(train_queue):
             individual = pop[n_batch % args.n_population]
+            individual_r2_weights = r2_weights_pop[n_batch % args.n_population]
             individual_architect = unpack_alphas(individual.X, model.alphas_dim, args)
             model.update_arch_parameters(individual_architect)
             discrete = discretize(individual_architect, model.genotype(), args.device)
             model.update_arch_parameters(discrete)
             time_stamp = time.time()
-            std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, args)
+            model_flops, model_parameters = utils.get_model_metrics(model.genotype(), model)
+            std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, args, model_flops, model_parameters, individual_r2_weights, z_ref_stch, ideal_point, nadir_point)
             if n_batch % args.report_freq == 0:
                 print(f'>>>> Gen {gen}/{args.epochs} | Epoch {epoch}/{epochs} | Batch {n_batch}/{len(train_queue)} | Loss {loss:.4f} | Std Acc {std_acc:.2f}% | Adv Acc {adv_acc:.2f}% | Time {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_stamp))} (HH:MM:SS)')
         scheduler.step()
 
-def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, scheduler, attack_f, weights_r2):
+def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, scheduler, attack_f, weights_r2, warmup=False):
     archive = []
     archive_accuracy = []
     archive_losses = []
@@ -76,9 +86,13 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     pop = initial_population(args.n_population, model.alphas_dim, args.objectives)
     print(f">>>> Initial population of size {len(pop)} created.")
     scaler = None
-    train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, scaler, args)
+    if warmup:
+        print(">>>> Warmup training of the supernet...")
+        train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, scaler, args, weights_r2, warmup=True)
+        print(">>>> Warmup training DONE.")
+    train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, scaler, args, weights_r2)
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'), 'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
-    architectures_evaluated += eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
+    eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
     archive = archive_update_pq(archive, pop)
     archive_losses = archive_update_pq(archive_losses, pop, k=2)
     hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args, weights_r2, statistics)
@@ -87,7 +101,7 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     for epoch in range(args.epochs):
         start = time.time()
         time_stamp_epoch = time.time()
-        train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoch + 1, scheduler, scaler, args)
+        train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, epoch + 1, scheduler, scaler, args, weights_r2)
         print(f">>>> Gen {epoch + 1} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_epoch))} (HH:MM:SS)")
 
         parents = tournament_selection(pop, n_select=len(pop)//2, tournament_size=5)
