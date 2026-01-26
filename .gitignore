@@ -13,3 +13,4 @@ evaluations.csv
 r2_weights/
 rnas_search.err
 rnas_search.out
+venv/
