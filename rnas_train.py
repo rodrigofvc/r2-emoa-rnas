@@ -54,7 +54,7 @@ def prepare_arch_genotype(architecture, algorithm):
         genotype = architecture
     else:
         raise ValueError(f"Unknown algorithm: {algorithm}")
-    model = NetworkCIFAR(args.init_channels, args.classes, args.layers, args.auxiliary, genotype).to(args.device)
+    model = NetworkCIFAR(args.init_channels, args.n_classes, args.layers, args.auxiliary, genotype).to(args.device)
 
     optimizer = torch.optim.SGD(
         model.parameters(),
