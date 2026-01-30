@@ -81,9 +81,9 @@ def store_metrics(architectures_evaluated, population, population_2, args, weigh
     nadir_point = np.array([max_f1, max_f2, max_f3, max_f4])
     r2_population = r2(population, weights_r2[args.n_population], nadir_point, z_ref)
     statistics['r2_log'].append(r2_population.item())
-    row_hyp = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'hv', hyp, args.save_path_final_model]
-    row_hyp2 = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'hv_2obj', hyp2, args.save_path_final_model]
-    row_r2 = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'r2', r2_population, args.save_path_final_model]
+    row_hyp = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'hv', hyp, args.save_path_final_model.replace("\\", "/")]
+    row_hyp2 = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'hv_2obj', hyp2, args.save_path_final_model.replace("\\", "/")]
+    row_r2 = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'r2', r2_population, args.save_path_final_model.replace("\\", "/")]
     file = open('evaluations.csv', 'a', newline='')
     writer = csv.writer(file)
     writer.writerow(row_hyp)
