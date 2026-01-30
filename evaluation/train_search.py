@@ -102,14 +102,13 @@ def infer(valid_queue, model, criterion, attack, args):
     adv_correct = 0
     std_loss_mean = 0
     adv_loss_mean = 0
-    total_loss_mean = 0
     total = 0
     #assert model.training is False
     model.eval()
     for step, (input, target) in enumerate(valid_queue):
         input  = input.to(args.device)
         target = target.to(args.device)
-        if args.attack['name'] == 'FGSM':
+        if args.attack == 'FGSM':
             adv_input, std_logits = attack(input, target)
         else:
             std_logits = model(input)
@@ -121,7 +120,6 @@ def infer(valid_queue, model, criterion, attack, args):
             std_loss = criterion(std_logits, target)
             adv_logits = model(adv_input)
             adv_loss = criterion(adv_logits, target)
-            total_loss = args.lambda_1 * std_loss + args.lambda_2 * adv_loss
 
         std_predicts = std_logits.argmax(dim=1)
         adv_predicts = adv_logits.argmax(dim=1)
@@ -130,13 +128,11 @@ def infer(valid_queue, model, criterion, attack, args):
         total += target.size(0)
         std_loss_mean += std_loss.item()
         adv_loss_mean += adv_loss.item()
-        total_loss_mean += total_loss.item()
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
     std_loss_mean /= total
     adv_loss_mean /= total
-    total_loss_mean /= total
-    return std_accuracy * 100.0, adv_accuracy * 100.0, std_loss_mean, adv_loss_mean, total_loss_mean
+    return std_accuracy * 100.0, adv_accuracy * 100.0, std_loss_mean, adv_loss_mean
 
 def setup_logger(debug_mode):
     level = logging.DEBUG if debug_mode else logging.INFO
@@ -162,7 +158,7 @@ def run_epoch(epoch, model, individuals, n_population, train_queue, valid_queue,
 
     time_valid = time.time()
     # validation
-    std_accuracy, adv_accuracy, loss = infer(valid_queue, model, args.lambda_1, args.lambda_2, criterion, attack_f=attack_f, device=device)
+    std_accuracy, adv_accuracy = infer(valid_queue, model, args.lambda_1, args.lambda_2, criterion, attack_f=attack_f, device=device)
     print(f"Tiempo de validacion epoca {epoch+1}/{args.epochs}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_valid))}")
     scheduler.step()
     #utils.save(model, os.path.join(args.save, 'weights.pt'))

@@ -32,7 +32,7 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
         discrete = discretize(individual_architect, model.genotype(), device)
         model.update_arch_parameters(discrete)
         time_stamp = time.time()
-        std_acc, adv_acc, std_loss, adv_loss, ws_loss = infer(valid_queue, model, criterion, attack, args)
+        std_acc, adv_acc, std_loss, adv_loss = infer(valid_queue, model, criterion, attack, args)
         individual.std_acc = std_acc
         individual.adv_acc = adv_acc
         individual.F[args.std_loss_index] = std_loss
@@ -74,7 +74,7 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, gen,
                 print(f'>>>> Gen {gen}/{args.generations} | Epoch {epoch}/{epochs} | Batch {n_batch}/{len(train_queue)} | Loss {loss:.4f} | Std Acc {std_acc:.2f}% | Adv Acc {adv_acc:.2f}% | Time {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_stamp))} (HH:MM:SS)')
         scheduler.step()
 
-def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, scheduler, attack_f, weights_r2, warmup=False):
+def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, scheduler, attack_f, weights_r2):
     archive = []
     archive_accuracy = []
     archive_losses = []
@@ -82,7 +82,7 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     pop = initial_population(args.n_population, model.alphas_dim, args.objectives)
     print(f">>>> Initial population of size {len(pop)} created.")
     scaler = None
-    if warmup:
+    if args.epochs_warmup > 0:
         print(">>>> Warmup training of the supernet...")
         train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, scaler, args, weights_r2, warmup=True)
         print(">>>> Warmup training DONE.")

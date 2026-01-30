@@ -33,6 +33,8 @@ def store_weights_ponderated(n, k):
     for i in range(n+1):
         size_pop = 2 * n - i
         directions_set[size_pop] = get_weights_ponderated(size_pop, k)
+    for weight in directions_set.values():
+        print(weight)
     for v, key in directions_set.items():
         print(v, key.shape)
     with open(file, 'wb') as f:
@@ -40,7 +42,7 @@ def store_weights_ponderated(n, k):
     return directions_set
 
 if __name__ == '__main__':
-    n = 20
+    n = 40
     k = 4
     #store_weights(n, k)
     store_weights_ponderated(n, k)
