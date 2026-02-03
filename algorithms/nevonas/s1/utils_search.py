@@ -12,7 +12,7 @@ import os
 import pickle
 
 from model import NetworkCIFAR
-from indicators import r2, normalize_objectives, get_dynamic_r2_reference
+from indicators import r2, get_dynamic_r2_reference
 
 
 # Load R2 weights for the i-th population size
@@ -57,9 +57,9 @@ def store_metrics(architectures_evaluated, population, population_2, args, weigh
     hyp2 = ind2(population_array2)
     statistics['hyp2_log'].append(hyp2.item())
     # compute r2
-    normalize_objectives(population)
-    z_ref = get_dynamic_r2_reference(population)
-    r2_population = r2(population, weights_r2[args.pop_size], z_ref)
+    z_ref = np.zeros(4)
+    nadir_point = np.array([max_f1, max_f2, max_f3, max_f4])
+    r2_population = r2(population, weights_r2[args.pop_size], nadir_point, z_ref)
     statistics['r2_log'].append(r2_population.item())
     row_hyp = ['nevonas', args.dataset, 'FGSM', architectures_evaluated, 'hv', hyp, args.save_dir]
     row_r2 = ['nevonas', args.dataset, 'FGSM', architectures_evaluated, 'r2', r2_population, args.save_dir]

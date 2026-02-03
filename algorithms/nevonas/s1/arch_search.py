@@ -380,7 +380,7 @@ save_supernet(model, DIR)
 for i, ind in enumerate(nas.archive):
     logging.info(f'Archive individual fitness: {ind.F}')
     # check architecture
-    model = NetworkCIFAR(args.init_channels, 10, args.layers, auxiliary=False, genotype=ind.get('genotype'))
+    model = NetworkCIFAR(args.init_channels,  num_classes, args.layers, auxiliary=False, genotype=ind.get('genotype'))
     save_architecture(i, ind, DIR)
 
 save_archive(nas.archive, DIR)
