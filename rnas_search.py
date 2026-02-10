@@ -1,5 +1,4 @@
 import argparse
-import json
 import ssl
 
 import numpy as np
@@ -9,7 +8,7 @@ import torchvision
 from torch import nn
 
 import utils
-from r2_emoa import r2_emoa_rnas
+from r2_emoa import r2_emoa_rnas_oneshot, r2_emoa_rnas
 from evaluation.model_search import Network
 from adversarial import get_attack_function
 
@@ -45,6 +44,10 @@ def prepare_args(args):
         device=args.device,
     ).to(args.device)
 
+    if args.pretrained_supernet is not None:
+        print(f"Loading pretrained supernet from {args.pretrained_supernet}")
+        model = utils.load_supernet(args.pretrained_supernet, model)
+        model = model.to(args.device)
 
     optimizer = torch.optim.SGD(
       model.parameters(),
@@ -96,7 +99,7 @@ def prepare_args(args):
 
     return model, criterion, optimizer, scheduler, train_queue, valid_queue, attack_f, weights_r2
 """
- python3 rnas_search.py --seed 18906049 --algorithm r2-emoa --dataset cifar10 --batch_size 96  \
+ python3 rnas_search.py --seed 18906049 --algorithm r2-emoa-one-shot --dataset cifar10 --batch_size 96  \
  --n_population 10 --generations 2 --epochs_warmup 0 --epochs_train_supernet 1 \
  --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 \
  --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 \
@@ -108,12 +111,13 @@ def prepare_args(args):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Running R2-EMOA for RNAS")
     parser.add_argument('--seed', type=int, default=0, help='random seed')
-    parser.add_argument('--algorithm', type=str, choices=['r2-emoa'], help='algorithm to run')
+    parser.add_argument('--algorithm', type=str, choices=['r2-emoa', 'r2-emoa-one-shot'], help='algorithm to run')
     parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'], help='dataset to use')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--n_population', type=int, default=40, help='population size')
     parser.add_argument('--generations', type=int, default=30, help='number of generations to search')
     parser.add_argument('--epochs_warmup', type=int, default=0, help='number of epochs to warmup supernet')
+    parser.add_argument('--pretrained_supernet', type=str, default=None, help='path to pretrained supernet to load before training')
     parser.add_argument('--epochs_train_supernet', type=int, default=1, help='number of epochs to train supernet per generation')
     parser.add_argument('--objectives', type=int, default=4, help='number of objectives')
     parser.add_argument('--std_loss_index', type=int, default=0, help='index of standard loss in objectives')
@@ -145,14 +149,6 @@ if __name__ == '__main__':
     parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
     args = parser.parse_args()
 
-    #with open(args.params_dir, 'r') as f:
-    #    config = json.load(f)
-
-    #for key, value in vars(args).items():
-    #    if value is not None:
-    #        config[key] = value
-
-    #args = argparse.Namespace(**config)
     print("Running with config:")
     for key, value in vars(args).items():
         print(f"{key}: {value}")
@@ -172,8 +168,8 @@ if __name__ == '__main__':
     args.save_path_final_architect = results_dir
 
     model, criterion, optimizer, scheduler, train_queue, valid_queue, attack_f, weights_r2 = prepare_args(args)
-    if args.algorithm == 'r2-emoa':
-        supernet, archive, archive_accuracy, archive_losses, statistics = r2_emoa_rnas(
+    if args.algorithm == 'r2-emoa-one-shot':
+        supernet, archive, archive_accuracy, archive_losses, statistics = r2_emoa_rnas_oneshot(
             model=model,
             criterion=criterion,
             optimizer=optimizer,
@@ -185,6 +181,34 @@ if __name__ == '__main__':
             args=args
         )
         utils.save_model(supernet, args.save_path_final_model, f"super-net.pt")
+        print("Final archive:")
+        for individual in archive:
+            print(individual.F, individual.std_acc, individual.adv_acc)
+        for i, individual in enumerate(archive):
+            utils.save_architecture(i, individual, args.save_path_final_architect)
+        utils.save_archive(archive, args.save_path_final_architect)
+        utils.save_archive_accuracy(archive_accuracy, args.save_path_final_architect)
+        utils.save_archive_losses(archive_losses, args.save_path_final_architect)
+        utils.plot_archive_losses(archive_losses, args.save_path_final_architect)
+        utils.plot_archive_accuracy(archive_accuracy, args.save_path_final_architect)
+        utils.plot_hypervolume(statistics, args.save_path_final_architect)
+        utils.plot_hypervolume2(statistics, args.save_path_final_architect)
+        utils.plot_r2(statistics, args.save_path_final_architect)
+        utils.save_statistics_to_csv(statistics, args.save_path_final_architect)
+        utils.save_params(args, args.save_path_final_architect)
+        print(f"Experiment completed and results saved in {results_dir}")
+    elif args.algorithm == 'r2-emoa':
+        archive, archive_accuracy, archive_losses, statistics = r2_emoa_rnas(
+            model=model,
+            criterion=criterion,
+            optimizer=optimizer,
+            scheduler=scheduler,
+            train_queue=train_queue,
+            valid_queue=valid_queue,
+            attack_f=attack_f,
+            weights_r2=weights_r2,
+            args=args
+        )
         print("Final archive:")
         for individual in archive:
             print(individual.F, individual.std_acc, individual.adv_acc)

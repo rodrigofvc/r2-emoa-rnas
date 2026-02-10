@@ -74,11 +74,12 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, gen,
                 print(f'>>>> Gen {gen}/{args.generations} | Epoch {epoch}/{epochs} | Batch {n_batch}/{len(train_queue)} | Loss {loss:.4f} | Std Acc {std_acc:.2f}% | Adv Acc {adv_acc:.2f}% | Time {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_stamp))} (HH:MM:SS)')
         scheduler.step()
 
-def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, scheduler, attack_f, weights_r2):
+def r2_emoa_rnas_oneshot(args, train_queue, valid_queue, model, criterion, optimizer, scheduler, attack_f, weights_r2):
     archive = []
     archive_accuracy = []
     archive_losses = []
     architectures_evaluated = 0
+    time_search = time.time()
     pop = initial_population(args.n_population, model.alphas_dim, args.objectives)
     print(f">>>> Initial population of size {len(pop)} created.")
     scaler = None
@@ -93,7 +94,6 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
     archive_losses = archive_update_pq(archive_losses, pop, k=2)
     hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args, weights_r2, statistics)
     print(f"Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
-    time_search = time.time()
     for generation in range(args.generations):
         start = time.time()
         time_stamp_epoch = time.time()
@@ -119,8 +119,13 @@ def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, sc
         utils.plot_hypervolume2(statistics, args.save_path_final_architect)
         utils.plot_r2(statistics, args.save_path_final_architect)
         print(f"Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
-    print(f">>>> Total search time: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_search))} (HH:MM:SS)")
+    print(f">>>> Total search time: ({(time.time() - time_search) // 86400:02.0f}:{time.strftime('%H:%M:%S)', time.gmtime(time.time() - time_search))} (DD:HH:MM:SS)")
     return model, archive, archive_accuracy, archive_losses, statistics
+
+# R2 version where each architecture has its own weights (no supernet training). This is a baseline to compare with the supernet version.
+def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, scheduler, attack_f, weights_r2):
+    # TODO
+    pass
 
 def non_dominated_sort(population):
     N = len(population)
