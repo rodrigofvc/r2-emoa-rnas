@@ -113,18 +113,9 @@ def save_log_train(arch_path, log):
         log_str = ','.join([str(item) for item in log])
         f.write(log_str + '\n')
 
-def load_model(model_path):
-    state_dict = torch.load(model_path, weights_only=False)
-    if torch.cuda.is_available():
-        state_dict.to('cuda')
-    return state_dict
-
-def load_supernet(model_path, model):
-    model_path += 'super-net.pt'
-    state_dict = torch.load(model_path, map_location='cpu')
-    model.load_state_dict(state_dict)
-    if torch.cuda.is_available():
-        model.to('cuda')
+# Load the supernet model from the specified path
+def load_supernet(model_path):
+    model = torch.load(model_path, map_location='cpu')
     return model
 
 def save_architecture(i, individual, architect_path):
