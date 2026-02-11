@@ -15,58 +15,24 @@ def get_weights_r2(n):
         weights_r2 = pickle.load(f)
     return weights_r2
 
-def normalize_objectives(pop_obj):
-    n_obj = pop_obj.shape[1]
-    f_mins = np.min(pop_obj, axis=0)
-    f_maxs = np.max(pop_obj, axis=0)
-    for ind in pop_obj:
-        for i in range(n_obj):
-            assert np.isfinite(ind[i]), f"Non-finite F encountered in normalization: {ind.F[i]}"
-            if f_maxs[i] - f_mins[i] > 1e-12:
-                ind[i] = (ind[i] - f_mins[i]) / (f_maxs[i] - f_mins[i])
-            else:
-                ind[i] = 0.0
-            assert np.isfinite(ind[i]), f"Non-finite F_norm encountered in normalization: {ind[i]}"
-            ind[i] = np.clip(ind[i], a_min=0.0, a_max=1.0)
-
-
-
-def r2(population, weights, z_ref):
+def r2(population, weights, nadir_point, z_ref):
     acc = 0.0
     for w in weights:
         min_diff = float('inf')
         for p in population:
-            max_diff = max([w_j * abs(p[j] - z_ref[j]) for j, w_j in enumerate(w)])
+            max_diff = max([w_j * abs((p[j] - z_ref[j]) / max(nadir_point[j] - z_ref[j], 1e-10)) for j, w_j in enumerate(w)])
             min_diff = min(min_diff, max_diff)
+        assert np.isfinite(max_diff), f"Non-finite max_diff encountered in R2 calculation: {max_diff}"
         acc += min_diff
     return acc / weights.shape[0]
 
-def contribution_r2(population, individual, weights, z_ref):
-    n = population.shape[0]
-    assert weights[n].shape[0] == n, f"weights shape != population size {n}"
-    full = r2(population, weights[n], z_ref)
+def contribution_r2(population, individual, weights, nadir_point, z_ref):
+    n = len(population)
+    #full = r2(population, weights, nadir_point, z_ref)
     population_exclude = [p for p in population if np.not_equal(p, individual).any()]
     assert len(population_exclude) == n - 1, f"population_exclude size != population size - 1 {n - 1}"
-    excl = r2(population_exclude, weights[n], z_ref)
-    return abs(full - excl)
-
-def get_dynamic_r2_reference(population):
-    n_obj = population.shape[1]
-    z_ref = np.zeros(n_obj)
-    max_f = 0
-    for i in range(n_obj):
-        max_f_i = np.max(population[:, i])
-        min_f_i = np.min(population[:, i])
-        max_f = max(max_f, max_f_i - min_f_i)
-        assert np.isfinite(min_f_i), "Non-finite min_f_i encountered in dynamic R2 reference point calculation"
-        assert np.isfinite(max_f_i), "Non-finite max_f_i encountered in dynamic R2 reference point calculation"
-        assert np.isfinite(max_f), "Non-finite max_f encountered in dynamic R2 reference point calculation"
-    for i in range(n_obj):
-        min_f_i = np.min(population[:, i])
-        z_ref[i] = min_f_i - max_f
-        assert np.isfinite(z_ref[i]), "Non-finite z_ref encountered in dynamic R2 reference point calculation"
-        assert np.isfinite(min_f_i), "Non-finite min_f_i encountered in dynamic R2 reference point calculation"
-    return z_ref
+    excl = r2(population_exclude, weights, nadir_point, z_ref)
+    return excl
 
 def store_metrics(dataset, architectures_evaluated, pop_obj, pop_obj_2, save_dir, statistics):
     max_f1 = 4 * 1.5
@@ -83,10 +49,9 @@ def store_metrics(dataset, architectures_evaluated, pop_obj, pop_obj_2, save_dir
     statistics['hyp2_log'].append(hyp_2obj.item())
     # compute r2
     weights_r2 = get_weights_r2(40)
-    norm_obj = pop_obj.copy()
-    normalize_objectives(norm_obj)
-    z_ref = get_dynamic_r2_reference(norm_obj)
-    r2_population = r2(norm_obj, weights_r2[40], z_ref)
+    z_ref = np.zeros(4)
+    nadir_point = np.array([max_f1, max_f2, max_f3, max_f4])
+    r2_population = r2(pop_obj, weights_r2, nadir_point, z_ref)
     statistics['r2_log'].append(r2_population)
     row_hyp =  ['nsga-net', dataset, 'FGSM', architectures_evaluated, 'hv', hyp, save_dir]
     row_r2 =   ['nsga-net', dataset, 'FGSM', architectures_evaluated, 'r2', r2_population, save_dir]

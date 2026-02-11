@@ -180,7 +180,7 @@ def main():
                    callback=do_every_generations,
                    termination=('n_gen', args.n_gens))
     args.time_taken = time.time() - start
-    print('Total search time: {}'.format(time.strftime('%H:%M:%S', time.gmtime(time.time() - start))))
+    print(f">>>> Total search time: ({(time.time() - start) // 86400:02.0f}:{time.strftime('%H:%M:%S)', time.gmtime(time.time() - start))} (DD:HH:MM:SS)")
     # store non-dominated solutions
     for i, arch in enumerate(res.X):
         genome = micro_encoding.convert(arch) if args.search_space == 'micro' else macro_encoding.convert(arch)
