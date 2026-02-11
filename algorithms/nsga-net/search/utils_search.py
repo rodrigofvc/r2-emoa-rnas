@@ -51,7 +51,7 @@ def store_metrics(dataset, architectures_evaluated, pop_obj, pop_obj_2, save_dir
     weights_r2 = get_weights_r2(40)
     z_ref = np.zeros(4)
     nadir_point = np.array([max_f1, max_f2, max_f3, max_f4])
-    r2_population = r2(pop_obj, weights_r2, nadir_point, z_ref)
+    r2_population = r2(pop_obj, weights_r2[40], nadir_point, z_ref)
     statistics['r2_log'].append(r2_population)
     row_hyp =  ['nsga-net', dataset, 'FGSM', architectures_evaluated, 'hv', hyp, save_dir]
     row_r2 =   ['nsga-net', dataset, 'FGSM', architectures_evaluated, 'r2', r2_population, save_dir]
