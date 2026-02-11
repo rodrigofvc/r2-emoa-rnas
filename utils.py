@@ -115,7 +115,7 @@ def save_log_train(arch_path, log):
 
 # Load the supernet model from the specified path
 def load_supernet(model_path):
-    model = torch.load(model_path, map_location='cpu')
+    model = torch.load(model_path, weights_only=False)
     return model
 
 def save_architecture(i, individual, architect_path):

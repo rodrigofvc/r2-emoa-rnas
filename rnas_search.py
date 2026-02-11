@@ -46,7 +46,7 @@ def prepare_args(args):
 
     if args.pretrained_supernet is not None:
         print(f"Loading pretrained supernet from {args.pretrained_supernet}")
-        model = utils.load_supernet(args.pretrained_supernet, model)
+        model = utils.load_supernet(args.pretrained_supernet)
         model = model.to(args.device)
 
     optimizer = torch.optim.SGD(
