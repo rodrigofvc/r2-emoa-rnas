@@ -1,9 +1,9 @@
 import numpy as np
 
 def dominates(ind1, ind2, k):
-    if np.allclose(ind1.F[:k], ind2.F[:k], atol=1e-8):
+    if np.allclose(ind1[:k], ind2[:k], atol=1e-8):
         return False
-    return all(f1 <= f2 for f1, f2 in zip(ind1.F[:k], ind2.F[:k]))
+    return all(f1 <= f2 for f1, f2 in zip(ind1[:k], ind2[:k]))
 
 
 
