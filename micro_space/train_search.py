@@ -5,7 +5,7 @@ import torch
 from torch import nn
 
 from debug import inspect_model
-from evaluation.model_search import discretize
+from micro_space.model_search import discretize
 
 
 # Train a model for one epoch

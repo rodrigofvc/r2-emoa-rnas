@@ -1,5 +1,5 @@
-from evaluation.genotypes import PRIMITIVES, Genotype
-from evaluation.operations import *
+from micro_space.genotypes import PRIMITIVES, Genotype
+from micro_space.operations import *
 from torch import nn
 import torch.nn.functional as F
 

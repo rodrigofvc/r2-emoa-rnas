@@ -11,7 +11,7 @@ import torchvision
 
 import utils
 import utils_train
-from evaluation.model import NetworkCIFAR
+from micro_space.model import NetworkCIFAR
 from adversarial import get_attack_function
 
 def prepare_args(args):
@@ -119,25 +119,18 @@ def smooth_tchebycheff_sc_loss(std_loss, adv_loss, flops, params, r2_weights, z_
     stch_value = mu * torch.logsumexp(torch.tensor(r2_weights, dtype=torch.float32).to(std_loss.device) * (values - z_ref_stch) / mu, dim=-1)
     return stch_value
 
-def update_ref_points(nadir_point, ideal_point, natural_loss, adv_loss, model_flops, model_parameters):
-    if nadir_point[0] < natural_loss:
-        nadir_point[0] = natural_loss
-    if nadir_point[1] < adv_loss:
-        nadir_point[1] = adv_loss
-    if nadir_point[2] < model_flops:
-        nadir_point[2] = model_flops
-    if nadir_point[3] < model_parameters:
-        nadir_point[3] = model_parameters
-    if ideal_point[0] > natural_loss:
-        ideal_point[0] = natural_loss
-    if ideal_point[1] > adv_loss:
-        ideal_point[1] = adv_loss
-    if ideal_point[2] > model_flops:
-        ideal_point[2] = model_flops
-    if ideal_point[3] > model_parameters:
-        ideal_point[3] = model_parameters
-
-
+def train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point, ideal_point, scheduler):
+    model.to(args.device)
+    attack = attack_f(model)
+    z_ref_stch = torch.zeros(4, device=args.device)
+    for epoch in range(args.epochs_train_individual):
+        for n_batch, (input, target) in enumerate(train_queue):
+            time_stamp = time.time()
+            model_flops, model_parameters = utils.get_model_metrics(None, model, discrete=True)
+            std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, attack, None, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
+            if n_batch % args.report_freq == 0:
+                print(f'>>>> Epoch {epoch}/{args.epochs_train_individual} | Batch {n_batch}/{len(train_queue)} | Loss {loss:.4f} | Std Acc {std_acc:.2f}% | Adv Acc {adv_acc:.2f}% | Time {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_stamp))} (HH:MM:SS)')
+        scheduler.step()
 
 def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
 
@@ -151,14 +144,12 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     logits_adv = model(adv_X)
     adv_loss = criterion(logits_adv, target)
     natural_loss = criterion(std_logits, target)
-    update_ref_points(nadir_point, ideal_point, natural_loss.item(), adv_loss.item(), model_flops, model_parameters)
     total_loss = smooth_tchebycheff_sc_loss(natural_loss, adv_loss, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point)
-    #total_loss = args.lambda_1 * natural_loss + args.lambda_2 * adv_loss
 
     total_loss.backward()
     #scaler.scale(total_loss).backward()
     #scaler.unscale_(optimizer)
-    nn.utils.clip_grad_norm_(model.weight_parameters(), args.grad_clip)
+    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
     #scaler.step(optimizer)
     #scaler.update()
     optimizer.step()
@@ -168,6 +159,42 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     std_correct = (std_predicts == target).sum().item()
     adv_correct = (adv_predicts == target).sum().item()
     return std_correct, adv_correct, total_loss.item()
+
+def infer(valid_queue, model, criterion, attack, args):
+    std_correct = 0
+    adv_correct = 0
+    std_loss_mean = 0
+    adv_loss_mean = 0
+    total = 0
+    model.eval()
+    for step, (input, target) in enumerate(valid_queue):
+        input  = input.to(args.device)
+        target = target.to(args.device)
+        if args.attack == 'FGSM':
+            adv_input, std_logits = attack(input, target)
+        else:
+            std_logits = model(input)
+            adv_input = attack(input, target)
+        adv_input = adv_input.to(args.device)
+
+        with torch.no_grad():
+            #with torch.amp.autocast('cuda', dtype=torch.float16):
+            std_loss = criterion(std_logits, target)
+            adv_logits = model(adv_input)
+            adv_loss = criterion(adv_logits, target)
+
+        std_predicts = std_logits.argmax(dim=1)
+        adv_predicts = adv_logits.argmax(dim=1)
+        std_correct += (std_predicts == target).sum().item()
+        adv_correct += (adv_predicts == target).sum().item()
+        total += target.size(0)
+        std_loss_mean += std_loss.item()
+        adv_loss_mean += adv_loss.item()
+    std_accuracy = std_correct / total
+    adv_accuracy = adv_correct / total
+    std_loss_mean /= total
+    adv_loss_mean /= total
+    return std_accuracy * 100.0, adv_accuracy * 100.0, std_loss_mean, adv_loss_mean
 
 # This file trains architectures found by RNAS
 # it loads the architectures and supernet from specified paths

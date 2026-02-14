@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 
-from evaluation.operations import FactorizedReduce, ReLUConvBN, OPS
+from micro_space.operations import FactorizedReduce, ReLUConvBN, OPS
 
 
 class Cell(nn.Module):
