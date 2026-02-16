@@ -112,8 +112,7 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
     total_loss_mean /= total
     return std_accuracy * 100.0, adv_accuracy * 100.0, total_loss_mean
 
-def smooth_tchebycheff_sc_loss(std_loss, adv_loss, flops, params, r2_weights, z_ref_stch, nadir_point, ideal_point):
-    mu = 0.1
+def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, r2_weights, z_ref_stch, nadir_point, ideal_point):
     losses = torch.stack([std_loss, adv_loss, torch.tensor(float(flops), device=std_loss.device), torch.tensor(float(params), device=std_loss.device)])
     values = torch.abs(losses - ideal_point) / torch.clamp(torch.abs(nadir_point - ideal_point), 1e-6)
     stch_value = mu * torch.logsumexp(torch.tensor(r2_weights, dtype=torch.float32).to(std_loss.device) * (values - z_ref_stch) / mu, dim=-1)
@@ -144,7 +143,7 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     logits_adv = model(adv_X)
     adv_loss = criterion(logits_adv, target)
     natural_loss = criterion(std_logits, target)
-    total_loss = smooth_tchebycheff_sc_loss(natural_loss, adv_loss, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point)
+    total_loss = smooth_tchebycheff_sc_loss(args.mu, natural_loss, adv_loss, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point)
 
     total_loss.backward()
     #scaler.scale(total_loss).backward()

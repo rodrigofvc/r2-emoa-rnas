@@ -17,7 +17,7 @@ from micro_space.genotypes import PRIMITIVES
 """
  python3 rnas_search.py --seed 18906049 --algorithm r2-emoa-one-shot --dataset cifar10 --batch_size 32  \
  --n_population 10 --generations 2 --epochs_warmup 0 --epochs_train_supernet 1 \
- --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 \
+ --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 --mu 0.1 \
  --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 \
  --report_freq 50 --gpu 0 --init_channels 16 --reduction True --layers 5 --steps 6 --multiplier 6 \
  --attack FGSM --fgsm_eps 8/255 --cutout False --cutout_length 16 --drop_path_prob 0.3 \
@@ -112,7 +112,7 @@ def prepare_args_supernet(args):
 """
  python3 rnas_search.py --seed 18906049 --algorithm r2-emoa --dataset cifar10 --batch_size 32  \
  --n_population 10 --epochs_train_individual 2 --generations 2 \
- --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 \
+ --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 --mu 0.1 \
  --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 \
  --report_freq 50 --gpu 0 --init_channels 16 --reduction True --layers 5 --steps 6 --multiplier 6 \
  --attack FGSM --fgsm_eps 8/255 --cutout False --cutout_length 16 --drop_path_prob 0.3 \
@@ -196,6 +196,7 @@ if __name__ == '__main__':
     parser.add_argument('--prob_mut', type=float, default=0.1, help='mutation probability')
     parser.add_argument('--eta_cross', type=int, default=15, help='crossover eta')
     parser.add_argument('--eta_mut', type=int, default=20, help='mutation eta')
+    parser.add_argument('--mu', type=int, default=0.1, help='mu for thchebycheff function')
     parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
     parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
