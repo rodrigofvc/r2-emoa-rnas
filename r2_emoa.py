@@ -4,15 +4,15 @@ import numpy as np
 
 import utils
 from archivers import archive_update_pq, archive_update_pq_accuracy, dominates
-from evaluation.model_search import discretize
-from evaluation.train_search import infer
+from micro_space.model_search import discretize, Network
+from micro_space.model import NetworkCIFAR
 from individual import Individual
-from rnas_train import run_batch_epoch
+from rnas_train import run_batch_epoch, train_individual, infer
 from evolutionary import unpack_alphas, tournament_selection, binary_crossover, polynomial_mutation
 import torch
 
 
-from indicators import contribution_r2
+from indicators import contribution_r2, update_ref_points
 
 
 def initial_population(n_population, alphas_dim, k):
@@ -47,7 +47,24 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
     utils.store_statisctics(statisctics, objective_space)
     return len(pop)
 
-def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, gen, scheduler, scaler, args, r2_weights, warmup=False):
+def eval_individual(individual, model, valid_queue, args, criterion, attack_f):
+    if args.device == 'mps':
+        # MPS does not support float64
+        model.to(args.device, dtype=torch.float32)
+    else:
+        model.to(args.device)
+    attack = attack_f(model)
+    std_acc, adv_acc, std_loss, adv_loss = infer(valid_queue, model, criterion, attack, args)
+    individual.std_acc = std_acc
+    individual.adv_acc = adv_acc
+    individual.F[args.std_loss_index] = std_loss
+    individual.F[args.adv_loss_index] = adv_loss
+    model_flops, model_parameters = utils.get_model_metrics(None, model, discrete=True)
+    individual.F[args.flops_index] = model_flops
+    individual.F[args.params_index] = model_parameters
+    print(f"Evaluation: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, std_loss {std_loss:.4f}, adv_loss {adv_loss:.4f} ,flops {model_flops:.2f}, params {model_parameters}")
+
+def train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, attack_f, gen, scaler, args, r2_weights, nadir_point, ideal_point, warmup=False):
     model.train()
     attack = attack_f(model)
     if warmup:
@@ -55,10 +72,8 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, gen,
     else:
         epochs = args.epochs_train_supernet
     r2_weights_pop = r2_weights[len(pop)]
-    assert r2_weights_pop.shape[0] == len(pop)
-    nadir_point = torch.zeros(4, device=args.device)
-    ideal_point = torch.tensor([float('inf')] * 4, device=args.device)
     z_ref_stch = torch.zeros(4, device=args.device)
+    assert r2_weights_pop.shape[0] == len(pop)
     for epoch in range(epochs):
         for n_batch, (input, target) in enumerate(train_queue):
             individual = pop[n_batch % args.n_population]
@@ -73,6 +88,7 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, gen,
             if n_batch % args.report_freq == 0:
                 print(f'>>>> Gen {gen}/{args.generations} | Epoch {epoch}/{epochs} | Batch {n_batch}/{len(train_queue)} | Loss {loss:.4f} | Std Acc {std_acc:.2f}% | Adv Acc {adv_acc:.2f}% | Time {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_stamp))} (HH:MM:SS)')
         scheduler.step()
+    update_ref_points(pop, nadir_point, ideal_point)
 
 def r2_emoa_rnas_oneshot(args, train_queue, valid_queue, model, criterion, optimizer, scheduler, attack_f, weights_r2):
     archive = []
@@ -83,12 +99,14 @@ def r2_emoa_rnas_oneshot(args, train_queue, valid_queue, model, criterion, optim
     pop = initial_population(args.n_population, model.alphas_dim, args.objectives)
     print(f">>>> Initial population of size {len(pop)} created.")
     scaler = None
+    nadir_point = torch.ones(4, device=args.device)
+    ideal_point = torch.zeros(4, device=args.device)
     if args.epochs_warmup > 0:
         print(">>>> Warmup training of the supernet...")
-        train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, scaler, args, weights_r2, warmup=True)
+        train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, attack_f, 0, scaler, args, weights_r2, nadir_point, ideal_point, warmup=True)
         print(">>>> Warmup training DONE.")
-    train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, 0, scheduler, scaler, args, weights_r2)
-    statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'), 'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
+    train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, attack_f, 0, scaler, args, weights_r2, nadir_point, ideal_point)
+    statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'), 'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': [], 'lr_log': []}
     eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
     archive = archive_update_pq(archive, pop)
     archive_losses = archive_update_pq(archive_losses, pop, k=2)
@@ -97,7 +115,7 @@ def r2_emoa_rnas_oneshot(args, train_queue, valid_queue, model, criterion, optim
     for generation in range(args.generations):
         start = time.time()
         time_stamp_epoch = time.time()
-        train_supernet(pop, train_queue, model, criterion, optimizer, attack_f, generation + 1, scheduler, scaler, args, weights_r2)
+        train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, attack_f, generation + 1, scaler, args, weights_r2, nadir_point, ideal_point)
         print(f">>>> Gen {generation + 1} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_epoch))} (HH:MM:SS)")
 
         parents = tournament_selection(pop, n_select=len(pop)//2, tournament_size=5)
@@ -118,14 +136,108 @@ def r2_emoa_rnas_oneshot(args, train_queue, valid_queue, model, criterion, optim
         utils.plot_hypervolume(statistics, args.save_path_final_architect)
         utils.plot_hypervolume2(statistics, args.save_path_final_architect)
         utils.plot_r2(statistics, args.save_path_final_architect)
+        statistics['lr_log'].append(optimizer.param_groups[0]['lr'])
         print(f"Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
     print(f">>>> Total search time: ({(time.time() - time_search) // 86400:02.0f}:{time.strftime('%H:%M:%S)', time.gmtime(time.time() - time_search))} (DD:HH:MM:SS)")
     return model, archive, archive_accuracy, archive_losses, statistics
 
+def get_model_from_individual(individual, args):
+    criterion = torch.nn.CrossEntropyLoss()
+    if args.dataset == 'cifar10':
+        n_classes = 10
+    elif args.dataset == 'cifar100':
+        n_classes = 100
+    else:
+        raise ValueError(f"Unknown dataset: {args.dataset}")
+    continuous_model = Network(
+        C=args.init_channels,
+        num_classes=n_classes,
+        layers=args.layers,
+        criterion=criterion,
+        steps=args.steps,
+        multiplier=args.multiplier,
+        stem_multiplier=3,
+        device=args.device,
+    ).to(args.device)
+    individual_architect = unpack_alphas(individual.X, continuous_model.alphas_dim, args)
+    continuous_model.update_arch_parameters(individual_architect)
+    discrete = discretize(individual_architect, continuous_model.genotype(), args.device)
+    continuous_model.update_arch_parameters(discrete)
+    discrete_genotype = continuous_model.genotype()
+    individual.genotype = discrete_genotype
+    discrete_model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, discrete_genotype).to(args.device)
+    optimizer = torch.optim.SGD(
+        discrete_model.parameters(),
+        args.learning_rate,
+        momentum=args.momentum,
+        weight_decay=args.weight_decay)
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+        optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
+    del continuous_model
+    return discrete_model, criterion, optimizer, scheduler
+
 # R2 version where each architecture has its own weights (no supernet training). This is a baseline to compare with the supernet version.
-def r2_emoa_rnas(args, train_queue, valid_queue, model, criterion, optimizer, scheduler, attack_f, weights_r2):
-    # TODO
-    pass
+def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r2):
+    archive = []
+    archive_accuracy = []
+    archive_losses = []
+    architectures_evaluated = 0
+    nadir_point = torch.ones(4, device=args.device)
+    ideal_point = torch.zeros(4, device=args.device)
+    time_search = time.time()
+    pop = initial_population(args.n_population, alphas_dim, args.objectives)
+    print(f">>>> Initial population of size {len(pop)} created.")
+    statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'),
+                  'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
+    for i, individual in enumerate(pop):
+        model, criterion, optimizer, scheduler = get_model_from_individual(individual, args)
+        weight_individual = weights_r2[len(pop)][i]
+        train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point, ideal_point, scheduler)
+        eval_individual(individual, model, valid_queue, args, criterion, attack_f)
+    update_ref_points(pop, nadir_point, ideal_point)
+
+    archive = archive_update_pq(archive, pop)
+    archive_losses = archive_update_pq(archive_losses, pop, k=2)
+    hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args,
+                                                         weights_r2, statistics)
+    print(f">>>> Gen 0 | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
+    for generation in range(args.generations):
+        time_stamp_gen = time.time()
+
+        parents = tournament_selection(pop, n_select=len(pop) // 2, tournament_size=5)
+        offsprings = binary_crossover(parents, n_childs=len(pop), eta=args.eta_cross, prob_cross=args.prob_cross)
+        mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
+
+        for i, individual in enumerate(mutation):
+            model, criterion, optimizer, scheduler = get_model_from_individual(individual, args)
+            weight_individual = weights_r2[len(pop)][i]
+            time_training = time.time()
+            train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point,
+                             ideal_point, scheduler)
+            print(f'Gen {generation + 1} Training {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
+            time_evaluation = time.time()
+            eval_individual(individual, model, valid_queue, args, criterion, attack_f)
+            print(f'Gen {generation + 1} Evaluation {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
+        architectures_evaluated += len(pop)
+        update_ref_points(pop, nadir_point, ideal_point)
+
+        archive = archive_update_pq(archive, pop + mutation)
+        archive_accuracy = archive_update_pq_accuracy(archive_accuracy, pop + mutation)
+        archive_losses = archive_update_pq(archive_losses, pop + mutation, k=2)
+        pop = update_population_r2(pop, mutation, weights_r2)
+        hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args,
+                                                             weights_r2, statistics)
+        utils.save_architectures(archive, args.save_path_final_architect)
+        utils.plot_hypervolume(statistics, args.save_path_final_architect)
+        utils.plot_hypervolume2(statistics, args.save_path_final_architect)
+        utils.plot_r2(statistics, args.save_path_final_architect)
+        print(f">>>> Gen {generation + 1} | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
+        print(
+            f">>>> Gen {generation + 1} DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_gen))} (HH:MM:SS)")
+    print(
+        f">>>> Total search time: ({(time.time() - time_search) // 86400:02.0f}:{time.strftime('%H:%M:%S)', time.gmtime(time.time() - time_search))} (DD:HH:MM:SS)")
+    return archive, archive_accuracy, archive_losses, statistics
+
 
 def non_dominated_sort(population):
     N = len(population)

@@ -11,7 +11,7 @@ import torchvision.transforms as transforms
 import os
 import pickle
 
-from evaluation.model import NetworkCIFAR
+from micro_space.model import NetworkCIFAR
 from indicators import r2
 
 
@@ -115,7 +115,7 @@ def save_log_train(arch_path, log):
 
 # Load the supernet model from the specified path
 def load_supernet(model_path):
-    model = torch.load(model_path, map_location='cpu')
+    model = torch.load(model_path, weights_only=False)
     return model
 
 def save_architecture(i, individual, architect_path):
@@ -173,6 +173,17 @@ def plot_archive_accuracy(archive_accuracy, archive_path):
     plt.ylabel('Adversarial Accuracy (%)')
     plt.grid(True)
     plt.savefig(archive_path)
+    plt.close()
+
+def plot_lr_scheduler(statistics, path):
+    path += 'lr_scheduler.pdf'
+    plt.figure(figsize=(8, 6))
+    plt.plot(statistics['lr_log'], marker='o', color='blue')
+    plt.title('Learning Rate Scheduler')
+    plt.xlabel('Generation')
+    plt.ylabel('Learning Rate')
+    plt.grid(True)
+    plt.savefig(path)
     plt.close()
 
 def plot_hypervolume(statistics, path):
@@ -252,9 +263,13 @@ def data_transforms_cifar10(args):
   return train_transform, valid_transform
 
 # Returns the flops and number of parameters of a model given its genotype
-def get_model_metrics(genotype, model):
-    discretized_model = NetworkCIFAR(model.C, model.num_classes, model.layers, auxiliary=False, genotype=genotype)
-    x = torch.randn(1, 3, 32, 32)
+def get_model_metrics(genotype, model, discrete=False):
+    if not discrete:
+        # create a discretized version of the model using the provided genotype and model
+        discretized_model = NetworkCIFAR(model.C, model.num_classes, model.layers, auxiliary=False, genotype=genotype)
+    else:
+        discretized_model = model
+    x = torch.randn(1, 3, 32, 32).to(next(discretized_model.parameters()).device)
     macs, params = profile(discretized_model, inputs=(x,), verbose=False)
     flops = (2 * macs) / 1e6
     params = params / 1e6

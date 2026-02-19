@@ -8,7 +8,6 @@ import torch
 import torchvision
 
 import utils
-from evaluation.train_search import infer
 from adversarial import get_attack_function
 
 

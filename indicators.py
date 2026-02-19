@@ -52,3 +52,22 @@ def get_dynamic_r2_reference(population):
         assert z_ref[i] <= min([ind.F[i] for ind in population]), f"Dynamic R2 reference point z_ref[{i}] is not less than the minimum objective value {z_ref[i]} >= {min([ind.F[i] for ind in population])}"
     print("Dynamic R2 reference point:", z_ref)
     return z_ref
+
+def update_ref_points(population, nadir_point, ideal_point):
+    for ind in population:
+        if nadir_point[0] < ind.F[0]:
+            nadir_point[0] = ind.F[0]
+        if nadir_point[1] < ind.F[1]:
+            nadir_point[1] = ind.F[1]
+        if nadir_point[2] < ind.F[2]:
+            nadir_point[2] = ind.F[2]
+        if nadir_point[3] < ind.F[3]:
+            nadir_point[3] = ind.F[3]
+        if ideal_point[0] > ind.F[0]:
+            ideal_point[0] = ind.F[0]
+        if ideal_point[1] > ind.F[1]:
+            ideal_point[1] = ind.F[1]
+        if ideal_point[2] > ind.F[2]:
+            ideal_point[2] = ind.F[2]
+        if ideal_point[3] > ind.F[3]:
+            ideal_point[3] = ind.F[3]
