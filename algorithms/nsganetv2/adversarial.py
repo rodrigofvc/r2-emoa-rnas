@@ -48,8 +48,6 @@ def fgsm(model, x, y, eps=8/255):
 def fgsm_simple(model, x, y, eps):
     device = next(model.parameters()).device
     x_adv = x.detach().clone().to(device).float().requires_grad_(True)
-    model.zero_grad(set_to_none=True)
-    #with amp.autocast('cuda', dtype=torch.float16):
     std_logits = model(x_adv)
     loss = F.cross_entropy(std_logits, y)
     grad = torch.autograd.grad(loss, x_adv, retain_graph=False, create_graph=False)[0]

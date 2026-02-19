@@ -6,7 +6,6 @@ import torch.nn.functional as F
 def fgsm_simple(model, x, y, eps):
     device = next(model.parameters()).device
     x_adv = x.detach().clone().to(device).float().requires_grad_(True)
-    model.zero_grad(set_to_none=True)
     std_logits = model(x_adv)
     loss = F.cross_entropy(std_logits, y)
     grad = torch.autograd.grad(loss, x_adv, retain_graph=False, create_graph=False)[0]
