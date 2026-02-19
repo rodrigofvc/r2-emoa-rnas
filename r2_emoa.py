@@ -214,10 +214,10 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
             time_training = time.time()
             train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point,
                              ideal_point, scheduler)
-            print(f'Training {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
+            print(f'Gen {generation + 1} Training {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
             time_evaluation = time.time()
             eval_individual(individual, model, valid_queue, args, criterion, attack_f)
-            print(f'Evaluation {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
+            print(f'Gen {generation + 1} Evaluation {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
         architectures_evaluated += len(pop)
         update_ref_points(pop, nadir_point, ideal_point)
 

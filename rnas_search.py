@@ -196,7 +196,7 @@ if __name__ == '__main__':
     parser.add_argument('--prob_mut', type=float, default=0.1, help='mutation probability')
     parser.add_argument('--eta_cross', type=int, default=15, help='crossover eta')
     parser.add_argument('--eta_mut', type=int, default=20, help='mutation eta')
-    parser.add_argument('--mu', type=int, default=0.1, help='mu for thchebycheff function')
+    parser.add_argument('--mu', type=float, default=0.1, help='mu for thchebycheff function')
     parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
     parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
