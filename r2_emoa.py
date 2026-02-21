@@ -192,8 +192,12 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
     for i, individual in enumerate(pop):
         model, criterion, optimizer, scheduler = get_model_from_individual(individual, args)
         weight_individual = weights_r2[len(pop)][i]
+        time_training = time.time()
         train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point, ideal_point, scheduler)
+        print(f'Gen 0 Training {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
+        time_evaluation = time.time()
         eval_individual(individual, model, valid_queue, args, criterion, attack_f)
+        print(f'Gen 0 Evaluation {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
     update_ref_points(pop, nadir_point, ideal_point)
 
     archive = archive_update_pq(archive, pop)
