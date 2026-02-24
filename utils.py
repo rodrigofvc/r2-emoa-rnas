@@ -269,6 +269,7 @@ def get_model_metrics(genotype, model, discrete=False):
         discretized_model = NetworkCIFAR(model.C, model.num_classes, model.layers, auxiliary=False, genotype=genotype)
     else:
         discretized_model = model
+    model.eval()
     x = torch.randn(1, 3, 32, 32).to(next(discretized_model.parameters()).device)
     macs, params = profile(discretized_model, inputs=(x,), verbose=False)
     flops = (2 * macs) / 1e6

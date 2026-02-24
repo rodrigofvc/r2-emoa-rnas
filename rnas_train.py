@@ -5,7 +5,6 @@ import time
 
 import torch
 from torch import nn, amp
-
 import numpy as np
 import torchvision
 
@@ -122,13 +121,12 @@ def train_individual(model, train_queue, criterion, optimizer, attack_f, args, w
     model.to(args.device)
     attack = attack_f(model)
     z_ref_stch = torch.zeros(4, device=args.device)
+    model_flops, model_parameters = utils.get_model_metrics(None, model, discrete=True)
+    model.train()
+    time_stamp = time.time()    
     for epoch in range(args.epochs_train_individual):
         for n_batch, (input, target) in enumerate(train_queue):
-            time_stamp = time.time()
-            model_flops, model_parameters = utils.get_model_metrics(None, model, discrete=True)
             std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, attack, None, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
-            if n_batch % args.report_freq == 0:
-                print(f'>>>> Epoch {epoch}/{args.epochs_train_individual} | Batch {n_batch}/{len(train_queue)} | Loss {loss:.4f} | Std Acc {std_acc:.2f}% | Adv Acc {adv_acc:.2f}% | Time {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_stamp))} (HH:MM:SS)')
         scheduler.step()
 
 def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
