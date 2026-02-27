@@ -79,11 +79,9 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
 
         optimizer.zero_grad()
 
-        if args.attack['name'] == 'FGSM':
-            adv_X, logits = attack(input, target)
-        else:
-            logits = model(input)
-            adv_X = attack(input, target)
+
+        adv_X = attack(input, target)
+        logits = model(input)
 
         logits_adv = model(adv_X)
         adv_loss = criterion(logits_adv, target)
@@ -135,8 +133,8 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     target = target.to(args.device)
 
     optimizer.zero_grad(set_to_none=True)
-    adv_X, std_logits = attack(input, target)
-
+    adv_X = attack(input, target)
+    std_logits = model(input)
     #with amp.autocast("cuda", dtype=torch.float16):
     logits_adv = model(adv_X)
     adv_loss = criterion(logits_adv, target)
@@ -167,11 +165,9 @@ def infer(valid_queue, model, criterion, attack, args):
     for step, (input, target) in enumerate(valid_queue):
         input  = input.to(args.device)
         target = target.to(args.device)
-        if args.attack == 'FGSM':
-            adv_input, std_logits = attack(input, target)
-        else:
-            std_logits = model(input)
-            adv_input = attack(input, target)
+
+        std_logits = model(input)
+        adv_input = attack(input, target)
         adv_input = adv_input.to(args.device)
 
         with torch.no_grad():
