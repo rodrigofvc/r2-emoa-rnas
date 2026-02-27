@@ -195,8 +195,9 @@ def train(train_queue, net, criterion, optimizer, attack_f, params):
         inputs, targets = inputs.to(device), targets.to(device)
         optimizer.zero_grad()
 
-        adv_X, std_logits = attack(inputs, targets)
+        adv_X = attack(inputs, targets)
         adv_logits = net(adv_X)[0]
+        std_logits = net(inputs)[0]
         std_loss = criterion(std_logits, targets)
         adv_loss = criterion(adv_logits, targets)
         total_loss = params['lambda_1'] * std_loss + params['lambda_2'] * adv_loss
@@ -222,9 +223,10 @@ def infer(valid_queue, net, criterion, attack_f, params):
     for step, (inputs, targets) in enumerate(valid_queue):
         inputs, targets = inputs.to(device), targets.to(device)
 
-        adv_inputs, std_logits = attack(inputs, targets)
+        adv_inputs = attack(inputs, targets)
         with torch.no_grad():
             outputs_adv, _ = net(adv_inputs)
+            std_logits, _ = net(inputs)
             std_loss = criterion(std_logits, targets)
             adv_loss = criterion(outputs_adv, targets)
 
