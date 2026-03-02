@@ -133,20 +133,18 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     target = target.to(args.device)
 
     optimizer.zero_grad(set_to_none=True)
-    adv_X = attack(input, target)
-    std_logits = model(input)
-    #with amp.autocast("cuda", dtype=torch.float16):
+
+    # for adversarial training
+    input.requires_grad = True
+
+    adv_X, std_logits, natural_loss = attack(input, target)
     logits_adv = model(adv_X)
     adv_loss = criterion(logits_adv, target)
-    natural_loss = criterion(std_logits, target)
+
     total_loss = smooth_tchebycheff_sc_loss(args.mu, natural_loss, adv_loss, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point)
 
     total_loss.backward()
-    #scaler.scale(total_loss).backward()
-    #scaler.unscale_(optimizer)
     nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
-    #scaler.step(optimizer)
-    #scaler.update()
     optimizer.step()
 
     std_predicts = std_logits.argmax(dim=1)
@@ -165,14 +163,12 @@ def infer(valid_queue, model, criterion, attack, args):
     for step, (input, target) in enumerate(valid_queue):
         input  = input.to(args.device)
         target = target.to(args.device)
-
-        std_logits = model(input)
-        adv_input = attack(input, target)
+        # For adversarial evaluation
+        input.requires_grad = True
+        adv_input, std_logits, std_loss = attack(input, target)
         adv_input = adv_input.to(args.device)
 
         with torch.no_grad():
-            #with torch.amp.autocast('cuda', dtype=torch.float16):
-            std_loss = criterion(std_logits, target)
             adv_logits = model(adv_input)
             adv_loss = criterion(adv_logits, target)
 

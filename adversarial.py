@@ -5,13 +5,6 @@ import torch.nn.functional as F
 from torch import amp
 
 
-def fgsm_dep(model, x, y, eps=8/255):
-    x_adv = x.detach().clone().requires_grad_(True)
-    logits = model(x_adv)
-    loss = F.cross_entropy(logits, y)
-    (grad,) = torch.autograd.grad(loss, x_adv, retain_graph=False, create_graph=False)
-    adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach()
-    return adv
 
 def fgsm(model, x, y, eps=8/255):
     device = next(model.parameters()).device
@@ -47,13 +40,13 @@ def fgsm(model, x, y, eps=8/255):
     return adv
 
 def fgsm_simple(model, x, y, eps):
-    device = next(model.parameters()).device
-    x_adv = x.detach().clone().to(device).float().requires_grad_(True)
-    std_logits = model(x_adv)
-    loss = F.cross_entropy(std_logits, y)
-    grad = torch.autograd.grad(loss, x_adv, retain_graph=False, create_graph=False)[0]
-    adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach()
-    return adv
+    assert x.requires_grad, "Input tensor must have requires_grad=True for fgsm_simple attack"
+    std_logits = model(x)
+    std_loss = F.cross_entropy(std_logits, y)
+    # retain the graph for tchebycheff loss
+    grad = torch.autograd.grad(std_loss, x, retain_graph=True, create_graph=False)[0]
+    adv = (x + eps * grad.sign()).clamp(0.0, 1.0).detach()
+    return adv, std_logits, std_loss
 
 class FGSMAttack:
     def __init__(self, eps=8/255):
