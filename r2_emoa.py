@@ -48,7 +48,7 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
     return len(pop)
 
 def eval_individual(individual, model, valid_queue, args, criterion, attack_f):
-    if args.device == 'mps':
+    if args.device == torch.device("mps"):
         # MPS does not support float64
         model.to(args.device, dtype=torch.float32)
     else:
