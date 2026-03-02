@@ -85,12 +85,10 @@ def train(model, train_queue, criterion, optimizer, gen, attack_f, device, pop=N
       targets = targets.to(device)
       optimizer.zero_grad()
 
-      adv_input = attack(inputs, targets)
+      adv_input, std_logits, std_loss = attack(inputs, targets)
       adv_input = adv_input.to(device)
-      std_logits = model(inputs)
       adv_logits = model(adv_input)
       adv_loss = criterion(adv_logits, targets)
-      std_loss = criterion(std_logits, targets)
       total_loss = args.lambda_1 * std_loss + args.lambda_2 * adv_loss
       total_loss.backward()
       nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
@@ -126,12 +124,10 @@ def train(model, train_queue, criterion, optimizer, gen, attack_f, device, pop=N
       targets = targets.to(device)
       optimizer.zero_grad()
 
-      adv_input = attack(inputs, targets)
+      adv_input, std_logits, std_loss = attack(inputs, targets)
       adv_input = adv_input.to(device)
       adv_logits = model(adv_input)
-      std_logits = model(inputs)
       adv_loss = criterion(adv_logits, targets)
-      std_loss = criterion(std_logits, targets)
       total_loss = args.lambda_1 * std_loss + args.lambda_2 * adv_loss
       total_loss.backward()
       nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
@@ -183,14 +179,12 @@ class NAS(ElementwiseProblem):
       inputs = inputs.to(device)
       targets = targets.to(device)
 
-      adv_input = attack(inputs, targets)
+      adv_input, std_logits, std_loss = attack(inputs, targets)
       adv_input = adv_input.to(device)
 
       with torch.no_grad():
         adv_logits = model(adv_input)
-        std_logits = model(inputs)
         adv_loss = criterion(adv_logits, targets)
-        std_loss = criterion(std_logits, targets)
         total_loss = args.lambda_1 * std_loss + args.lambda_2 * adv_loss
 
       std_predicts = std_logits.argmax(dim=1)

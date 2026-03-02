@@ -5,13 +5,12 @@ import torch.nn.functional as F
 
 
 def fgsm_simple(model, x, y, eps):
-    device = next(model.parameters()).device
-    x_adv = x.detach().clone().to(device).float().requires_grad_(True)
-    std_logits = model(x_adv)
-    loss = F.cross_entropy(std_logits, y)
-    grad = torch.autograd.grad(loss, x_adv, retain_graph=False, create_graph=False)[0]
-    adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach()
-    return adv
+    assert x.requires_grad, "Input tensor must have requires_grad=True for fgsm_simple attack"
+    std_logits = model(x)
+    std_loss = F.cross_entropy(std_logits, y)
+    grad = torch.autograd.grad(std_loss, x, retain_graph=True, create_graph=False)[0]
+    adv = (x + eps * grad.sign()).clamp(0.0, 1.0).detach()
+    return adv, std_logits, std_loss
 
 class FGSMAttack:
     def __init__(self, eps=8/255):

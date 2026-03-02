@@ -80,9 +80,7 @@ class AdvRunManager(RunManager):
         ) as t:
             for i, (images, labels) in enumerate(data_loader):
                 images, labels = images.to(self.device), labels.to(self.device)
-                adv_images = attack(images, labels)
-                std_logits = net(images)
-                std_loss = self.test_criterion(std_logits, labels)
+                adv_images, std_logits, std_loss = attack(images, labels)
                 adv_logits = net(adv_images)
                 adv_loss = self.test_criterion(adv_logits, labels)
                 loss = std_loss * 0.5 + adv_loss * 0.5
@@ -201,10 +199,8 @@ class AdvRunManager(RunManager):
                         soft_logits = args.teacher_model(images).detach()
                         soft_label = F.softmax(soft_logits, dim=1)
 
-                adv_images = attack(images, target)
-                std_logits = self.net(images)
+                adv_images, std_logits, std_loss = attack(images, target)
                 # compute output
-                std_loss = self.train_criterion(std_logits, labels)
                 adv_output = self.net(adv_images)
                 adv_loss = self.train_criterion(adv_output, labels)
                 loss = std_loss * 0.5 + adv_loss * 0.5
