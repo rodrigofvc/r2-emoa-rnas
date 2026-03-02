@@ -85,6 +85,7 @@ def train(model, train_queue, criterion, optimizer, gen, attack_f, device, pop=N
       targets = targets.to(device)
       optimizer.zero_grad()
 
+      inputs.requires_grad = True
       adv_input, std_logits, std_loss = attack(inputs, targets)
       adv_input = adv_input.to(device)
       adv_logits = model(adv_input)
@@ -124,6 +125,7 @@ def train(model, train_queue, criterion, optimizer, gen, attack_f, device, pop=N
       targets = targets.to(device)
       optimizer.zero_grad()
 
+      inputs.requires_grad = True
       adv_input, std_logits, std_loss = attack(inputs, targets)
       adv_input = adv_input.to(device)
       adv_logits = model(adv_input)
@@ -179,6 +181,7 @@ class NAS(ElementwiseProblem):
       inputs = inputs.to(device)
       targets = targets.to(device)
 
+      inputs.requires_grad = True
       adv_input, std_logits, std_loss = attack(inputs, targets)
       adv_input = adv_input.to(device)
 

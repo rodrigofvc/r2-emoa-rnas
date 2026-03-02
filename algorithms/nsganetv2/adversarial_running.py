@@ -80,6 +80,7 @@ class AdvRunManager(RunManager):
         ) as t:
             for i, (images, labels) in enumerate(data_loader):
                 images, labels = images.to(self.device), labels.to(self.device)
+                images.requires_grad = True
                 adv_images, std_logits, std_loss = attack(images, labels)
                 adv_logits = net(adv_images)
                 adv_loss = self.test_criterion(adv_logits, labels)
@@ -198,7 +199,7 @@ class AdvRunManager(RunManager):
                     with torch.no_grad():
                         soft_logits = args.teacher_model(images).detach()
                         soft_label = F.softmax(soft_logits, dim=1)
-
+                images.requires_grad = True
                 adv_images, std_logits, std_loss = attack(images, target)
                 # compute output
                 adv_output = self.net(adv_images)
