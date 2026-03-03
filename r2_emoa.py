@@ -1,3 +1,4 @@
+import gc
 import time
 
 import numpy as np
@@ -145,7 +146,6 @@ def r2_emoa_rnas_oneshot(args, train_queue, valid_queue, model, criterion, optim
     return model, archive, archive_accuracy, archive_losses, statistics
 
 def get_model_from_individual(individual, args):
-    criterion = torch.nn.CrossEntropyLoss()
     if args.dataset == 'cifar10':
         n_classes = 10
     elif args.dataset == 'cifar100':
@@ -156,7 +156,7 @@ def get_model_from_individual(individual, args):
         C=args.init_channels,
         num_classes=n_classes,
         layers=args.layers,
-        criterion=criterion,
+        criterion=torch.nn.CrossEntropyLoss(),
         steps=args.steps,
         multiplier=args.multiplier,
         stem_multiplier=3,
@@ -168,6 +168,10 @@ def get_model_from_individual(individual, args):
     continuous_model.update_arch_parameters(discrete)
     discrete_genotype = continuous_model.genotype()
     individual.genotype = discrete_genotype
+    del continuous_model
+    gc.collect()
+    if args.device == torch.device(f'cuda:{args.gpu}') and args.synchronize:
+        torch.cuda.empty_cache()
     discrete_model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, discrete_genotype).to(args.device)
     optimizer = torch.optim.SGD(
         discrete_model.parameters(),
@@ -176,8 +180,7 @@ def get_model_from_individual(individual, args):
         weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
-    del continuous_model
-    return discrete_model, criterion, optimizer, scheduler
+    return discrete_model, optimizer, scheduler
 
 # R2 version where each architecture has its own weights (no supernet training). This is a baseline to compare with the supernet version.
 def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r2):
@@ -193,7 +196,8 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'),
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
     for i, individual in enumerate(pop):
-        model, criterion, optimizer, scheduler = get_model_from_individual(individual, args)
+        criterion = torch.nn.CrossEntropyLoss()
+        model, optimizer, scheduler = get_model_from_individual(individual, args)
         weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
         time_training = time.time()
         train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point, ideal_point, scheduler)
@@ -201,7 +205,11 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
         time_evaluation = time.time()
         eval_individual(individual, model, valid_queue, args, criterion, attack_f)
         print(f'Gen 0 Evaluation {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
-        #clean_individual(args.clean_gpu)
+        del model, optimizer, scheduler, criterion, weight_individual
+        gc.collect()
+        if args.device == torch.device(f'cuda:{args.gpu}') and args.synchronize:
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
     update_ref_points(pop, nadir_point, ideal_point)
 
     archive = archive_update_pq(archive, pop)
@@ -217,7 +225,8 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
         for i, individual in enumerate(mutation):
-            model, criterion, optimizer, scheduler = get_model_from_individual(individual, args)
+            model, optimizer, scheduler = get_model_from_individual(individual, args)
+            criterion = torch.nn.CrossEntropyLoss()
             weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
             time_training = time.time()
             train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point,
@@ -226,6 +235,11 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
             time_evaluation = time.time()
             eval_individual(individual, model, valid_queue, args, criterion, attack_f)
             print(f'Gen {generation + 1} Evaluation {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
+            del model, optimizer, scheduler, criterion, weight_individual
+            gc.collect()
+            if args.device == torch.device(f'cuda:{args.gpu}') and args.synchronize:
+                torch.cuda.empty_cache()
+                torch.cuda.synchronize()
         architectures_evaluated += len(pop)
         update_ref_points(pop, nadir_point, ideal_point)
 
