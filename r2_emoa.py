@@ -72,8 +72,12 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, att
     else:
         epochs = args.epochs_train_supernet
     r2_weights_pop = r2_weights[len(pop)]
+    r2_weights_pop = torch.tensor(r2_weights_pop, device=args.device, dtype=torch.float32)
     z_ref_stch = torch.zeros(4, device=args.device)
     assert r2_weights_pop.shape[0] == len(pop)
+    model_flops, model_parameters = utils.get_model_metrics(model.genotype(), model)
+    model_flops, model_parameters = torch.tensor(float(model_flops), device=args.device), torch.tensor(
+        float(model_parameters), device=args.device)
     for epoch in range(epochs):
         for n_batch, (input, target) in enumerate(train_queue):
             individual = pop[n_batch % args.n_population]
@@ -83,7 +87,6 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, att
             discrete = discretize(individual_architect, model.genotype(), args.device)
             model.update_arch_parameters(discrete)
             time_stamp = time.time()
-            model_flops, model_parameters = utils.get_model_metrics(model.genotype(), model)
             std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, args, model_flops, model_parameters, individual_r2_weights, z_ref_stch, ideal_point, nadir_point)
             if n_batch % args.report_freq == 0:
                 print(f'>>>> Gen {gen}/{args.generations} | Epoch {epoch}/{epochs} | Batch {n_batch}/{len(train_queue)} | Loss {loss:.4f} | Std Acc {std_acc:.2f}% | Adv Acc {adv_acc:.2f}% | Time {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_stamp))} (HH:MM:SS)')
@@ -191,13 +194,14 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
     for i, individual in enumerate(pop):
         model, criterion, optimizer, scheduler = get_model_from_individual(individual, args)
-        weight_individual = weights_r2[len(pop)][i]
+        weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
         time_training = time.time()
         train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point, ideal_point, scheduler)
         print(f'Gen 0 Training {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
         time_evaluation = time.time()
         eval_individual(individual, model, valid_queue, args, criterion, attack_f)
         print(f'Gen 0 Evaluation {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
+        #clean_individual(args.clean_gpu)
     update_ref_points(pop, nadir_point, ideal_point)
 
     archive = archive_update_pq(archive, pop)
@@ -214,7 +218,7 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
 
         for i, individual in enumerate(mutation):
             model, criterion, optimizer, scheduler = get_model_from_individual(individual, args)
-            weight_individual = weights_r2[len(pop)][i]
+            weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
             time_training = time.time()
             train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point,
                              ideal_point, scheduler)

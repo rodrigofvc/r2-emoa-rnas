@@ -110,9 +110,9 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
     return std_accuracy * 100.0, adv_accuracy * 100.0, total_loss_mean
 
 def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, r2_weights, z_ref_stch, nadir_point, ideal_point):
-    losses = torch.stack([std_loss, adv_loss, torch.tensor(float(flops), device=std_loss.device), torch.tensor(float(params), device=std_loss.device)])
+    losses = torch.stack([std_loss, adv_loss, flops, params])
     values = torch.abs(losses - ideal_point) / torch.clamp(torch.abs(nadir_point - ideal_point), 1e-6)
-    stch_value = mu * torch.logsumexp(torch.tensor(r2_weights, dtype=torch.float32).to(std_loss.device) * (values - z_ref_stch) / mu, dim=-1)
+    stch_value = mu * torch.logsumexp(r2_weights * (values - z_ref_stch) / mu, dim=-1)
     return stch_value
 
 def train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point, ideal_point, scheduler):
@@ -120,6 +120,8 @@ def train_individual(model, train_queue, criterion, optimizer, attack_f, args, w
     attack = attack_f(model)
     z_ref_stch = torch.zeros(4, device=args.device)
     model_flops, model_parameters = utils.get_model_metrics(None, model, discrete=True)
+    model_flops, model_parameters = torch.tensor(float(model_flops), device=args.device), torch.tensor(
+        float(model_parameters), device=args.device)
     model.train()
     time_stamp = time.time()    
     for epoch in range(args.epochs_train_individual):
