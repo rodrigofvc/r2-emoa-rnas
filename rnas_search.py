@@ -13,6 +13,7 @@ from micro_space.model_search import Network
 from adversarial import get_attack_function
 from micro_space.genotypes import PRIMITIVES
 
+torch.backends.cudnn.benchmark = False
 
 """
  python3 rnas_search.py --seed 18906049 --algorithm r2-emoa-one-shot --dataset cifar10 --batch_size 32  \
