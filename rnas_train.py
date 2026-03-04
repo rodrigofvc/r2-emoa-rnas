@@ -110,9 +110,17 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
     return std_accuracy * 100.0, adv_accuracy * 100.0, total_loss_mean
 
 def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, r2_weights, z_ref_stch, nadir_point, ideal_point):
-    losses = torch.stack([std_loss, adv_loss, flops, params])
-    values = torch.abs(losses - ideal_point) / torch.clamp(torch.abs(nadir_point - ideal_point), 1e-6)
-    stch_value = mu * torch.logsumexp(r2_weights * (values - z_ref_stch) / mu, dim=-1)
+    losses_grad = torch.stack([std_loss, adv_loss])
+    losses_const = torch.stack([flops, params]).detach()
+    losses = torch.cat([losses_grad, losses_const])
+
+    ideal = ideal_point.detach()
+    nadir = nadir_point.detach()
+    z_ref = z_ref_stch.detach()
+    weights = r2_weights.detach()
+
+    values = torch.abs(losses - ideal) / torch.clamp(torch.abs(nadir - ideal), 1e-6)
+    stch_value = mu * torch.logsumexp(weights * (values - z_ref) / mu, dim=-1)
     return stch_value
 
 def train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point, ideal_point, scheduler):
