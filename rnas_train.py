@@ -145,20 +145,6 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
 
     total_loss = smooth_tchebycheff_sc_loss(args.mu, natural_loss, adv_loss, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point)
 
-    print("total_loss device:", total_loss.device)
-
-    for name, tensor in [
-        ("loss_std", natural_loss),
-        ("loss_adv", adv_loss),
-        ("model_flops", model_flops),
-        ("model_parameters", model_parameters),
-        ("z_ref_stch", z_ref_stch),
-        ("nadir_point", nadir_point),
-        ("ideal_point", ideal_point),
-        ("weight_individual", r2_weights),
-    ]:
-        print(name, tensor.device, tensor.requires_grad)
-
     total_loss.backward()
     nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
     optimizer.step()
