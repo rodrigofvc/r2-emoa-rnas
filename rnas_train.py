@@ -147,15 +147,17 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
 
     print("total_loss device:", total_loss.device)
 
-    for name, val in [
+    for name, tensor in [
+        ("loss_std", natural_loss),
+        ("loss_adv", adv_loss),
         ("model_flops", model_flops),
         ("model_parameters", model_parameters),
         ("z_ref_stch", z_ref_stch),
         ("nadir_point", nadir_point),
         ("ideal_point", ideal_point),
+        ("weight_individual", r2_weights),
     ]:
-        if isinstance(val, torch.Tensor):
-            print(name, val.device)
+        print(name, tensor.device, tensor.requires_grad)
 
     total_loss.backward()
     nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
