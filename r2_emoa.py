@@ -170,7 +170,7 @@ def get_model_from_individual(individual, args):
     individual.genotype = discrete_genotype
     del continuous_model
     gc.collect()
-    if args.device == torch.device(f'cuda:{args.gpu}') and args.synchronize:
+    if args.device.type == 'cuda' and args.synchronize:
         torch.cuda.empty_cache()
     discrete_model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, discrete_genotype).to(args.device)
     optimizer = torch.optim.SGD(
@@ -207,7 +207,7 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
         print(f'Gen 0 Evaluation {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
         del model, optimizer, scheduler, criterion, weight_individual
         gc.collect()
-        if args.device == torch.device(f'cuda:{args.gpu}') and args.synchronize:
+        if args.device.type == 'cuda' and args.synchronize:
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
     update_ref_points(pop, nadir_point, ideal_point)
@@ -237,10 +237,10 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
             print(f'Gen {generation + 1} Evaluation {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
             del model, optimizer, scheduler, criterion, weight_individual
             gc.collect()
-            if args.device == torch.device(f'cuda:{args.gpu}') and args.synchronize:
+            if args.device.type == 'cuda' and args.synchronize:
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
-        architectures_evaluated += len(pop)
+        architectures_evaluated += len(mutation)
         update_ref_points(pop, nadir_point, ideal_point)
 
         archive = archive_update_pq(archive, pop + mutation)
