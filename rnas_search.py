@@ -215,6 +215,7 @@ if __name__ == '__main__':
     parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
     parser.add_argument('--grad_clip', type=float, default=5.0, help='gradient clipping')
     parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
+    parser.add_argument('--synchronize', type=bool, default=False, help='synchronize CUDA operations or not')
     args = parser.parse_args()
 
     print("Running with config:")

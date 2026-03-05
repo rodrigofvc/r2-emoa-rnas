@@ -1,5 +1,5 @@
 import numpy as np
-
+import torch
 
 def normalize_objectives(population):
     n_obj = len(population[0].F)
@@ -54,20 +54,10 @@ def get_dynamic_r2_reference(population):
     return z_ref
 
 def update_ref_points(population, nadir_point, ideal_point):
+    device = nadir_point.device
+    dtype = nadir_point.dtype
+
     for ind in population:
-        if nadir_point[0] < ind.F[0]:
-            nadir_point[0] = ind.F[0]
-        if nadir_point[1] < ind.F[1]:
-            nadir_point[1] = ind.F[1]
-        if nadir_point[2] < ind.F[2]:
-            nadir_point[2] = ind.F[2]
-        if nadir_point[3] < ind.F[3]:
-            nadir_point[3] = ind.F[3]
-        if ideal_point[0] > ind.F[0]:
-            ideal_point[0] = ind.F[0]
-        if ideal_point[1] > ind.F[1]:
-            ideal_point[1] = ind.F[1]
-        if ideal_point[2] > ind.F[2]:
-            ideal_point[2] = ind.F[2]
-        if ideal_point[3] > ind.F[3]:
-            ideal_point[3] = ind.F[3]
+        F = torch.tensor(ind.F, device=device, dtype=dtype)
+        nadir_point[:] = torch.maximum(nadir_point, F)
+        ideal_point[:] = torch.minimum(ideal_point, F)
