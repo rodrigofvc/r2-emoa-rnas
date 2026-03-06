@@ -178,6 +178,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Running R2-EMOA for RNAS")
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument('--algorithm', type=str, choices=['r2-emoa', 'r2-emoa-one-shot'], help='algorithm to run')
+    parser.add_argument('--search_space', type=str, default='continuous', choices='[continuous, discrete]', help='search space to use')
     parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'], help='dataset to use')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--n_population', type=int, default=40, help='population size')
@@ -206,8 +207,8 @@ if __name__ == '__main__':
     parser.add_argument('--init_channels', type=int, default=16, help='init channels')
     parser.add_argument('--reduction', type=bool, default=True, help='use reduction cell or not')
     parser.add_argument('--layers', type=int, default=5, help='total number of layers (cells)')
-    parser.add_argument('--steps', type=int, default=6, help='number of steps in one cell')
-    parser.add_argument('--multiplier', type=int, default=6, help='number of multiplier for number of channels')
+    parser.add_argument('--steps', type=int, default=6, help='number of steps in one cell (intern nodes except input and output)')
+    parser.add_argument('--multiplier', type=int, default=6, help='number of multiplier for number of channels (intern nodes to concat)')
     parser.add_argument('--attack', type=str, default='FGSM', help='adversarial attack to use')
     parser.add_argument('--fgsm_eps', type=str, default="8/255", help='attack epsilon')
     parser.add_argument('--cutout', type=bool, default=False, help='use cutout or not')
@@ -237,6 +238,8 @@ if __name__ == '__main__':
     args.save_path_final_architect = results_dir
 
     if args.algorithm == 'r2-emoa-one-shot':
+        # The search space is continuous because we are optimizing the architecture parameters (alphas) of the supernet
+        args.search_space = 'continuous'
         model, criterion, optimizer, scheduler, train_queue, valid_queue, attack_f, weights_r2 = prepare_args_supernet(args)
         supernet, archive, archive_accuracy, archive_losses, statistics = r2_emoa_rnas_oneshot(
             model=model,

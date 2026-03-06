@@ -26,6 +26,20 @@ def tournament_selection(pop, n_select, tournament_size=5):
             winners.append(winner)
     return winners
 
+def point_crossover(parents, n_childs, prob_cross):
+    offsprings = []
+    while len(offsprings) < n_childs:
+        parent1 = random.choice(parents)
+        parent2 = random.choice(parents)
+        if np.random.rand() < prob_cross and not np.array_equal(parent1.X, parent2.X):
+            point = random.randint(1, parent1.X.shape[0] - 1)
+            child1_X = np.concatenate((parent1.X[:point], parent2.X[point:]))
+            child2_X = np.concatenate((parent2.X[:point], parent1.X[point:]))
+            offsprings.append(Individual(X=child1_X.copy(), k=parent1.k, search_space='discrete'))
+            if len(offsprings) < n_childs:
+                offsprings.append(Individual(X=child2_X.copy(), k=parent2.k, search_space='discrete'))
+    return offsprings
+
 def binary_crossover(pop, n_childs, eta, prob_cross):
     offsprings = []
     n_var = pop[0].X.shape[0]
@@ -43,9 +57,9 @@ def binary_crossover(pop, n_childs, eta, prob_cross):
                     beta = (1 / (2 * (1 - u))) ** (1 / (eta + 1))
                 child1_X[j] = 0.5 * ((1 + beta) * parent1.X[j] + (1 - beta) * parent2.X[j])
                 child2_X[j] = 0.5 * ((1 - beta) * parent1.X[j] + (1 + beta) * parent2.X[j])
-            offsprings.append(Individual(X=child1_X.copy(), k=parent1.k))
+            offsprings.append(Individual(X=child1_X.copy(), k=parent1.k, search_space='continuous'))
             if len(offsprings) < n_childs:
-                offsprings.append(Individual(X=child2_X.copy(), k=parent2.k))
+                offsprings.append(Individual(X=child2_X.copy(), k=parent2.k, search_space='continuous'))
     return offsprings
 
 def polynomial_mutation(pop, prob_mut, eta):

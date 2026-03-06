@@ -5,22 +5,38 @@ import numpy as np
 
 import utils
 from archivers import archive_update_pq, archive_update_pq_accuracy, dominates
+from micro_space import micro_encoding
+from micro_space.micro_encoding import PRIMITIVES
 from micro_space.model_search import discretize, Network
 from micro_space.model import NetworkCIFAR
 from individual import Individual
 from rnas_train import run_batch_epoch, train_individual, infer
-from evolutionary import unpack_alphas, tournament_selection, binary_crossover, polynomial_mutation
+from evolutionary import unpack_alphas, tournament_selection, binary_crossover, polynomial_mutation, point_crossover
 import torch
 
 
 from indicators import contribution_r2, update_ref_points
 
 
-def initial_population(n_population, alphas_dim, k):
+def initial_population(n_population, alphas_dim, k, args):
     individuals = []
     for i in range(n_population):
-        flattened = torch.rand(alphas_dim[0]*alphas_dim[1]*2).requires_grad_(False).to('cpu')
-        individuals.append(Individual(X=flattened, k=k))
+        if args.search_space == 'discrete':
+            # Each group of 4 integers represents two operations for a given node (op1, from_node1, op2, from_node2)
+            n_var = 4 * args.steps * 2
+            n_ops = len(PRIMITIVES)
+            flattened = np.zeros(n_var, dtype=np.int32)
+            h = 1
+            for b in range(0, n_var // 2, 4):
+                flattened[b] = np.random.randint(0, n_ops)
+                flattened[b+1] = np.random.randint(0, h + 1)
+                flattened[b+2] = np.random.randint(0, n_ops)
+                flattened[b+3] = np.random.randint(0, h + 1)
+                h += 1
+            flattened[n_var // 2:] = flattened[:n_var // 2]
+        else:
+            flattened = torch.rand(alphas_dim[0]*alphas_dim[1]*2).requires_grad_(False).to('cpu')
+        individuals.append(Individual(X=flattened, k=k, search_space=args.search_space))
     return individuals
 
 def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, device, statisctics):
@@ -100,7 +116,7 @@ def r2_emoa_rnas_oneshot(args, train_queue, valid_queue, model, criterion, optim
     archive_losses = []
     architectures_evaluated = 0
     time_search = time.time()
-    pop = initial_population(args.n_population, model.alphas_dim, args.objectives)
+    pop = initial_population(args.n_population, model.alphas_dim, args.objectives, args)
     print(f">>>> Initial population of size {len(pop)} created.")
     scaler = None
     nadir_point = torch.ones(4, device=args.device)
@@ -152,35 +168,40 @@ def get_model_from_individual(individual, args):
         n_classes = 100
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
-    continuous_model = Network(
-        C=args.init_channels,
-        num_classes=n_classes,
-        layers=args.layers,
-        criterion=torch.nn.CrossEntropyLoss(),
-        steps=args.steps,
-        multiplier=args.multiplier,
-        stem_multiplier=3,
-        device=args.device,
-    ).to(args.device)
-    individual_architect = unpack_alphas(individual.X, continuous_model.alphas_dim, args)
-    continuous_model.update_arch_parameters(individual_architect)
-    discrete = discretize(individual_architect, continuous_model.genotype(), args.device)
-    continuous_model.update_arch_parameters(discrete)
-    discrete_genotype = continuous_model.genotype()
-    individual.genotype = discrete_genotype
-    del continuous_model
+    if args.search_space == 'continuous':
+        continuous_model = Network(
+            C=args.init_channels,
+            num_classes=n_classes,
+            layers=args.layers,
+            criterion=torch.nn.CrossEntropyLoss(),
+            steps=args.steps,
+            multiplier=args.multiplier,
+            stem_multiplier=3,
+            device=args.device,
+        ).to(args.device)
+        individual_architect = unpack_alphas(individual.X, continuous_model.alphas_dim, args)
+        continuous_model.update_arch_parameters(individual_architect)
+        discrete = discretize(individual_architect, continuous_model.genotype(), args.device)
+        continuous_model.update_arch_parameters(discrete)
+        genotype = continuous_model.genotype()
+        del continuous_model
+    else:
+        genome = micro_encoding.convert(individual.X)
+        genotype = micro_encoding.decode(genome, args.steps, args.multiplier)
+    individual.genotype = genotype
+
     gc.collect()
     if args.device.type == 'cuda' and args.synchronize:
         torch.cuda.empty_cache()
-    discrete_model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, discrete_genotype).to(args.device)
+    model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype).to(args.device)
     optimizer = torch.optim.SGD(
-        discrete_model.parameters(),
+        model.parameters(),
         args.learning_rate,
         momentum=args.momentum,
         weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
-    return discrete_model, optimizer, scheduler
+    return model, optimizer, scheduler
 
 # R2 version where each architecture has its own weights (no supernet training). This is a baseline to compare with the supernet version.
 def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r2):
@@ -191,7 +212,7 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
     nadir_point = torch.ones(4, device=args.device)
     ideal_point = torch.zeros(4, device=args.device)
     time_search = time.time()
-    pop = initial_population(args.n_population, alphas_dim, args.objectives)
+    pop = initial_population(args.n_population, alphas_dim, args.objectives, args)
     print(f">>>> Initial population of size {len(pop)} created.")
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'),
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
@@ -221,7 +242,10 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
         time_stamp_gen = time.time()
 
         parents = tournament_selection(pop, n_select=len(pop) // 2, tournament_size=5)
-        offsprings = binary_crossover(parents, n_childs=len(pop), eta=args.eta_cross, prob_cross=args.prob_cross)
+        if args.search_space == 'discrete':
+            offsprings = point_crossover(parents, n_childs=len(pop), prob_cross=args.prob_cross)
+        else:
+            offsprings = binary_crossover(parents, n_childs=len(pop), eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
         for i, individual in enumerate(mutation):
