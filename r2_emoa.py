@@ -253,17 +253,27 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
             criterion = torch.nn.CrossEntropyLoss()
             weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
             time_training = time.time()
-            train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point,
-                             ideal_point, scheduler)
-            print(f'Gen {generation + 1} Training {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
-            time_evaluation = time.time()
-            eval_individual(individual, model, valid_queue, args, criterion, attack_f)
-            print(f'Gen {generation + 1} Evaluation {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
-            del model, optimizer, scheduler, criterion, weight_individual
+            try:
+                train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point,
+                                 ideal_point, scheduler)
+                print(f'Gen {generation + 1} Training {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
+                time_evaluation = time.time()
+                eval_individual(individual, model, valid_queue, args, criterion, attack_f)
+                print(f'Gen {generation + 1} Evaluation {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
+            except RuntimeError as e:
+                print(f"Error training/evaluating individual {i} in generation {generation + 1}: {e}")
+                individual.std_acc = 0
+                individual.adv_acc = 0
+                individual.F[args.std_loss_index] = float('inf')
+                individual.F[args.adv_loss_index] = float('inf')
+                individual.F[args.flops_index] = 1000
+                individual.F[args.params_index] = 1000
+            finally:
+                del model, optimizer, scheduler, criterion, weight_individual
             gc.collect()
             if args.device.type == 'cuda' and args.synchronize:
                 torch.cuda.empty_cache()
-                torch.cuda.synchronize()
+                #torch.cuda.synchronize()
         architectures_evaluated += len(mutation)
         update_ref_points(pop, nadir_point, ideal_point)
 
