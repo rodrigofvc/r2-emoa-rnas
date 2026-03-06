@@ -1,5 +1,6 @@
 import argparse
 import ssl
+import random
 
 import numpy as np
 import torch
@@ -224,10 +225,11 @@ if __name__ == '__main__':
         print(f"{key}: {value}")
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
+    random.seed(args.seed)
 
     if torch.cuda.is_available():
         torch.backends.cudnn.benchmark = False
-        torch.backends.cudnn.deterministic = False
+        torch.backends.cudnn.deterministic = True
         torch.cuda.manual_seed(args.seed)
         torch.backends.cudnn.enabled = True
 
