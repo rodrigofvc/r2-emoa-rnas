@@ -228,7 +228,7 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
             eval_individual(individual, model, valid_queue, args, criterion, attack_f)
             print(f'Gen 0 Evaluation {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
         except RuntimeError as e:
-            print(f"Error training/evaluating individual {i} in generation 0: {e}")
+            print(f"Error training/evaluating individual {i} in generation 0: {e.__str__()}")
             individual.std_acc = 0
             individual.adv_acc = 0
             individual.F[args.std_loss_index] = float('inf')

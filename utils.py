@@ -227,40 +227,41 @@ class Cutout(object):
 
     def __call__(self, img):
         h, w = img.size(1), img.size(2)
-        mask = np.ones((h, w), np.float32)
-        y = np.random.randint(h)
-        x = np.random.randint(w)
 
-        y1 = np.clip(y - self.length // 2, 0, h)
-        y2 = np.clip(y + self.length // 2, 0, h)
-        x1 = np.clip(x - self.length // 2, 0, w)
-        x2 = np.clip(x + self.length // 2, 0, w)
+        y = torch.randint(0, h, (1,)).item()
+        x = torch.randint(0, w, (1,)).item()
 
-        mask[y1: y2, x1: x2] = 0.
-        mask = torch.from_numpy(mask)
-        mask = mask.expand_as(img)
-        img *= mask
+        y1 = max(0, y - self.length // 2)
+        y2 = min(h, y + self.length // 2)
+        x1 = max(0, x - self.length // 2)
+        x2 = min(w, x + self.length // 2)
+
+        mask = torch.ones((h, w), dtype=img.dtype, device=img.device)
+        mask[y1:y2, x1:x2] = 0
+        img = img * mask.expand_as(img)
+
         return img
 
 def data_transforms_cifar10(args):
-  CIFAR_MEAN = [0.49139968, 0.48215827, 0.44653124]
-  CIFAR_STD = [0.24703233, 0.24348505, 0.26158768]
 
-  train_transform = transforms.Compose([
-    transforms.RandomCrop(32, padding=4),
-    transforms.RandomHorizontalFlip(),
-    transforms.ToTensor(),
-    transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
-  ])
+    CIFAR_MEAN = [0.49139968, 0.48215827, 0.44653124]
+    CIFAR_STD = [0.24703233, 0.24348505, 0.26158768]
 
-  if args.cutout:
-    train_transform.transforms.append(Cutout(args.cutout_length))
-
-  valid_transform = transforms.Compose([
-    transforms.ToTensor(),
-    transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+    train_transform = transforms.Compose([
+        transforms.RandomCrop(32, padding=4),
+        transforms.RandomHorizontalFlip(),
+        transforms.ToTensor(),
+        transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
     ])
-  return train_transform, valid_transform
+
+    if args.cutout:
+        train_transform.transforms.append(Cutout(args.cutout_length))
+
+    valid_transform = transforms.Compose([
+        transforms.ToTensor(),
+        transforms.Normalize(CIFAR_MEAN, CIFAR_STD),
+        ])
+    return train_transform, valid_transform
 
 # Returns the flops and number of parameters of a model given its genotype
 def get_model_metrics(genotype, model, discrete=False):
@@ -269,7 +270,7 @@ def get_model_metrics(genotype, model, discrete=False):
         discretized_model = NetworkCIFAR(model.C, model.num_classes, model.layers, auxiliary=False, genotype=genotype)
     else:
         discretized_model = model
-    model.eval()
+    discretized_model.eval()
     x = torch.randn(1, 3, 32, 32).to(next(discretized_model.parameters()).device)
     macs, params = profile(discretized_model, inputs=(x,), verbose=False)
     flops = (2 * macs) / 1e6
