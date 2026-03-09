@@ -3,6 +3,7 @@ import json
 import lzma
 import time
 import matplotlib.pyplot as plt
+#from ultralytics.thop import profile
 from thop import profile
 import numpy as np
 import torch
@@ -274,9 +275,10 @@ def get_model_metrics(genotype, model, discrete=False):
     model_device = next(discretized_model.parameters()).device
     dtype = next(discretized_model.parameters()).dtype
     # move the model to CPU, as GPU computation might be unstable for some architectures
-    discretized_model.to('cpu')
+    discretized_model = discretized_model.to('cpu')
     x = torch.randn(1, 3, 32, 32, device='cpu')
-    macs, params = profile(discretized_model, inputs=(x,), verbose=False)
+    with torch.no_grad():
+        macs, params = profile(discretized_model, inputs=(x,), verbose=False)
     flops = (2 * macs) / 1e6
     params = params / 1e6
     discretized_model.to(model_device, dtype=dtype)
