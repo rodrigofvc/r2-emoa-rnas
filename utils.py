@@ -273,15 +273,11 @@ def get_model_metrics(genotype, model, discrete=False):
         discretized_model = model
     discretized_model.eval()
     model_device = next(discretized_model.parameters()).device
-    dtype = next(discretized_model.parameters()).dtype
-    # move the model to CPU, as GPU computation might be unstable for some architectures
-    discretized_model = discretized_model.to('cpu')
-    x = torch.randn(1, 3, 32, 32, device='cpu')
+    x = torch.randn(1, 3, 32, 32, device=model_device)
     with torch.no_grad():
         macs, params = profile(discretized_model, inputs=(x,), verbose=False)
     flops = (2 * macs) / 1e6
     params = params / 1e6
-    discretized_model.to(model_device, dtype=dtype)
     return round(flops, 4), round(params, 4)
 
 
