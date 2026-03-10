@@ -274,12 +274,10 @@ def get_model_metrics(genotype, model, discrete=False):
         discretized_model = model
     discretized_model.eval()
     model_device = next(discretized_model.parameters()).device
-    input_size = (1, 3, 32, 32)
-    model_stats = summary(model, input_size=input_size, verbose=0, device=model_device)
+    input_data = torch.randn(1, 3, 32, 32).to(model_device)
+    model_stats = summary(discretized_model, input_data=input_data, verbose=0, device=None, depth=3)
     macs = model_stats.total_mult_adds
     params = model_stats.total_params
-    #with torch.no_grad():
-    #    macs, params = profile(discretized_model, inputs=(x,), verbose=False)
     flops = (2 * macs) / 1e6
     params = params / 1e6
     return round(flops, 4), round(params, 4)
