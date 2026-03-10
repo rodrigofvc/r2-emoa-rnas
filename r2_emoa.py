@@ -1,5 +1,6 @@
 import gc
 import time
+from collections import defaultdict
 
 import numpy as np
 
@@ -203,6 +204,18 @@ def get_model_from_individual(individual, args):
         optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
     return model, optimizer, scheduler
 
+def sanity_check_individual(model):
+    seen = defaultdict(list)
+    for name, module in model.named_modules():
+        seen[id(module)].append(name)
+
+    for module_id, names in seen.items():
+        if len(names) > 1:
+            print("Shared module detected:")
+            for n in names:
+                print("   ", n)
+            raise RuntimeError("Shared module detected.")
+
 # R2 version where each architecture has its own weights (no supernet training). This is a baseline to compare with the supernet version.
 def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r2):
     archive = []
@@ -222,6 +235,7 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
         weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
         time_training = time.time()
         try:
+            sanity_check_individual(model)
             train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point, ideal_point, scheduler)
             print(f'Gen 0 Training {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
             time_evaluation = time.time()
