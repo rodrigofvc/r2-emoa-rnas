@@ -66,11 +66,6 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
     return len(pop)
 
 def eval_individual(individual, model, valid_queue, args, criterion, attack_f):
-    if args.device == torch.device("mps"):
-        # MPS does not support float64
-        model.to(args.device, dtype=torch.float32)
-    else:
-        model.to(args.device)
     attack = attack_f(model)
     std_acc, adv_acc, std_loss, adv_loss = infer(valid_queue, model, criterion, attack, args)
     individual.std_acc = std_acc

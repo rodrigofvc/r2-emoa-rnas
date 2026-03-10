@@ -124,7 +124,6 @@ def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, r2_weights
     return stch_value
 
 def train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point, ideal_point, scheduler):
-    model.to(args.device)
     attack = attack_f(model)
     z_ref_stch = torch.zeros(4, device=args.device)
     model_flops, model_parameters = utils.get_model_metrics(None, model, discrete=True)
