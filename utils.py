@@ -4,7 +4,8 @@ import lzma
 import time
 import matplotlib.pyplot as plt
 #from ultralytics.thop import profile
-from thop import profile
+#from thop import profile
+from torchinfo import summary
 import numpy as np
 import torch
 from pymoo.indicators.hv import HV
@@ -273,9 +274,12 @@ def get_model_metrics(genotype, model, discrete=False):
         discretized_model = model
     discretized_model.eval()
     model_device = next(discretized_model.parameters()).device
-    x = torch.randn(1, 3, 32, 32, device=model_device)
-    with torch.no_grad():
-        macs, params = profile(discretized_model, inputs=(x,), verbose=False)
+    input_size = (1, 3, 32, 32)
+    model_stats = summary(model, input_size=input_size, verbose=0, device=model_device)
+    macs = model_stats.total_mult_adds
+    params = model_stats.total_params
+    #with torch.no_grad():
+    #    macs, params = profile(discretized_model, inputs=(x,), verbose=False)
     flops = (2 * macs) / 1e6
     params = params / 1e6
     return round(flops, 4), round(params, 4)
