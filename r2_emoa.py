@@ -249,12 +249,12 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
             individual.F[args.adv_loss_index] = float('inf')
             individual.F[args.flops_index] = 1000
             individual.F[args.params_index] = 1000
-        finally:
-            del model, optimizer, scheduler, criterion, weight_individual
-        gc.collect()
-        if args.device.type == 'cuda' and args.synchronize:
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
+        #finally:
+        #    del model, optimizer, scheduler, criterion, weight_individual
+        #gc.collect()
+        #if args.device.type == 'cuda' and args.synchronize:
+        #    torch.cuda.empty_cache()
+        #    torch.cuda.synchronize()
     update_ref_points(pop, nadir_point, ideal_point)
 
     archive = archive_update_pq(archive, pop)
@@ -292,12 +292,12 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
                 individual.F[args.adv_loss_index] = float('inf')
                 individual.F[args.flops_index] = 1000
                 individual.F[args.params_index] = 1000
-            finally:
-                del model, optimizer, scheduler, criterion, weight_individual
-            gc.collect()
-            if args.device.type == 'cuda' and args.synchronize:
-                torch.cuda.empty_cache()
-                #torch.cuda.synchronize()
+            #finally:
+            #    del model, optimizer, scheduler, criterion, weight_individual
+            #gc.collect()
+            #if args.device.type == 'cuda' and args.synchronize:
+            #    torch.cuda.empty_cache()
+            #    torch.cuda.synchronize()
         architectures_evaluated += len(mutation)
         update_ref_points(pop, nadir_point, ideal_point)
 
