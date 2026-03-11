@@ -37,8 +37,9 @@ def add_flops_counting_methods(net_main_module):
     net_main_module.reset_flops_count()
 
     # Adding variables necessary for masked flops computation
-    net_main_module.apply(add_flops_mask_variable_or_reset)
-
+    #net_main_module.apply(add_flops_mask_variable_or_reset)
+    for m in net_main_module.modules():
+        add_flops_mask_variable_or_reset(m)
     return net_main_module
 
 
@@ -70,7 +71,13 @@ def start_flops_count(self):
 
     """
     add_batch_counter_hook_function(self)
-    self.apply(add_flops_counter_hook_function)
+    #self.apply(add_flops_counter_hook_function)
+    for name, module in self.named_modules():
+        try:
+            if is_supported_instance(module):
+                add_flops_counter_hook_function(module)
+        except Exception:
+            continue
 
 
 def stop_flops_count(self):
@@ -83,8 +90,12 @@ def stop_flops_count(self):
 
     """
     remove_batch_counter_hook_function(self)
-    self.apply(remove_flops_counter_hook_function)
-
+    #self.apply(remove_flops_counter_hook_function)
+    for module in self.modules():
+            try:
+                remove_flops_counter_hook_function(module)
+            except:
+                continue
 
 def reset_flops_count(self):
     """
@@ -95,7 +106,9 @@ def reset_flops_count(self):
 
     """
     add_batch_counter_variables_or_reset(self)
-    self.apply(add_flops_counter_variable_or_reset)
+    for m in self.modules():
+        add_flops_counter_variable_or_reset(m)
+    #self.apply(add_flops_counter_variable_or_reset)
 
 
 def add_flops_mask(module, mask):
@@ -115,6 +128,10 @@ def is_supported_instance(module):
                            torch.nn.LeakyReLU, torch.nn.ReLU6, torch.nn.Linear, \
                            torch.nn.MaxPool2d, torch.nn.AvgPool2d, torch.nn.BatchNorm2d, \
                            torch.nn.Upsample, nn.AdaptiveMaxPool2d, nn.AdaptiveAvgPool2d)):
+        return True
+
+    classname = module.__class__.__name__
+    if classname in ['DilConv', 'SepConv', 'ReLUConvBN', 'FactorizedReduce']:
         return True
 
     return False
@@ -226,6 +243,39 @@ def add_flops_counter_variable_or_reset(module):
 
 
 def add_flops_counter_hook_function(module):
+    if is_supported_instance(module):
+        if hasattr(module, '__flops_handle__'):
+            return
+
+        if len(list(module.parameters())) == 0 and len(list(module.buffers())) == 0:
+            if not isinstance(module, (nn.ReLU, nn.MaxPool2d, nn.AvgPool2d, nn.Upsample)):
+                return
+
+        try:
+            if isinstance(module, torch.nn.Conv2d):
+                handle = module.register_forward_hook(conv_flops_counter_hook)
+            elif isinstance(module, (torch.nn.ReLU, torch.nn.PReLU, torch.nn.ELU, \
+                                     torch.nn.LeakyReLU, torch.nn.ReLU6)):
+                handle = module.register_forward_hook(relu_flops_counter_hook)
+            elif isinstance(module, torch.nn.Linear):
+                handle = module.register_forward_hook(linear_flops_counter_hook)
+            elif isinstance(module, (torch.nn.AvgPool2d, torch.nn.MaxPool2d, nn.AdaptiveMaxPool2d, \
+                                     nn.AdaptiveAvgPool2d)):
+                handle = module.register_forward_hook(pool_flops_counter_hook)
+            elif isinstance(module, torch.nn.BatchNorm2d):
+                handle = module.register_forward_hook(bn_flops_counter_hook)
+            elif isinstance(module, torch.nn.Upsample):
+                handle = module.register_forward_hook(upsample_flops_counter_hook)
+            else:
+                handle = module.register_forward_hook(empty_flops_counter_hook)
+
+            object.__setattr__(module, '__flops_handle__', handle)
+
+        except Exception:
+            pass
+
+
+def add_flops_counter_hook_function_dep(module):
     if is_supported_instance(module):
         if hasattr(module, '__flops_handle__'):
             return
