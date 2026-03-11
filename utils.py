@@ -8,7 +8,8 @@ import matplotlib.pyplot as plt
 #from torchinfo import summary
 import numpy as np
 import torch
-from fvcore.nn import FlopCountAnalysis, parameter_count
+#from fvcore.nn import FlopCountAnalysis, parameter_count
+from torch import nn
 from pymoo.indicators.hv import HV
 import torchvision.transforms as transforms
 import os
@@ -291,20 +292,39 @@ def get_model_metrics(genotype, model, discrete=False):
         discretized_model = NetworkCIFAR(model.C, model.num_classes, model.layers, auxiliary=False, genotype=genotype)
     else:
         discretized_model = model
-    model_device = next(discretized_model.parameters()).device
-    input_data = torch.randn(1, 3, 32, 32).to(model_device)
 
-    fca = FlopCountAnalysis(discretized_model, input_data)
-    fca.unsupported_ops_warnings(False)
-    fca.uncalled_modules_warnings(False)
+    params_num = sum(p.numel() for p in discretized_model.parameters() if p.requires_grad)
+    params = round(float(params_num) / 1e6, 4)
 
-    flops = round(fca.total() / 1e6, 4)
+    def get_flops():
+        current_res = 32
+        macs = 0
 
-    params_dict = parameter_count(discretized_model)
-    params = round(params_dict[""] / 1e6, 4)
+        for m in discretized_model.modules():
+            if isinstance(m, nn.Conv2d):
+                k = m.kernel_size[0]
+                s = m.stride[0]
+                p = m.padding[0]
+                d = m.dilation[0]
+
+                out_res = ((current_res + 2 * p - d * (k - 1) - 1) // s) + 1
+
+                # MACs = (k_h * k_w * in_c * out_c / groups) * out_h * out_w
+                layer_macs = (k * k * m.in_channels * m.out_channels // m.groups) * (out_res * out_res)
+                macs += layer_macs
+
+                if s > 1:
+                    current_res = out_res
+
+            elif isinstance(m, nn.Linear):
+                macs += m.in_features * m.out_features
+
+        return macs
+
+    total_macs = get_flops()
+    flops = round(float(total_macs) / 1e6, 4)
 
     return flops, params
-
 
 def get_best_architecture_standard(archs_path):
     best_std_acc = -1.0
