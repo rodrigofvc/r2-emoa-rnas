@@ -273,6 +273,7 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
             weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
             time_training = time.time()
             try:
+                sanity_check_individual(model)
                 train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point,
                                  ideal_point, scheduler)
                 print(f'Gen {generation + 1} Training {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')

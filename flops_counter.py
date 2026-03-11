@@ -200,8 +200,8 @@ def batch_counter_hook(module, input, output):
 
 
 def add_batch_counter_variables_or_reset(module):
-
-    module.__batch_counter__ = 0
+    object.__setattr__(module, '__batch_counter__', 0)
+    #module.__batch_counter__ = 0
 
 
 def add_batch_counter_hook_function(module):
@@ -209,18 +209,20 @@ def add_batch_counter_hook_function(module):
         return
 
     handle = module.register_forward_hook(batch_counter_hook)
-    module.__batch_counter_handle__ = handle
+    #module.__batch_counter_handle__ = handle
+    object.__setattr__(module, '__batch_counter_handle__', handle)
 
 
 def remove_batch_counter_hook_function(module):
     if hasattr(module, '__batch_counter_handle__'):
         module.__batch_counter_handle__.remove()
-        del module.__batch_counter_handle__
-
+        #del module.__batch_counter_handle__
+        object.__delattr__(module, '__batch_counter_handle__')
 
 def add_flops_counter_variable_or_reset(module):
     if is_supported_instance(module):
-        module.__flops__ = 0
+        #module.__flops__ = 0
+        object.__setattr__(module, '__flops__', 0)
 
 
 def add_flops_counter_hook_function(module):
@@ -244,18 +246,21 @@ def add_flops_counter_hook_function(module):
             handle = module.register_forward_hook(upsample_flops_counter_hook)
         else:
             handle = module.register_forward_hook(empty_flops_counter_hook)
-        module.__flops_handle__ = handle
+        #module.__flops_handle__ = handle
+        object.__setattr__(module, '__flops_handle__', handle)
 
 
 def remove_flops_counter_hook_function(module):
     if is_supported_instance(module):
         if hasattr(module, '__flops_handle__'):
             module.__flops_handle__.remove()
-            del module.__flops_handle__
+            #del module.__flops_handle__
+            object.__delattr__(module, '__flops_handle__')
 # --- Masked flops counting
 
 
 # Also being run in the initialization
 def add_flops_mask_variable_or_reset(module):
     if is_supported_instance(module):
-        module.__mask__ = None
+        #module.__mask__ = None
+        object.__setattr__(module, '__mask__', None)
