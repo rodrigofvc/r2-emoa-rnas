@@ -8,6 +8,7 @@ import matplotlib.pyplot as plt
 #from torchinfo import summary
 import numpy as np
 import torch
+from fvcore.nn import FlopCountAnalysis, parameter_count
 from pymoo.indicators.hv import HV
 import torchvision.transforms as transforms
 import os
@@ -290,20 +291,17 @@ def get_model_metrics(genotype, model, discrete=False):
         discretized_model = NetworkCIFAR(model.C, model.num_classes, model.layers, auxiliary=False, genotype=genotype)
     else:
         discretized_model = model
-    discretized_model = add_flops_counting_methods(discretized_model)
-    discretized_model.eval()
-    discretized_model.reset_flops_count()
-    discretized_model.start_flops_count()
-
     model_device = next(discretized_model.parameters()).device
     input_data = torch.randn(1, 3, 32, 32).to(model_device)
-    with torch.no_grad():
-        discretized_model(input_data)
 
-    flops = round(discretized_model.compute_average_flops_cost() / 1e6, 4)
-    discretized_model.stop_flops_count()
-    params_num = sum(p.numel() for p in discretized_model.parameters() if p.requires_grad)
-    params = round(float(params_num) / 1e6, 4)
+    fca = FlopCountAnalysis(discretized_model, input_data)
+    fca.unsupported_ops_warnings(False)
+    fca.uncalled_modules_warnings(False)
+
+    flops = round(fca.total() / 1e6, 4)
+
+    params_dict = parameter_count(discretized_model)
+    params = round(params_dict[""] / 1e6, 4)
 
     return flops, params
 
