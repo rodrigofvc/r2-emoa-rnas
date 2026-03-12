@@ -144,7 +144,7 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     optimizer.zero_grad(set_to_none=True)
 
     # for adversarial training
-    input.requires_grad = True
+    #input.requires_grad = True
 
     adv_input = attack(input, target)
     adv_input = adv_input.to(args.device)
