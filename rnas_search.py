@@ -14,7 +14,7 @@ from micro_space.model_search import Network
 from adversarial import get_attack_function
 from micro_space.genotypes import PRIMITIVES
 import os
-os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True'
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'expandable_segments:True,max_split_size_mb:128'
 
 """
  python3 rnas_search.py --seed 18906049 --algorithm r2-emoa-one-shot --dataset cifar10 --batch_size 32  \

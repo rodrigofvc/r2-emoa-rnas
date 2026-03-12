@@ -93,7 +93,7 @@ class Zero(nn.Module):
     def forward(self, x):
         if self.stride == 1:
             return x.mul(0.)
-        return x[:, :, ::self.stride, ::self.stride].mul(0.)
+        return x[:, :, ::self.stride, ::self.stride].contiguous().mul(0.)
 
 
 class FactorizedReduce(nn.Module):

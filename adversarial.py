@@ -41,7 +41,7 @@ def fgsm(model, x, y, eps=8/255):
 
 def fgsm_simple(model, x, y, eps):
     #assert x.requires_grad, "Input tensor must have requires_grad=True for fgsm_simple attack"
-    x_adv = x.detach().clone().requires_grad_(True)
+    x_adv = x.detach().clone().contiguous().requires_grad_(True)
     with torch.enable_grad():
         std_logits = model(x_adv)
         std_loss = F.cross_entropy(std_logits, y)
