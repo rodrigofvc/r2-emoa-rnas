@@ -36,8 +36,9 @@ def initial_population(n_population, alphas_dim, k, args):
                 h += 1
             flattened[n_var // 2:] = flattened[:n_var // 2]
         else:
-            flattened = torch.rand(alphas_dim[0]*alphas_dim[1]*2).requires_grad_(False).to('cpu')
-        individuals.append(Individual(X=flattened, k=k, search_space=args.search_space))
+            flattened = torch.rand(alphas_dim[0]*alphas_dim[1]*2).detach().cpu().numpy()
+        individuals.append(Individual(X=flattened.copy(), k=k, search_space=args.search_space))
+    gc.collect()
     return individuals
 
 def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, device, statisctics):
@@ -180,6 +181,7 @@ def get_model_from_individual(individual, args):
         discrete = discretize(individual_architect, continuous_model.genotype(), args.device)
         continuous_model.update_arch_parameters(discrete)
         genotype = continuous_model.genotype()
+        continuous_model.cpu()
         del continuous_model
     else:
         genome = micro_encoding.convert(individual.X)
@@ -248,8 +250,8 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
             del model, optimizer, scheduler, criterion, weight_individual
         gc.collect()
         if args.device.type == 'cuda' and args.synchronize:
+            torch.cuda.synchronize()
             torch.cuda.empty_cache()
-            #torch.cuda.synchronize()
     update_ref_points(pop, nadir_point, ideal_point)
 
     archive = archive_update_pq(archive, pop)
@@ -292,8 +294,8 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
                 del model, optimizer, scheduler, criterion, weight_individual
             gc.collect()
             if args.device.type == 'cuda' and args.synchronize:
+                torch.cuda.synchronize()
                 torch.cuda.empty_cache()
-                #torch.cuda.synchronize()
         architectures_evaluated += len(mutation)
         update_ref_points(pop, nadir_point, ideal_point)
 

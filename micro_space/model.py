@@ -33,7 +33,7 @@ class Cell(nn.Module):
         for name, index in zip(op_names, indices):
             stride = 2 if reduction and index < 2 else 1
             op = OPS[name](C, stride, True)
-            self._ops += [op]
+            self._ops.append(op)
         self._indices = indices
 
     def forward(self, s0, s1):
