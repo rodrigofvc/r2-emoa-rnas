@@ -144,7 +144,6 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     optimizer.zero_grad(set_to_none=True)
 
     # for adversarial training
-    #input.requires_grad = True
 
     adv_input = attack(input, target)
     adv_input = adv_input.to(args.device)
@@ -178,8 +177,7 @@ def infer(valid_queue, model, criterion, attack, args):
     for step, (input, target) in enumerate(valid_queue):
         input  = input.to(args.device)
         target = target.to(args.device)
-        # For adversarial evaluation
-        input.requires_grad = True
+
         adv_input = attack(input, target)
         adv_input = adv_input.to(args.device)
 

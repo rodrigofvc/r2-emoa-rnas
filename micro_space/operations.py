@@ -81,7 +81,7 @@ class Identity(nn.Module):
         super(Identity, self).__init__()
 
     def forward(self, x):
-        return x
+        return x.clone()
 
 
 class Zero(nn.Module):
@@ -92,7 +92,7 @@ class Zero(nn.Module):
 
     def forward(self, x):
         if self.stride == 1:
-            return x.mul(0.)
+            return torch.zeros_like(x)
         return x[:, :, ::self.stride, ::self.stride].contiguous().mul(0.)
 
 
