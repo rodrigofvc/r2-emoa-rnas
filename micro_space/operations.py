@@ -47,9 +47,9 @@ class DilConv(nn.Module):
         )
 
     def forward(self, x):
-        #torch.backends.cudnn.enabled = False
+        if not x.is_contiguous():
+            x = x.contiguous()
         out = self.op(x)
-        #torch.backends.cudnn.enabled = True
         return out
 
 
@@ -69,9 +69,9 @@ class SepConv(nn.Module):
         )
 
     def forward(self, x):
-        #torch.backends.cudnn.enabled = False
+        if not x.is_contiguous():
+            x = x.contiguous()
         out = self.op(x)
-        #torch.backends.cudnn.enabled = True
         return out
 
 
@@ -108,6 +108,6 @@ class FactorizedReduce(nn.Module):
 
     def forward(self, x):
         x = self.relu(x)
-        out = torch.cat([self.conv_1(x), self.conv_2(x[:, :, 1:, 1:])], dim=1)
+        out = torch.cat([self.conv_1(x), self.conv_2(x[:, :, 1:, 1:].contiguous())], dim=1)
         out = self.bn(out)
         return out
