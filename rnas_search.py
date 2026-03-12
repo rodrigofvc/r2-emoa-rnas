@@ -2,7 +2,7 @@ import argparse
 import ssl
 import random
 import os
-os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:128'
+os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:64'
 
 import numpy as np
 import torch
@@ -235,7 +235,7 @@ if __name__ == '__main__':
         torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
         torch.cuda.manual_seed(args.seed)
-        torch.backends.cudnn.enabled = False
+        torch.backends.cudnn.enabled = True
 
 
     results_dir = utils.create_experiment_dir(args.algorithm, args.dataset, args.seed)
