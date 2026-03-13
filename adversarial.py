@@ -39,7 +39,7 @@ def fgsm(model, x, y, eps=8/255):
     adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach()
     return adv
 
-def fgsm_simple(model, x, y, eps):
+def fgsm_simple(model, x, y, eps=8/255):
     x_adv = x.detach().clone().contiguous().requires_grad_(True)
     if torch.cuda.is_available():
         torch.cuda.synchronize()

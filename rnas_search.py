@@ -168,8 +168,8 @@ def prepare_args_standard(args):
         }
     }
 
-    attack_f = get_attack_function(attack_params)
-
+    #attack_f = get_attack_function(attack_params)
+    attack_f = None
     weights_r2 = utils.get_weights_r2(args.n_population)
 
     k = sum(1 for i in range(args.steps) for _ in range(2 + i))

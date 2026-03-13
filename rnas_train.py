@@ -11,7 +11,8 @@ import torchvision
 import utils
 import utils_train
 from micro_space.model import NetworkCIFAR
-from adversarial import get_attack_function
+from adversarial import get_attack_function, fgsm_simple
+
 
 def prepare_args(args):
     if torch.cuda.is_available():
@@ -124,7 +125,7 @@ def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, r2_weights
     return stch_value
 
 def train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point, ideal_point, scheduler):
-    attack = attack_f(model)
+    attack = None
     z_ref_stch = torch.zeros(4, device=args.device)
     model_flops, model_parameters = utils.get_model_metrics(None, model, discrete=True)
     model_flops, model_parameters = torch.tensor(float(model_flops), device=args.device), torch.tensor(
@@ -148,7 +149,8 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     # generate adversarial examples with the current model, but do not backpropagate through the attack
     model.eval()
     with torch.no_grad():
-        adv_input = attack(input, target)
+        #adv_input = attack(input, target)
+        adv_input = fgsm_simple(model, input, target)
 
     model.train()
     adv_input = adv_input.to(args.device)
@@ -185,7 +187,8 @@ def infer(valid_queue, model, criterion, attack, args):
         input  = input.to(args.device)
         target = target.to(args.device)
 
-        adv_input = attack(input, target)
+        #adv_input = attack(input, target)
+        adv_input = fgsm_simple(model, input, target)
         adv_input = adv_input.to(args.device)
 
 
