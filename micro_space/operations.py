@@ -110,8 +110,6 @@ class FactorizedReduce(nn.Module):
         self.bn = nn.BatchNorm2d(C_out, affine=affine)
 
     def forward(self, x):
-        if torch.cuda.is_available():
-            torch.cuda.synchronize()
         x = self.relu(x)
         out = torch.cat([self.conv_1(x), self.conv_2(x[:, :, 1:, 1:].contiguous())], dim=1)
         out = self.bn(out)

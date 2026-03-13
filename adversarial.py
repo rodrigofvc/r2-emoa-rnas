@@ -40,8 +40,6 @@ def fgsm(model, x, y, eps=8/255):
 
 def fgsm_simple(model, x, y, eps=8/255):
     x_adv = x.detach().clone().contiguous().requires_grad_(True)
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
 
     with torch.enable_grad():
         std_logits = model(x_adv)
@@ -49,8 +47,6 @@ def fgsm_simple(model, x, y, eps=8/255):
 
     grad = torch.autograd.grad(std_loss, x_adv, only_inputs=True, retain_graph=False, create_graph=False)[0]
     adv = (x_adv + eps * grad.detach().sign()).clamp(0.0, 1.0).detach().clone().contiguous()
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
     del grad, std_loss, std_logits, x_adv
     return adv
 
