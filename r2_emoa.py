@@ -206,7 +206,7 @@ def sanity_check_individual(model):
             raise RuntimeError("Shared module detected.")
 
 # R2 version where each architecture has its own weights (no supernet training). This is a baseline to compare with the supernet version.
-def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r2):
+def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
     archive = []
     archive_accuracy = []
     archive_losses = []

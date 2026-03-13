@@ -159,14 +159,13 @@ def prepare_args_standard(args):
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
         num_workers=0, pin_memory=False, drop_last=True)
 
-    attack_f = None
     weights_r2 = utils.get_weights_r2(args.n_population)
 
     k = sum(1 for i in range(args.steps) for _ in range(2 + i))
     num_ops = len(PRIMITIVES)
     alphas_dim = (k, num_ops)
 
-    return alphas_dim, train_queue, valid_queue, attack_f, weights_r2
+    return alphas_dim, train_queue, valid_queue, weights_r2
 
 
 if __name__ == '__main__':
@@ -267,12 +266,11 @@ if __name__ == '__main__':
         utils.save_params(args, args.save_path_final_architect)
         print(f"Experiment completed and results saved in {results_dir}")
     elif args.algorithm == 'r2-emoa':
-        alphas_dim, train_queue, valid_queue, attack_f, weights_r2 = prepare_args_standard(args)
+        alphas_dim, train_queue, valid_queue, weights_r2 = prepare_args_standard(args)
         archive, archive_accuracy, archive_losses, statistics = r2_emoa_rnas(
             alphas_dim=alphas_dim,
             train_queue=train_queue,
             valid_queue=valid_queue,
-            attack_f=attack_f,
             weights_r2=weights_r2,
             args=args
         )
