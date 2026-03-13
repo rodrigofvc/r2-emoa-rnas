@@ -72,6 +72,10 @@ class SepConv(nn.Module):
         if not x.is_contiguous():
             x = x.contiguous()
         out = self.op(x)
+        for i, layer in enumerate(self.op):
+            x = layer(x)
+            if isinstance(layer, (nn.BatchNorm2d, nn.ReLU)):
+                x = x.contiguous()
         return out
 
 
