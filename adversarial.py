@@ -44,7 +44,8 @@ def fgsm_simple(model, x, y, eps=8/255):
     if torch.cuda.is_available():
         torch.cuda.synchronize()
 
-    with torch.enable_grad():
+    #with torch.enable_grad():
+    with torch.backends.cudnn.flags(enabled=False):
         std_logits = model(x_adv)
         std_loss = F.cross_entropy(std_logits, y)
 
