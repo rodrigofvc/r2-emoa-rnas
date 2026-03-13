@@ -236,6 +236,7 @@ if __name__ == '__main__':
         torch.backends.cudnn.deterministic = True
         torch.cuda.manual_seed(args.seed)
         torch.backends.cudnn.enabled = True
+        torch.backends.cudnn.allow_tf32 = True
 
 
     results_dir = utils.create_experiment_dir(args.algorithm, args.dataset, args.seed)
