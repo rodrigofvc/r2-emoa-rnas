@@ -156,7 +156,7 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
 
     model.train()
     adv_input = adv_input.to(args.device)
-    concat_images = torch.cat([input, adv_input], dim=0).contiguous()
+    concat_images = torch.cat([input, adv_input], dim=0).detach().contiguous()
 
     logits = model(concat_images)
     std_logits, logits_adv = torch.split(logits, input.size(0), dim=0)
@@ -196,7 +196,7 @@ def infer(valid_queue, model, criterion, attack, args):
             adv_input = adv_input.to(args.device)
 
 
-            concat_input = torch.cat([input, adv_input], dim=0).contiguous()
+            concat_input = torch.cat([input, adv_input], dim=0).detach().contiguous()
             logits = model(concat_input)
             std_logits, adv_logits = torch.split(logits, input.size(0), dim=0)
             adv_loss = criterion(adv_logits, target)
