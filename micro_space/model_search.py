@@ -116,7 +116,7 @@ class Network(nn.Module):
                 reduction = False
             cell = Cell(steps, multiplier, C_prev_prev, C_prev, C_curr, reduction, reduction_prev)
             reduction_prev = reduction
-            self.cells += [cell]
+            self.cells.append(cell)
             C_prev_prev, C_prev = C_prev, multiplier * C_curr
 
         self.global_pooling = nn.AdaptiveAvgPool2d(1)

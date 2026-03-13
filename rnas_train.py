@@ -141,9 +141,14 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     input = input.to(args.device)
     target = target.to(args.device)
 
+    if torch.cuda.is_available():
+        torch.cuda.empty_cache()
+        torch.cuda.synchronize()
+
     optimizer.zero_grad(set_to_none=True)
     # generate adversarial examples with the current model, but do not backpropagate through the attack
-    model.eval()
+    for m in model.modules():
+        m.training = False
     adv_input = attack(input, target)
 
     model.train()
