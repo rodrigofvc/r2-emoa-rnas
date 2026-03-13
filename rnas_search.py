@@ -1,14 +1,10 @@
 import argparse
 import ssl
 import random
-import os
-os.environ['PYTORCH_CUDA_ALLOC_CONF'] = 'max_split_size_mb:64'
 
 import numpy as np
 import torch
 
-torch.backends.cuda.enable_flash_sdp(False)
-torch.backends.cuda.enable_mem_efficient_sdp(False)
 
 import torchvision
 from torch import nn
@@ -64,10 +60,9 @@ def prepare_args_supernet(args):
         model = utils.load_supernet(args.pretrained_supernet)
         model = model.to(args.device)
 
-    optimizer = torch.optim.SGD(
+    optimizer = torch.optim.Adam(
       model.parameters(),
       args.learning_rate,
-      momentum=args.momentum,
       weight_decay=args.weight_decay)
 
     ssl._create_default_https_context = ssl._create_unverified_context
@@ -161,14 +156,6 @@ def prepare_args_standard(args):
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
         num_workers=0, pin_memory=False, drop_last=True)
 
-    attack_params = {
-        'name': args.attack,
-        'params': {
-            'eps': args.fgsm_eps
-        }
-    }
-
-    #attack_f = get_attack_function(attack_params)
     attack_f = None
     weights_r2 = utils.get_weights_r2(args.n_population)
 
@@ -236,7 +223,6 @@ if __name__ == '__main__':
         torch.backends.cudnn.deterministic = True
         torch.cuda.manual_seed(args.seed)
         torch.backends.cudnn.enabled = True
-        torch.backends.cudnn.allow_tf32 = True
 
 
     results_dir = utils.create_experiment_dir(args.algorithm, args.dataset, args.seed)

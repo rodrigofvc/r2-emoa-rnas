@@ -124,8 +124,7 @@ def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, r2_weights
     stch_value = mu * torch.logsumexp(weights * (values - z_ref) / mu, dim=-1)
     return stch_value
 
-def train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point, ideal_point, scheduler):
-    attack = None
+def train_individual(model, train_queue, criterion, optimizer, args, weight_individual, nadir_point, ideal_point, scheduler):
     z_ref_stch = torch.zeros(4, device=args.device)
     model_flops, model_parameters = utils.get_model_metrics(None, model, discrete=True)
     model_flops, model_parameters = torch.tensor(float(model_flops), device=args.device), torch.tensor(
@@ -134,16 +133,13 @@ def train_individual(model, train_queue, criterion, optimizer, attack_f, args, w
     time_stamp = time.time()    
     for epoch in range(args.epochs_train_individual):
         for n_batch, (input, target) in enumerate(train_queue):
-            std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, attack, None, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
+            std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
         scheduler.step()
 
-def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
+def run_batch_epoch(model, input, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
 
     input = input.to(args.device)
     target = target.to(args.device)
-
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
 
     optimizer.zero_grad(set_to_none=True)
     # generate adversarial examples with the current model, but do not backpropagate through the attack
@@ -151,9 +147,6 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
 
     with torch.no_grad():
         adv_input = fgsm_simple(model, input, target)
-
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
 
     #model.train()
     adv_input = adv_input.to(args.device)
@@ -170,8 +163,6 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     total_loss.backward()
     nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
     optimizer.step()
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
 
     std_predicts = std_logits.argmax(dim=1)
     adv_predicts = logits_adv.argmax(dim=1)
@@ -180,7 +171,7 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     del concat_images, logits, std_logits, logits_adv, adv_loss, std_loss
     return std_correct, adv_correct, total_loss.item()
 
-def infer(valid_queue, model, criterion, attack, args):
+def infer(valid_queue, model, criterion, args):
     std_correct = 0
     adv_correct = 0
     std_loss_mean = 0
