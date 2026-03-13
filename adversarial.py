@@ -50,6 +50,7 @@ def fgsm_simple(model, x, y, eps=8/255):
 
     grad = torch.autograd.grad(std_loss, x_adv, retain_graph=False, create_graph=False)[0]
     adv = (x_adv + eps * grad.detach().sign()).clamp(0.0, 1.0).detach().clone().contiguous()
+    del grad, std_loss, std_logits, x_adv
     return adv
 
 class FGSMAttack:
