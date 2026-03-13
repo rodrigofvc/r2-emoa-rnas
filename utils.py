@@ -1,4 +1,5 @@
 import csv
+import gc
 import json
 import lzma
 import time
@@ -309,6 +310,12 @@ def get_model_metrics(genotype, model, discrete=False):
         discretized_model = NetworkCIFAR(model.C, model.num_classes, model.layers, auxiliary=False, genotype=genotype)
     else:
         discretized_model = model
+
+    gc.collect()
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
+    discretized_model.eval()
 
     params_num = sum(p.numel() for p in discretized_model.parameters() if p.requires_grad)
     params = round(float(params_num) / 1e6, 4)

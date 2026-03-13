@@ -284,9 +284,10 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
                 individual.F[args.params_index] = 1000
             finally:
                 del model, optimizer, scheduler, criterion, weight_individual
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
             gc.collect()
+            if torch.cuda.is_available():
+                torch.cuda.synchronize()
+                torch.cuda.empty_cache()
         architectures_evaluated += len(mutation)
         update_ref_points(pop, nadir_point, ideal_point)
 
