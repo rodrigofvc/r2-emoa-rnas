@@ -142,14 +142,13 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     target = target.to(args.device)
 
     if torch.cuda.is_available():
-        torch.cuda.empty_cache()
         torch.cuda.synchronize()
 
     optimizer.zero_grad(set_to_none=True)
     # generate adversarial examples with the current model, but do not backpropagate through the attack
-    for m in model.modules():
-        m.training = False
-    adv_input = attack(input, target)
+    model.eval()
+    with torch.no_grad():
+        adv_input = attack(input, target)
 
     model.train()
     adv_input = adv_input.to(args.device)
@@ -166,6 +165,8 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     total_loss.backward()
     nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
     optimizer.step()
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
 
     std_predicts = std_logits.argmax(dim=1)
     adv_predicts = logits_adv.argmax(dim=1)

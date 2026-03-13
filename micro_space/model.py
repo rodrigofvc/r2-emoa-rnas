@@ -49,7 +49,9 @@ class Cell(nn.Module):
             h2 = op2(h2).contiguous()
             s = h1 + h2
             states.append(s)
-        return torch.cat([states[i] for i in self._concat], dim=1)
+        out = torch.cat([states[i] for i in self._concat], dim=1)
+        del states
+        return out
 
 class AuxiliaryHeadCIFAR(nn.Module):
 

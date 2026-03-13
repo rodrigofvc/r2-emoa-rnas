@@ -181,7 +181,6 @@ def get_model_from_individual(individual, args):
         discrete = discretize(individual_architect, continuous_model.genotype(), args.device)
         continuous_model.update_arch_parameters(discrete)
         genotype = continuous_model.genotype()
-        continuous_model.cpu()
         del continuous_model
     else:
         genome = micro_encoding.convert(individual.X)
@@ -247,11 +246,13 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
             individual.F[args.flops_index] = 1000
             individual.F[args.params_index] = 1000
         finally:
+            model.cpu()
             del model, optimizer, scheduler, criterion, weight_individual
         gc.collect()
         if args.device.type == 'cuda':
             torch.cuda.empty_cache()
             torch.cuda.synchronize()
+            time.sleep(0.1)
     update_ref_points(pop, nadir_point, ideal_point)
 
     archive = archive_update_pq(archive, pop)
@@ -291,11 +292,13 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
                 individual.F[args.flops_index] = 1000
                 individual.F[args.params_index] = 1000
             finally:
+                model.cpu()
                 del model, optimizer, scheduler, criterion, weight_individual
             gc.collect()
             if args.device.type == 'cuda':
                 torch.cuda.empty_cache()
                 torch.cuda.synchronize()
+                time.sleep(0.1)
         architectures_evaluated += len(mutation)
         update_ref_points(pop, nadir_point, ideal_point)
 
