@@ -176,6 +176,7 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     adv_predicts = logits_adv.argmax(dim=1)
     std_correct = (std_predicts == target).sum().item()
     adv_correct = (adv_predicts == target).sum().item()
+    del concat_images, logits, std_logits, logits_adv, adv_loss, std_loss
     return std_correct, adv_correct, total_loss.item()
 
 def infer(valid_queue, model, criterion, attack, args):
@@ -185,29 +186,30 @@ def infer(valid_queue, model, criterion, attack, args):
     adv_loss_mean = 0
     total = 0
     model.eval()
-    for step, (input, target) in enumerate(valid_queue):
-        input  = input.to(args.device)
-        target = target.to(args.device)
+    with torch.no_grad():
+        for step, (input, target) in enumerate(valid_queue):
+            input  = input.to(args.device)
+            target = target.to(args.device)
 
-        #adv_input = attack(input, target)
-        adv_input = fgsm_simple(model, input, target)
-        adv_input = adv_input.to(args.device)
+            with torch.enable_grad():
+                adv_input = fgsm_simple(model, input, target)
+            adv_input = adv_input.to(args.device)
 
 
-        with torch.no_grad():
             concat_input = torch.cat([input, adv_input], dim=0).contiguous()
             logits = model(concat_input)
             std_logits, adv_logits = torch.split(logits, input.size(0), dim=0)
             adv_loss = criterion(adv_logits, target)
             std_loss = criterion(std_logits, target)
 
-        std_predicts = std_logits.argmax(dim=1)
-        adv_predicts = adv_logits.argmax(dim=1)
-        std_correct += (std_predicts == target).sum().item()
-        adv_correct += (adv_predicts == target).sum().item()
-        total += target.size(0)
-        std_loss_mean += std_loss.item()
-        adv_loss_mean += adv_loss.item()
+            std_predicts = std_logits.argmax(dim=1)
+            adv_predicts = adv_logits.argmax(dim=1)
+            std_correct += (std_predicts == target).sum().item()
+            adv_correct += (adv_predicts == target).sum().item()
+            total += target.size(0)
+            std_loss_mean += std_loss.item()
+            adv_loss_mean += adv_loss.item()
+            del adv_input, concat_input, logits, std_logits, adv_logits, std_loss, adv_loss
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
     std_loss_mean /= total
