@@ -1,3 +1,4 @@
+import gc
 import time
 from collections import defaultdict
 
@@ -234,12 +235,15 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
             print(f"Error training/evaluating individual {i} in generation 0: {e.__str__()}")
             individual.std_acc = 0
             individual.adv_acc = 0
-            individual.F[args.std_loss_index] = float('inf')
-            individual.F[args.adv_loss_index] = float('inf')
+            individual.F[args.std_loss_index] = 1000
+            individual.F[args.adv_loss_index] = 1000
             individual.F[args.flops_index] = 1000
             individual.F[args.params_index] = 1000
         finally:
             del model, optimizer, scheduler, criterion, weight_individual
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+        gc.collect()
     update_ref_points(pop, nadir_point, ideal_point)
 
     archive = archive_update_pq(archive, pop)
@@ -274,12 +278,15 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
                 print(f"Error training/evaluating individual {i} in generation {generation + 1}: {e}")
                 individual.std_acc = 0
                 individual.adv_acc = 0
-                individual.F[args.std_loss_index] = float('inf')
-                individual.F[args.adv_loss_index] = float('inf')
+                individual.F[args.std_loss_index] = 1000
+                individual.F[args.adv_loss_index] = 1000
                 individual.F[args.flops_index] = 1000
                 individual.F[args.params_index] = 1000
             finally:
                 del model, optimizer, scheduler, criterion, weight_individual
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
         architectures_evaluated += len(mutation)
         update_ref_points(pop, nadir_point, ideal_point)
 
