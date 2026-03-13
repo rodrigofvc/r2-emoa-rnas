@@ -142,20 +142,20 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     input = input.to(args.device)
     target = target.to(args.device)
 
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
+    #if torch.cuda.is_available():
+    #    torch.cuda.synchronize()
 
     optimizer.zero_grad(set_to_none=True)
     # generate adversarial examples with the current model, but do not backpropagate through the attack
-    model.eval()
+    #model.eval()
 
     with torch.no_grad():
         adv_input = fgsm_simple(model, input, target)
 
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
+    #if torch.cuda.is_available():
+    #    torch.cuda.synchronize()
 
-    model.train()
+    #model.train()
     adv_input = adv_input.to(args.device)
     concat_images = torch.cat([input, adv_input], dim=0).detach().contiguous()
 
@@ -170,8 +170,9 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     total_loss.backward()
     nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
     optimizer.step()
-    if torch.cuda.is_available():
-        torch.cuda.synchronize()
+    
+    #if torch.cuda.is_available():
+    #    torch.cuda.synchronize()
 
     std_predicts = std_logits.argmax(dim=1)
     adv_predicts = logits_adv.argmax(dim=1)

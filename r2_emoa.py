@@ -66,9 +66,8 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
     utils.store_statisctics(statisctics, objective_space)
     return len(pop)
 
-def eval_individual(individual, model, valid_queue, args, criterion, attack_f):
-    #attack = attack_f(model)
-    std_acc, adv_acc, std_loss, adv_loss = infer(valid_queue, model, criterion, attack_f, args)
+def eval_individual(individual, model, valid_queue, args, criterion):
+    std_acc, adv_acc, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
     individual.std_acc = std_acc
     individual.adv_acc = adv_acc
     individual.F[args.std_loss_index] = std_loss
@@ -186,15 +185,11 @@ def get_model_from_individual(individual, args):
         genome = micro_encoding.convert(individual.X)
         genotype = micro_encoding.decode(genome, args.steps, args.multiplier)
     individual.genotype = genotype
-
-    gc.collect()
-    if args.device.type == 'cuda' and args.synchronize:
-        torch.cuda.empty_cache()
+    
     model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype).to(args.device)
-    optimizer = torch.optim.SGD(
+    optimizer = torch.optim.Adam(
         model.parameters(),
         args.learning_rate,
-        momentum=args.momentum,
         weight_decay=args.weight_decay)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
@@ -235,7 +230,7 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
             train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point, ideal_point, scheduler)
             print(f'Gen 0 Training {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
             time_evaluation = time.time()
-            eval_individual(individual, model, valid_queue, args, criterion, attack_f)
+            eval_individual(individual, model, valid_queue, args, criterion)
             print(f'Gen 0 Evaluation {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
         except RuntimeError as e:
             print(f"Error training/evaluating individual {i} in generation 0: {e.__str__()}")
@@ -248,11 +243,6 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
         finally:
             model.cpu()
             del model, optimizer, scheduler, criterion, weight_individual
-        gc.collect()
-        if args.device.type == 'cuda':
-            torch.cuda.empty_cache()
-            torch.cuda.synchronize()
-            time.sleep(0.1)
     update_ref_points(pop, nadir_point, ideal_point)
 
     archive = archive_update_pq(archive, pop)
@@ -281,7 +271,7 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
                                  ideal_point, scheduler)
                 print(f'Gen {generation + 1} Training {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
                 time_evaluation = time.time()
-                eval_individual(individual, model, valid_queue, args, criterion, attack_f)
+                eval_individual(individual, model, valid_queue, args, criterion)
                 print(f'Gen {generation + 1} Evaluation {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
             except RuntimeError as e:
                 print(f"Error training/evaluating individual {i} in generation {generation + 1}: {e}")
@@ -294,11 +284,6 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, attack_f, weights_r
             finally:
                 model.cpu()
                 del model, optimizer, scheduler, criterion, weight_individual
-            gc.collect()
-            if args.device.type == 'cuda':
-                torch.cuda.empty_cache()
-                torch.cuda.synchronize()
-                time.sleep(0.1)
         architectures_evaluated += len(mutation)
         update_ref_points(pop, nadir_point, ideal_point)
 
