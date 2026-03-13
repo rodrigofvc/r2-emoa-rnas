@@ -147,7 +147,7 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
 
     optimizer.zero_grad(set_to_none=True)
     # generate adversarial examples with the current model, but do not backpropagate through the attack
-    model.eval()
+    #model.eval()
 
     with torch.no_grad():
         adv_input = fgsm_simple(model, input, target)
@@ -155,7 +155,7 @@ def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, 
     if torch.cuda.is_available():
         torch.cuda.synchronize()
 
-    model.train()
+    #model.train()
     adv_input = adv_input.to(args.device)
     concat_images = torch.cat([input, adv_input], dim=0).detach().contiguous()
 
