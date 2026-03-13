@@ -35,22 +35,21 @@ class ReLUConvBN(nn.Module):
 
 
 class DilConv(nn.Module):
-
     def __init__(self, C_in, C_out, kernel_size, stride, padding, dilation, affine=True):
         super(DilConv, self).__init__()
-        self.op = nn.Sequential(
-            nn.ReLU(inplace=False),
-            nn.Conv2d(C_in, C_in, kernel_size=kernel_size, stride=stride, padding=padding, dilation=dilation,
-                      groups=C_in, bias=False),
-            nn.Conv2d(C_in, C_out, kernel_size=1, padding=0, bias=False),
-            nn.BatchNorm2d(C_out, affine=affine),
-        )
+        self.relu = nn.ReLU(inplace=False)
+        self.conv1 = nn.Conv2d(C_in, C_in, kernel_size=kernel_size, stride=stride, padding=padding,
+                               dilation=dilation, groups=C_in, bias=False)
+        self.conv2 = nn.Conv2d(C_in, C_out, kernel_size=1, padding=0, bias=False)
+        self.bn = nn.BatchNorm2d(C_out, affine=affine)
 
     def forward(self, x):
-        if not x.is_contiguous():
-            x = x.contiguous()
-        out = self.op(x)
-        return out
+        # Esta es la zona del crash (Línea 52)
+        x = self.relu(x)
+        x = self.conv1(x.contiguous())
+        x = self.conv2(x.contiguous())
+        x = self.bn(x)
+        return x
 
 
 class SepConv(nn.Module):
@@ -72,6 +71,10 @@ class SepConv(nn.Module):
         if not x.is_contiguous():
             x = x.contiguous()
         out = self.op(x)
+        for i, layer in enumerate(self.op):
+            x = layer(x)
+            if isinstance(layer, (nn.BatchNorm2d, nn.ReLU)):
+                x = x.contiguous()
         return out
 
 
