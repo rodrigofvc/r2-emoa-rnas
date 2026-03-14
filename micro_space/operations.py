@@ -45,9 +45,9 @@ class DilConv(nn.Module):
 
     def forward(self, x):
         # Esta es la zona del crash (Línea 52)
-        x = self.relu(x)
-        x = self.conv1(x.contiguous())
-        x = self.conv2(x.contiguous())
+        x = self.relu(x.contiguous())
+        x = self.conv1(x)
+        x = self.conv2(x)
         x = self.bn(x)
         return x
 
@@ -68,13 +68,7 @@ class SepConv(nn.Module):
         )
 
     def forward(self, x):
-        if not x.is_contiguous():
-            x = x.contiguous()
-        out = self.op(x)
-        for i, layer in enumerate(self.op):
-            x = layer(x)
-            if isinstance(layer, (nn.BatchNorm2d, nn.ReLU)):
-                x = x.contiguous()
+        out = self.op(x.contiguous())
         return out
 
 
