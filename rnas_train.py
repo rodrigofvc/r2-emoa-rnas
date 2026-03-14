@@ -4,7 +4,7 @@ import ssl
 import time
 
 import torch
-from torch import nn, amp
+from torch import nn
 import numpy as np
 import torchvision
 
