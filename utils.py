@@ -71,17 +71,26 @@ def store_metrics(architectures_evaluated, population, population_2, args, weigh
     ind = HV(ref_point=np.array([max_f1, max_f2, max_f3, max_f4]))
     population_array = np.array([ind.F for ind in population])
     hyp = ind(population_array)
-    statistics['hyp_log'].append(hyp.item())
+    if type(hyp) == np.ndarray:
+        statistics['hyp_log'].append(hyp.item())
+    else:
+        statistics['hyp_log'].append(hyp)
     # compute hypervolume 2 (std_loss, adv_loss)
     ind2 = HV(ref_point=np.array([max_f1, max_f2]))
     population_array2 = np.array([[ind.F[0], ind.F[1]] for ind in population_2])
     hyp2 = ind2(population_array2)
-    statistics['hyp2_log'].append(hyp2.item())
+    if type(hyp2) == np.ndarray:
+        statistics['hyp2_log'].append(hyp2.item())
+    else:
+        statistics['hyp2_log'].append(hyp2)
     # compute r2
     z_ref = np.zeros(4)
     nadir_point = np.array([max_f1, max_f2, max_f3, max_f4])
     r2_population = r2(population, weights_r2[args.n_population], nadir_point, z_ref)
-    statistics['r2_log'].append(r2_population.item())
+    if type(r2_population) == np.ndarray:
+        statistics['r2_log'].append(r2_population.item())
+    else:
+        statistics['r2_log'].append(r2_population)
     row_hyp = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'hv', hyp, args.save_path_final_model.replace("\\", "/")]
     row_hyp2 = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'hv_2obj', hyp2, args.save_path_final_model.replace("\\", "/")]
     row_r2 = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'r2', r2_population, args.save_path_final_model.replace("\\", "/")]
