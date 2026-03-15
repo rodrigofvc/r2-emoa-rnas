@@ -144,8 +144,7 @@ def run_batch_epoch(model, input, target, criterion, optimizer, args, model_flop
     # generate adversarial examples with the current model, but do not backpropagate through the attack
     #model.eval()
 
-    with torch.no_grad():
-        adv_input = fgsm_simple(model, input, target)
+    adv_input = fgsm_simple(model, input, target)
 
     #model.train()
     adv_input = adv_input.to(args.device)
@@ -167,7 +166,6 @@ def run_batch_epoch(model, input, target, criterion, optimizer, args, model_flop
     adv_predicts = logits_adv.argmax(dim=1)
     std_correct = (std_predicts == target).sum().item()
     adv_correct = (adv_predicts == target).sum().item()
-    del concat_images, logits, std_logits, logits_adv, adv_loss, std_loss
     return std_correct, adv_correct, total_loss.item()
 
 def infer(valid_queue, model, criterion, args):
@@ -200,7 +198,6 @@ def infer(valid_queue, model, criterion, args):
             total += target.size(0)
             std_loss_mean += std_loss.item()
             adv_loss_mean += adv_loss.item()
-            del adv_input, concat_input, logits, std_logits, adv_logits, std_loss, adv_loss
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
     std_loss_mean /= total
