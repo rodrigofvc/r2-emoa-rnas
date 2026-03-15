@@ -203,7 +203,7 @@ if __name__ == '__main__':
     parser.add_argument('--steps', type=int, default=6, help='number of steps in one cell (intern nodes except input and output)')
     parser.add_argument('--multiplier', type=int, default=6, help='number of multiplier for number of channels (intern nodes to concat)')
     parser.add_argument('--attack', type=str, default='FGSM', help='adversarial attack to use')
-    parser.add_argument('--fgsm_eps', type=str, default="8/255", help='attack epsilon')
+    parser.add_argument('--fgsm_eps', type=int, default=8/255, help='attack epsilon')
     parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
     parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
     parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')

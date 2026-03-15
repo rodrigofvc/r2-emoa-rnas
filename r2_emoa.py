@@ -179,7 +179,13 @@ def get_model_from_individual(individual, args):
         discrete = discretize(individual_architect, continuous_model.genotype(), args.device)
         continuous_model.update_arch_parameters(discrete)
         genotype = continuous_model.genotype()
+        del individual_architect, discrete
+        continuous_model.cpu()
         del continuous_model
+        gc.collect()
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            torch.cuda.synchronize()
     else:
         genome = micro_encoding.convert(individual.X)
         genotype = micro_encoding.decode(genome, args.steps, args.multiplier)
@@ -223,11 +229,10 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
     for i, individual in enumerate(pop):
         criterion = torch.nn.CrossEntropyLoss()
         if torch.cuda.is_available():
-            torch.cuda.empty_cache()
             gc.collect()
+            torch.cuda.empty_cache()
             torch.cuda.synchronize()
-        with torch.no_grad():
-            model, optimizer, scheduler = get_model_from_individual(individual, args)
+        model, optimizer, scheduler = get_model_from_individual(individual, args)
         weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
         time_training = time.time()
         try:
@@ -269,11 +274,11 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
 
         for i, individual in enumerate(mutation):
             if torch.cuda.is_available():
-                torch.cuda.empty_cache()
                 gc.collect()
+                torch.cuda.empty_cache()
                 torch.cuda.synchronize()
-            with torch.no_grad():
-                model, optimizer, scheduler = get_model_from_individual(individual, args)
+
+            model, optimizer, scheduler = get_model_from_individual(individual, args)
             criterion = torch.nn.CrossEntropyLoss()
             weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
             time_training = time.time()

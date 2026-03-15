@@ -93,7 +93,6 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
         total_loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
         optimizer.step()
-        scheduler.step()
 
         std_predicts = logits.argmax(dim=1)
         adv_predicts = logits_adv.argmax(dim=1)
@@ -104,6 +103,7 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
         if n_batch % args.report_freq == 0:
             print(
                 f">>>> batch {n_batch + 1}/{len(train_queue)} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - times_stamp))}) (HH:MM:SS): std_acc {std_correct / total * 100:.2f}%, adv_acc {adv_correct / total * 100:.2f}%, loss {total_loss_mean:.4f}")
+    scheduler.step()
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
     total_loss_mean /= total

@@ -249,6 +249,7 @@ def discretize(alphas, arch_genotype, device):
     reduction_cell = arch_genotype.reduce
 
     # Discretizing the normal cell
+    step = 0
     index = 0
     offset = 0
     new_normal = torch.zeros_like(alphas[0]).detach().to(device)
@@ -261,10 +262,12 @@ def discretize(alphas, arch_genotype, device):
         op, cell = normal_cell[index]
         idx = PRIMITIVES.index(op)
         new_normal[int(offset + cell)][idx] = 1
-        offset += (index // 2) + 2
+        offset += step + 2
         index += 1
+        step += 1
 
     # Discretizing the reduction cell
+    step = 0
     index = 0
     offset = 0
     new_reduce = torch.zeros_like(alphas[1]).detach().to(device)
@@ -277,6 +280,7 @@ def discretize(alphas, arch_genotype, device):
         op, cell = reduction_cell[index]
         idx = PRIMITIVES.index(op)
         new_reduce[int(offset + cell)][idx] = 1
-        offset += (index // 2) + 2
+        offset += step + 2
         index += 1
+        step += 1
     return [new_normal, new_reduce]
