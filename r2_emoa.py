@@ -206,6 +206,7 @@ def sanity_check_individual(model):
                 print("   ", n)
             raise RuntimeError("Shared module detected.")
 
+# TODO probar si es mejor calcular los FLOPs antes de entrenar
 # R2 version where each architecture has its own weights (no supernet training). This is a baseline to compare with the supernet version.
 def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
     archive = []
@@ -221,7 +222,12 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
     for i, individual in enumerate(pop):
         criterion = torch.nn.CrossEntropyLoss()
-        model, optimizer, scheduler = get_model_from_individual(individual, args)
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+            gc.collect()
+            torch.cuda.synchronize()
+        with torch.no_grad():
+            model, optimizer, scheduler = get_model_from_individual(individual, args)
         weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
         time_training = time.time()
         try:
@@ -262,7 +268,12 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
         for i, individual in enumerate(mutation):
-            model, optimizer, scheduler = get_model_from_individual(individual, args)
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+                gc.collect()
+                torch.cuda.synchronize()
+            with torch.no_grad():
+                model, optimizer, scheduler = get_model_from_individual(individual, args)
             criterion = torch.nn.CrossEntropyLoss()
             weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
             time_training = time.time()

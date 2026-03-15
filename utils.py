@@ -329,10 +329,13 @@ def get_model_metrics(genotype, model, discrete=False):
     params_num = sum(p.numel() for p in discretized_model.parameters() if p.requires_grad)
     params = round(float(params_num) / 1e6, 4)
 
-    x = torch.randn(1, 3, 32, 32).to(next(discretized_model.parameters()).device)
-    with FlopCounterMode(display=False) as flop_counter:
-        with torch.no_grad():
-            discretized_model(x)
+    with torch.no_grad():
+        if torch.cuda.is_available():
+            torch.cuda.synchronize()
+        x = torch.randn(1, 3, 32, 32).to(next(discretized_model.parameters()).device)
+        with FlopCounterMode(display=False) as flop_counter:
+            with torch.no_grad():
+                discretized_model(x)
 
     flops = round(float(flop_counter.get_total_flops()) / 1e6, 4)
 
