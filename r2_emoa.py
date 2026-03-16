@@ -176,7 +176,9 @@ def get_model_from_individual(individual, args):
     optimizer = torch.optim.Adam(
         model.parameters(),
         args.learning_rate,
-        weight_decay=args.weight_decay)
+        weight_decay=args.weight_decay,
+        foreach=False
+    )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
     return model, optimizer, scheduler
