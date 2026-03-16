@@ -8,7 +8,7 @@ import utils
 from archivers import archive_update_pq, archive_update_pq_accuracy, dominates
 from micro_space import micro_encoding
 from micro_space.micro_encoding import PRIMITIVES
-from micro_space.model_search import discretize, Network
+from micro_space.model_search import discretize, Network, alphas_to_genotype
 from micro_space.model import NetworkCIFAR
 from individual import Individual
 from rnas_train import run_batch_epoch, train_individual, infer
@@ -164,21 +164,9 @@ def get_model_from_individual(individual, args):
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
     if args.search_space == 'continuous':
-        continuous_model = Network(
-            C=args.init_channels,
-            num_classes=n_classes,
-            layers=args.layers,
-            criterion=torch.nn.CrossEntropyLoss(),
-            steps=args.steps,
-            multiplier=args.multiplier,
-            stem_multiplier=3,
-            device=args.device,
-        ).to(args.device)
-        individual_architect = unpack_alphas(individual.X, continuous_model.alphas_dim, args)
-        continuous_model.update_arch_parameters(individual_architect)
-        discrete = discretize(individual_architect, continuous_model.genotype(), args.device)
-        continuous_model.update_arch_parameters(discrete)
-        genotype = continuous_model.genotype()
+        k = sum(2 + i for i in range(args.steps))
+        alphas_dim = (k, len(PRIMITIVES))
+        genotype = alphas_to_genotype(individual.X, alphas_dim, args)
     else:
         genome = micro_encoding.convert(individual.X)
         genotype = micro_encoding.decode(genome, args.steps, args.multiplier)

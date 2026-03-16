@@ -1,4 +1,6 @@
-from micro_space.genotypes import PRIMITIVES, Genotype
+import numpy as np
+
+from micro_space.micro_encoding import PRIMITIVES, Genotype
 from micro_space.operations import *
 from torch import nn
 import torch.nn.functional as F
@@ -241,7 +243,39 @@ def genotype(model, PRIMITIVES):
         })
     return genotype_cells
 
+def alphas_to_genotype(individual_X, alphas_dim, args):
+    n_norm = alphas_dim[0] * alphas_dim[1]
+    a_norm = individual_X[:n_norm].reshape(alphas_dim)
+    a_reduce = individual_X[n_norm:].reshape(alphas_dim)
 
+    def _parse(weights):
+        gene = []
+        n, start = 2, 0
+        for i in range(args.steps):
+            end = start + n
+            W = weights[start:end].copy()
+            none_idx = PRIMITIVES.index('none')
+            edges = sorted(range(i + 2),
+                           key=lambda x: -max(W[x][k] for k in range(len(W[x])) if k != none_idx))[:2]
+            for j in edges:
+                k_best = max((k for k in range(len(W[j])) if k != none_idx),
+                             key=lambda k: W[j][k])
+                gene.append((PRIMITIVES[k_best], j))
+            start = end
+            n += 1
+        return gene
+
+    def softmax(x):
+        e = np.exp(x - np.max(x, axis=-1, keepdims=True))
+        return e / e.sum(axis=-1, keepdims=True)
+
+    gene_normal = _parse(softmax(a_norm))
+    gene_reduce = _parse(softmax(a_reduce))
+    concat = range(2 + args.steps - args.multiplier, args.steps + 2)
+    return Genotype(
+        normal=gene_normal, normal_concat=concat,
+        reduce=gene_reduce, reduce_concat=concat
+    )
 
 
 def discretize(alphas, arch_genotype, device):
