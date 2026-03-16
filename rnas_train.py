@@ -159,7 +159,7 @@ def run_batch_epoch(model, input, target, criterion, optimizer, args, model_flop
     total_loss = smooth_tchebycheff_sc_loss(args.mu, std_loss, adv_loss, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point)
 
     total_loss.backward()
-    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip, foreach=False, fused=False)
     optimizer.step()
 
     std_predicts = std_logits.argmax(dim=1)
