@@ -123,11 +123,10 @@ def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, r2_weights
     stch_value = mu * torch.logsumexp(weights * (values - z_ref) / mu, dim=-1)
     return stch_value
 
-def train_individual(model, train_queue, criterion, optimizer, args, weight_individual, nadir_point, ideal_point, scheduler):
+def train_individual(model, flops, params, train_queue, criterion, optimizer, args, weight_individual, nadir_point, ideal_point, scheduler):
     z_ref_stch = torch.zeros(4, device=args.device)
-    model_flops, model_parameters = utils.get_model_metrics(None, model, discrete=True)
-    model_flops, model_parameters = torch.tensor(float(model_flops), device=args.device), torch.tensor(
-        float(model_parameters), device=args.device)
+    model_flops = torch.tensor(float(flops), device=args.device)
+    model_parameters = torch.tensor(float(params), device=args.device)
     model.train()
     time_stamp = time.time()    
     for epoch in range(args.epochs_train_individual):

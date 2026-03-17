@@ -71,9 +71,8 @@ def eval_individual(individual, model, valid_queue, args, criterion):
     individual.adv_acc = adv_acc
     individual.F[args.std_loss_index] = std_loss
     individual.F[args.adv_loss_index] = adv_loss
-    model_flops, model_parameters = utils.get_model_metrics(None, model, discrete=True)
-    individual.F[args.flops_index] = model_flops
-    individual.F[args.params_index] = model_parameters
+    # pre-calculated FLOPs and parameters during get_model_from_individual, so we just retrieve them here
+    model_flops, model_parameters = individual.F[args.flops_index], individual.F[args.params_index]
     print(f"Evaluation: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, std_loss {std_loss:.4f}, adv_loss {adv_loss:.4f} ,flops {model_flops:.2f}, params {model_parameters}")
 
 def train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, attack_f, gen, scaler, args, r2_weights, nadir_point, ideal_point, warmup=False):
@@ -87,7 +86,7 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, att
     r2_weights_pop = torch.tensor(r2_weights_pop, device=args.device, dtype=torch.float32)
     z_ref_stch = torch.zeros(4, device=args.device)
     assert r2_weights_pop.shape[0] == len(pop)
-    model_flops, model_parameters = utils.get_model_metrics(model.genotype(), model)
+    model_flops, model_parameters = utils.get_model_metrics(model)
     model_flops, model_parameters = torch.tensor(float(model_flops), device=args.device), torch.tensor(
         float(model_parameters), device=args.device)
     for epoch in range(epochs):
@@ -182,7 +181,10 @@ def get_model_from_individual(individual, args):
     )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
-    return model, optimizer, scheduler
+    flops, params = utils.get_model_metrics(model)
+    individual.F[args.flops_index] = flops
+    individual.F[args.params_index] = params
+    return model, optimizer, scheduler, flops, params
 
 def sanity_check_individual(model):
     seen = defaultdict(list)
@@ -212,11 +214,11 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
     for i, individual in enumerate(pop):
         criterion = torch.nn.CrossEntropyLoss()
-        model, optimizer, scheduler = get_model_from_individual(individual, args)
+        model, optimizer, scheduler, individual_flops, individual_params = get_model_from_individual(individual, args)
         weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
         time_training = time.time()
         try:
-            train_individual(model, train_queue, criterion, optimizer, args, weight_individual, nadir_point, ideal_point, scheduler)
+            train_individual(model, individual_flops, individual_params, train_queue, criterion, optimizer, args, weight_individual, nadir_point, ideal_point, scheduler)
             print(f'Gen 0 Training {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
             time_evaluation = time.time()
             eval_individual(individual, model, valid_queue, args, criterion)
@@ -248,12 +250,12 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
 
         for i, individual in enumerate(mutation):
 
-            model, optimizer, scheduler = get_model_from_individual(individual, args)
+            model, optimizer, scheduler, individual_flops, individual_params = get_model_from_individual(individual, args)
             criterion = torch.nn.CrossEntropyLoss()
             weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
             time_training = time.time()
             try:
-                train_individual(model, train_queue, criterion, optimizer, args, weight_individual, nadir_point,
+                train_individual(model, individual_flops, individual_params, train_queue, criterion, optimizer, args, weight_individual, nadir_point,
                                  ideal_point, scheduler)
                 print(f'Gen {generation + 1} Training {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
                 time_evaluation = time.time()

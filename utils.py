@@ -313,22 +313,14 @@ def get_model_metrics_dep(genotype, model, discrete=False):
 
     return flops, params
 
-def get_model_metrics(genotype, model, discrete=False):
-    if not discrete:
-        # create a discretized version of the model using the provided genotype and model
-        discretized_model = NetworkCIFAR(model.C, model.num_classes, model.layers, auxiliary=False, genotype=genotype)
-    else:
-        discretized_model = model
+def get_model_metrics(model):
 
-    discretized_model.eval()
-
-    params_num = sum(p.numel() for p in discretized_model.parameters() if p.requires_grad)
+    params_num = sum(p.numel() for p in model.parameters() if p.requires_grad)
     params = round(float(params_num) / 1e6, 4)
 
-    with torch.no_grad():
-        x = torch.randn(1, 3, 32, 32).to(next(discretized_model.parameters()).device)
-        with FlopCounterMode(display=False) as flop_counter:
-            discretized_model(x)
+    x = torch.randn(1, 3, 32, 32).to(next(model.parameters()).device)
+    with FlopCounterMode(display=False) as flop_counter:
+        model(x)
 
     flops = round(float(flop_counter.get_total_flops()) / 1e6, 4)
 
