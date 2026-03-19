@@ -180,10 +180,9 @@ def infer(valid_queue, model, criterion, args):
                 adv_input = fgsm_simple(model, inputs, target)
             adv_input = adv_input.to(args.device)
 
-
-            concat_input = torch.cat([inputs, adv_input], dim=0).detach()
-            logits = model(concat_input)
-            std_logits, adv_logits = torch.split(logits, inputs.size(0), dim=0)
+            std_logits = model(inputs)
+            adv_logits = model(adv_input)
+            
             adv_loss = criterion(adv_logits, target)
             std_loss = criterion(std_logits, target)
 
