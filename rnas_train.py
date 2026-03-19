@@ -130,39 +130,36 @@ def train_individual(model, flops, params, train_queue, criterion, optimizer, ar
     model.train()
     time_stamp = time.time()    
     for epoch in range(args.epochs_train_individual):
-        for n_batch, (input, target) in enumerate(train_queue):
-            std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
+        for n_batch, (inputs, target) in enumerate(train_queue):
+            std_acc, adv_acc, loss = run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
         scheduler.step()
 
-def run_batch_epoch(model, input, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
+def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
 
-    input = input.to(args.device)
+    inputs = inputs.to(args.device)
     target = target.to(args.device)
 
-    optimizer.zero_grad(set_to_none=True)
-    # generate adversarial examples with the current model, but do not backpropagate through the attack
-    #model.eval()
+    optimizer.zero_grad(set_to_none=False)
 
-    adv_input = fgsm_simple(model, input, target)
+    adv_input = fgsm_simple(model, inputs, target)
 
-    #model.train()
     adv_input = adv_input.to(args.device)
-    concat_images = torch.cat([input, adv_input], dim=0).detach().contiguous()
 
-    logits = model(concat_images)
-    std_logits, logits_adv = torch.split(logits, input.size(0), dim=0)
+    std_logits = model(inputs)
+    adv_logits = model(adv_input)
 
-    adv_loss = criterion(logits_adv, target)
+    adv_loss = criterion(adv_logits, target)
     std_loss = criterion(std_logits, target)
 
     total_loss = smooth_tchebycheff_sc_loss(args.mu, std_loss, adv_loss, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point)
 
     total_loss.backward()
-    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip, foreach=False)
+
+    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
     optimizer.step()
 
     std_predicts = std_logits.argmax(dim=1)
-    adv_predicts = logits_adv.argmax(dim=1)
+    adv_predicts = adv_logits.argmax(dim=1)
     std_correct = (std_predicts == target).sum().item()
     adv_correct = (adv_predicts == target).sum().item()
     return std_correct, adv_correct, total_loss.item()
@@ -175,18 +172,18 @@ def infer(valid_queue, model, criterion, args):
     total = 0
     model.eval()
     with torch.no_grad():
-        for step, (input, target) in enumerate(valid_queue):
-            input  = input.to(args.device)
+        for step, (inputs, target) in enumerate(valid_queue):
+            inputs  = inputs.to(args.device)
             target = target.to(args.device)
 
             with torch.enable_grad():
-                adv_input = fgsm_simple(model, input, target)
+                adv_input = fgsm_simple(model, inputs, target)
             adv_input = adv_input.to(args.device)
 
 
-            concat_input = torch.cat([input, adv_input], dim=0).detach().contiguous()
+            concat_input = torch.cat([inputs, adv_input], dim=0).detach()
             logits = model(concat_input)
-            std_logits, adv_logits = torch.split(logits, input.size(0), dim=0)
+            std_logits, adv_logits = torch.split(logits, inputs.size(0), dim=0)
             adv_loss = criterion(adv_logits, target)
             std_loss = criterion(std_logits, target)
 

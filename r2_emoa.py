@@ -172,13 +172,19 @@ def get_model_from_individual(individual, args):
     individual.genotype = genotype
 
     model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype).to(args.device)
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.SGD(
         model.parameters(),
         args.learning_rate,
         weight_decay=args.weight_decay,
-        foreach=False,
-        fused=False
+        momentum=args.momentum
     )
+    #optimizer = torch.optim.Adam(
+    #    model.parameters(),
+    #    args.learning_rate,
+    #    weight_decay=args.weight_decay,
+    #    foreach=False,
+    #    fused=False
+    #)
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
     flops, params = utils.get_model_metrics(model)
