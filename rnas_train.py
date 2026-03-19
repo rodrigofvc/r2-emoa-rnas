@@ -128,13 +128,14 @@ def train_individual(model, flops, params, train_queue, criterion, optimizer, ar
     model_flops = torch.tensor(float(flops), device=args.device)
     model_parameters = torch.tensor(float(params), device=args.device)
     model.train()
-    time_stamp = time.time()    
+    time_stamp = time.time()
+    scaler = torch.amp.GradScaler(device=args.device) if "cuda" in str(args.device) else None
     for epoch in range(args.epochs_train_individual):
         for n_batch, (inputs, target) in enumerate(train_queue):
-            std_acc, adv_acc, loss = run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
+            std_acc, adv_acc, loss = run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point, scaler)
         scheduler.step()
 
-def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
+def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point, scaler):
 
     inputs = inputs.to(args.device)
     target = target.to(args.device)
@@ -145,18 +146,29 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
 
     adv_input = adv_input.to(args.device)
 
-    std_logits = model(inputs)
-    adv_logits = model(adv_input)
+    with torch.amp.autocast(device_type=args.device.type):
+        std_logits = model(inputs)
+        adv_logits = model(adv_input)
 
-    adv_loss = criterion(adv_logits, target)
-    std_loss = criterion(std_logits, target)
+        adv_loss = criterion(adv_logits, target)
+        std_loss = criterion(std_logits, target)
 
-    total_loss = smooth_tchebycheff_sc_loss(args.mu, std_loss, adv_loss, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point)
+        total_loss = smooth_tchebycheff_sc_loss(
+            args.mu, std_loss, adv_loss,
+            model_flops, model_parameters,
+            r2_weights, z_ref_stch, nadir_point, ideal_point
+        )
 
-    total_loss.backward()
-
-    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
-    optimizer.step()
+    if scaler is not None:
+        scaler.scale(total_loss).backward()
+        scaler.unscale_(optimizer)
+        nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+        scaler.step(optimizer)
+        scaler.update()
+    else:
+        total_loss.backward()
+        nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+        optimizer.step()
 
     std_predicts = std_logits.argmax(dim=1)
     adv_predicts = adv_logits.argmax(dim=1)
