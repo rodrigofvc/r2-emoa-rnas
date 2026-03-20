@@ -145,7 +145,13 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
     model.eval()
     adv_input = fgsm_simple(model, inputs, target)
     model.train()
-    
+
+    for name, p in model.named_parameters():
+        if p.grad is not None and p.grad.abs().sum() > 0:
+            print(f"{name} tiene grad no cero despues de fgsm")
+
+            raise  RuntimeError(f"Gradient not zero for {name} after fgsm")
+
     adv_input = adv_input.to(args.device)
 
     std_logits = model(inputs)
