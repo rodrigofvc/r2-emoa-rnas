@@ -172,12 +172,6 @@ def get_model_from_individual(individual, args):
     individual.genotype = genotype
 
     model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype).to(args.device)
-    #optimizer = torch.optim.SGD(
-    #    model.parameters(),
-    #    args.learning_rate,
-    #    weight_decay=args.weight_decay,
-    #    momentum=args.momentum
-    #)
     optimizer = torch.optim.Adam(
         model.parameters(),
         args.learning_rate,

@@ -110,14 +110,15 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
     return std_accuracy * 100.0, adv_accuracy * 100.0, total_loss_mean
 
 def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, r2_weights, z_ref_stch, nadir_point, ideal_point):
+    loss_type = std_loss.dtype
     losses_grad = torch.stack([std_loss, adv_loss])
-    losses_const = torch.stack([flops, params]).detach()
+    losses_const = torch.stack([flops, params]).detach().to(dtype=loss_type)
     losses = torch.cat([losses_grad, losses_const])
 
-    ideal = ideal_point.detach()
-    nadir = nadir_point.detach()
-    z_ref = z_ref_stch.detach()
-    weights = r2_weights.detach()
+    ideal = ideal_point.detach().to(dtype=loss_type)
+    nadir = nadir_point.detach().to(dtype=loss_type)
+    z_ref = z_ref_stch.detach().to(dtype=loss_type)
+    weights = r2_weights.detach().to(dtype=loss_type)
 
     values = torch.abs(losses - ideal) / torch.clamp(torch.abs(nadir - ideal), 1e-6)
     stch_value = mu * torch.logsumexp(weights * (values - z_ref) / mu, dim=-1)
@@ -141,8 +142,10 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
 
     optimizer.zero_grad(set_to_none=False)
 
+    model.eval()
     adv_input = fgsm_simple(model, inputs, target)
-
+    model.train()
+    
     adv_input = adv_input.to(args.device)
 
     std_logits = model(inputs)
