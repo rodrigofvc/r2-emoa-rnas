@@ -11,7 +11,8 @@ import torchvision
 import utils
 import utils_train
 from micro_space.model import NetworkCIFAR
-from adversarial import fgsm_simple
+from adversarial import fgsm_simple, fgsm_simple_amp
+
 
 def prepare_args(args):
     if torch.cuda.is_available():
@@ -142,7 +143,7 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
 
     optimizer.zero_grad(set_to_none=False)
 
-    adv_input = fgsm_simple(model, inputs, target)
+    adv_input = fgsm_simple_amp(model, inputs, target, args.device.type)
 
     adv_input = adv_input.to(args.device)
 
@@ -162,12 +163,12 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
     if scaler is not None:
         scaler.scale(total_loss).backward()
         scaler.unscale_(optimizer)
-        nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+        nn.utils.clip_grad_norm_(model.parameters(), float(args.grad_clip))
         scaler.step(optimizer)
         scaler.update()
     else:
         total_loss.backward()
-        nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+        nn.utils.clip_grad_norm_(model.parameters(), float(args.grad_clip))
         optimizer.step()
 
     std_predicts = std_logits.argmax(dim=1)
