@@ -124,8 +124,8 @@ def decode(genome, steps=6, multiplier=6):
     reduce_cell = genome[1]
 
     # intern nodes are concatenad, except the input nodes (0,1)
-    normal, normal_concat = [], range(2 + steps - multiplier, steps + 2)
-    reduce, reduce_concat = [], range(2 + steps - multiplier, steps + 2)
+    normal, normal_concat = [], list(range(2 + steps - multiplier, steps + 2))
+    reduce, reduce_concat = [], list(range(2 + steps - multiplier, steps + 2))
 
     for block in normal_cell:
         for unit in block:

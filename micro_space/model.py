@@ -45,8 +45,8 @@ class Cell(nn.Module):
             h2 = states[self._indices[2*i+1]]
             op1 = self._ops[2*i]
             op2 = self._ops[2*i+1]
-            h1 = op1(h1).contiguous()
-            h2 = op2(h2).contiguous()
+            h1 = op1(h1)
+            h2 = op2(h2)
             s = h1 + h2
             states.append(s)
         out = torch.cat([states[i] for i in self._concat], dim=1)

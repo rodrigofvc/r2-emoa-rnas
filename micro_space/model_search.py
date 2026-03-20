@@ -271,7 +271,7 @@ def alphas_to_genotype(individual_X, alphas_dim, args):
 
     gene_normal = _parse(softmax(a_norm))
     gene_reduce = _parse(softmax(a_reduce))
-    concat = range(2 + args.steps - args.multiplier, args.steps + 2)
+    concat = list(range(2 + args.steps - args.multiplier, args.steps + 2))
     return Genotype(
         normal=gene_normal, normal_concat=concat,
         reduce=gene_reduce, reduce_concat=concat
