@@ -135,6 +135,10 @@ def train_individual(model, flops, params, train_queue, criterion, optimizer, ar
             std_acc, adv_acc, loss = run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
         scheduler.step()
 
+def set_model_mode(model, training=False):
+    for m in model.modules():
+        m.training = training
+
 def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
 
     inputs = inputs.to(args.device)
@@ -142,9 +146,11 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
 
     optimizer.zero_grad(set_to_none=False)
 
-    model.eval()
+    #model.eval()
+    set_model_mode(model, False)
     adv_input = fgsm_simple(model, inputs, target)
-    model.train()
+    #model.train()
+    set_model_mode(model, True)
 
     for name, p in model.named_parameters():
         if p.grad is not None and p.grad.abs().sum() > 0:
