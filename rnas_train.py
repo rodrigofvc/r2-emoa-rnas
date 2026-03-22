@@ -11,7 +11,8 @@ import torchvision
 import utils
 import utils_train
 from micro_space.model import NetworkCIFAR
-from adversarial import fgsm_simple
+from adversarial import fgsm_simple, set_model_mode, set_attack_mode
+
 
 def prepare_args(args):
     if torch.cuda.is_available():
@@ -129,16 +130,13 @@ def train_individual(model, flops, params, train_queue, criterion, optimizer, ar
     model_flops = torch.tensor(float(flops), device=args.device)
     model_parameters = torch.tensor(float(params), device=args.device)
     #model.train()
-    set_model_mode(model, True)
+    #set_model_mode(model, True)
     time_stamp = time.time()
     for epoch in range(args.epochs_train_individual):
         for n_batch, (inputs, target) in enumerate(train_queue):
             std_acc, adv_acc, loss = run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
         scheduler.step()
 
-def set_model_mode(model, training=False):
-    for m in model.modules():
-        m.training = training
 
 def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
 
@@ -147,15 +145,9 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
 
     optimizer.zero_grad(set_to_none=False)
 
-    set_model_mode(model, False)
+    set_attack_mode(model, True)
     adv_input = fgsm_simple(model, inputs, target)
     set_model_mode(model, True)
-
-    for name, p in model.named_parameters():
-        if p.grad is not None and p.grad.abs().sum() > 0:
-            print(f"{name} tiene grad no cero despues de fgsm")
-
-            raise  RuntimeError(f"Gradient not zero for {name} after fgsm")
 
     adv_input = adv_input.to(args.device)
 
@@ -190,8 +182,10 @@ def infer(valid_queue, model, criterion, args):
             inputs  = inputs.to(args.device)
             target = target.to(args.device)
 
+            set_attack_mode(model, False)
             with torch.enable_grad():
                 adv_input = fgsm_simple(model, inputs, target)
+            set_model_mode(model, False)
             adv_input = adv_input.to(args.device)
 
             std_logits = model(inputs)
