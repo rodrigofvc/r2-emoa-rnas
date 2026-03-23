@@ -198,7 +198,6 @@ def sanity_check_individual(model):
                 print("   ", n)
             raise RuntimeError("Shared module detected.")
 
-# TODO probar si es mejor calcular los FLOPs antes de entrenar
 # R2 version where each architecture has its own weights (no supernet training). This is a baseline to compare with the supernet version.
 def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
     archive = []
@@ -265,13 +264,15 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
             criterion = torch.nn.CrossEntropyLoss()
             weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
             time_training = time.time()
+            stream = torch.cuda.Stream(device=args.device)
             try:
-                train_individual(model, individual_flops, individual_params, train_queue, criterion, optimizer, args, weight_individual, nadir_point,
+                with torch.cuda.stream(stream):
+                    train_individual(model, individual_flops, individual_params, train_queue, criterion, optimizer, args, weight_individual, nadir_point,
                                  ideal_point, scheduler)
-                print(f'Gen {generation + 1} Training {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
-                time_evaluation = time.time()
-                eval_individual(individual, model, valid_queue, args, criterion)
-                print(f'Gen {generation + 1} Evaluation {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
+                    print(f'Gen {generation + 1} Training {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
+                    time_evaluation = time.time()
+                    eval_individual(individual, model, valid_queue, args, criterion)
+                    print(f'Gen {generation + 1} Evaluation {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
             except RuntimeError as e:
                 print(f"Error training/evaluating individual {i} in generation {generation + 1}: {e}")
                 individual.std_acc = 0
@@ -281,10 +282,12 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
                 individual.F[args.flops_index] = 1000
                 individual.F[args.params_index] = 1000
             finally:
+                stream.synchronize()
                 torch.cuda.synchronize()
                 model.cpu()
                 optimizer.state.clear()
                 del model, optimizer, scheduler, criterion, weight_individual
+                del stream
                 gc.collect()
                 torch.cuda.empty_cache()
         architectures_evaluated += len(mutation)
