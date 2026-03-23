@@ -212,13 +212,14 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'),
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
     for i, individual in enumerate(pop):
-        criterion = torch.nn.CrossEntropyLoss()
-        model, optimizer, scheduler, individual_flops, individual_params = get_model_from_individual(individual, args)
-        weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
         time_training = time.time()
         stream = torch.cuda.Stream(device=args.device)
         try:
             with torch.cuda.stream(stream):
+                criterion = torch.nn.CrossEntropyLoss()
+                model, optimizer, scheduler, individual_flops, individual_params = get_model_from_individual(individual,
+                                                                                                             args)
+                weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
                 train_individual(model, individual_flops, individual_params, train_queue, criterion, optimizer, args, weight_individual, nadir_point, ideal_point, scheduler)
                 print(f'Gen 0 Training {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
                 time_evaluation = time.time()
@@ -259,14 +260,14 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
         for i, individual in enumerate(mutation):
-
-            model, optimizer, scheduler, individual_flops, individual_params = get_model_from_individual(individual, args)
-            criterion = torch.nn.CrossEntropyLoss()
-            weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
             time_training = time.time()
             stream = torch.cuda.Stream(device=args.device)
             try:
                 with torch.cuda.stream(stream):
+                    model, optimizer, scheduler, individual_flops, individual_params = get_model_from_individual(
+                        individual, args)
+                    criterion = torch.nn.CrossEntropyLoss()
+                    weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
                     train_individual(model, individual_flops, individual_params, train_queue, criterion, optimizer, args, weight_individual, nadir_point,
                                  ideal_point, scheduler)
                     print(f'Gen {generation + 1} Training {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
