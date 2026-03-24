@@ -209,9 +209,11 @@ def get_model_from_individual(individual, args):
     valid_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-        num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed)) 
+        num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
 
-    return model, optimizer, scheduler, flops, params, train_queue, valid_queue
+    criterion = torch.nn.CrossEntropyLoss()
+
+    return model, optimizer, scheduler, flops, params, train_queue, valid_queue, criterion
 
 def sanity_check_individual(model):
     seen = defaultdict(list)
@@ -240,18 +242,15 @@ def r2_emoa_rnas(args, alphas_dim, weights_r2):
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
     for i, individual in enumerate(pop):
         time_training = time.time()
-        stream = torch.cuda.Stream(device=args.device)
         try:
-            with torch.cuda.stream(stream):
-                criterion = torch.nn.CrossEntropyLoss()
-                model, optimizer, scheduler, individual_flops, individual_params, train_queue, valid_queue = get_model_from_individual(individual,
+            model, optimizer, scheduler, individual_flops, individual_params, train_queue, valid_queue, criterion = get_model_from_individual(individual,
                                                                                                              args)
-                weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
-                train_individual(model, individual_flops, individual_params, train_queue, criterion, optimizer, args, weight_individual, nadir_point, ideal_point, scheduler)
-                print(f'Gen 0 Training {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
-                time_evaluation = time.time()
-                eval_individual(individual, model, valid_queue, args, criterion)
-                print(f'Gen 0 Evaluation {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
+            weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
+            train_individual(model, individual_flops, individual_params, train_queue, criterion, optimizer, args, weight_individual, nadir_point, ideal_point, scheduler)
+            print(f'Gen 0 Training {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
+            time_evaluation = time.time()
+            eval_individual(individual, model, valid_queue, args, criterion)
+            print(f'Gen 0 Evaluation {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
         except Exception as e:
             print(f"Error training/evaluating individual {i} in generation 0: {type(e).__name__}: {e}")
             individual.std_acc = 0
@@ -261,12 +260,11 @@ def r2_emoa_rnas(args, alphas_dim, weights_r2):
             individual.F[args.flops_index] = 1000
             individual.F[args.params_index] = 1000
         finally:
-            stream.synchronize()
+            #stream.synchronize()
             torch.cuda.synchronize()
             model.cpu()
-            optimizer.state.clear()
-            del model, optimizer, scheduler, criterion, weight_individual
-            del stream
+            del model, optimizer, scheduler, criterion, weight_individual, train_queue, valid_queue
+            #del stream
             gc.collect()
             torch.cuda.empty_cache()
     update_ref_points(pop, nadir_point, ideal_point)
@@ -288,19 +286,17 @@ def r2_emoa_rnas(args, alphas_dim, weights_r2):
 
         for i, individual in enumerate(mutation):
             time_training = time.time()
-            stream = torch.cuda.Stream(device=args.device)
+
             try:
-                with torch.cuda.stream(stream):
-                    model, optimizer, scheduler, individual_flops, individual_params, train_queue, valid_queue  = get_model_from_individual(
+                model, optimizer, scheduler, individual_flops, individual_params, train_queue, valid_queue, criterion  = get_model_from_individual(
                         individual, args)
-                    criterion = torch.nn.CrossEntropyLoss()
-                    weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
-                    train_individual(model, individual_flops, individual_params, train_queue, criterion, optimizer, args, weight_individual, nadir_point,
+                weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
+                train_individual(model, individual_flops, individual_params, train_queue, criterion, optimizer, args, weight_individual, nadir_point,
                                  ideal_point, scheduler)
-                    print(f'Gen {generation + 1} Training {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
-                    time_evaluation = time.time()
-                    eval_individual(individual, model, valid_queue, args, criterion)
-                    print(f'Gen {generation + 1} Evaluation {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
+                print(f'Gen {generation + 1} Training {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
+                time_evaluation = time.time()
+                eval_individual(individual, model, valid_queue, args, criterion)
+                print(f'Gen {generation + 1} Evaluation {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
             except Exception as e:
                 print(f"Error training/evaluating individual {i} in generation {generation + 1}: {type(e).__name__}: {e}")
                 individual.std_acc = 0
@@ -310,12 +306,11 @@ def r2_emoa_rnas(args, alphas_dim, weights_r2):
                 individual.F[args.flops_index] = 1000
                 individual.F[args.params_index] = 1000
             finally:
-                stream.synchronize()
+                #stream.synchronize()
                 torch.cuda.synchronize()
                 model.cpu()
-                optimizer.state.clear()
-                del model, optimizer, scheduler, criterion, weight_individual
-                del stream
+                del model, optimizer, scheduler, criterion, weight_individual, train_queue, valid_queue
+                #del stream
                 gc.collect()
                 torch.cuda.empty_cache()
         architectures_evaluated += len(mutation)
