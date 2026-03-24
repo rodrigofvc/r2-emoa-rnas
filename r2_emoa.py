@@ -14,7 +14,7 @@ from individual import Individual
 from rnas_train import run_batch_epoch, train_individual, infer
 from evolutionary import unpack_alphas, tournament_selection, binary_crossover, polynomial_mutation, point_crossover
 import torch
-
+import torchvision
 
 from indicators import contribution_r2, update_ref_points
 
@@ -184,7 +184,34 @@ def get_model_from_individual(individual, args):
     flops, params = utils.get_model_metrics(model)
     individual.F[args.flops_index] = flops
     individual.F[args.params_index] = params
-    return model, optimizer, scheduler, flops, params
+
+    train_transform, valid_transform = utils.data_transforms_cifar10(args)
+    if args.dataset == 'cifar10':
+        train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
+    elif args.dataset == 'cifar100':
+        train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
+    else:
+        raise ValueError(f"Unknown dataset: {args.dataset}")
+    num_train = len(train_data)
+    indices = list(range(num_train))
+    split = int(np.floor(args.train_portion * num_train))
+
+    if torch.backends.mps.is_available():
+        # testing
+        split = 32
+        num_train = split + 32
+
+    train_queue = torch.utils.data.DataLoader(
+      train_data, batch_size=args.batch_size,
+      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
+        num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+
+    valid_queue = torch.utils.data.DataLoader(
+      train_data, batch_size=args.batch_size,
+      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
+        num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed)) 
+
+    return model, optimizer, scheduler, flops, params, train_queue, valid_queue
 
 def sanity_check_individual(model):
     seen = defaultdict(list)
@@ -199,7 +226,7 @@ def sanity_check_individual(model):
             raise RuntimeError("Shared module detected.")
 
 # R2 version where each architecture has its own weights (no supernet training). This is a baseline to compare with the supernet version.
-def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
+def r2_emoa_rnas(args, alphas_dim, weights_r2):
     archive = []
     archive_accuracy = []
     archive_losses = []
@@ -217,7 +244,7 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
         try:
             with torch.cuda.stream(stream):
                 criterion = torch.nn.CrossEntropyLoss()
-                model, optimizer, scheduler, individual_flops, individual_params = get_model_from_individual(individual,
+                model, optimizer, scheduler, individual_flops, individual_params, train_queue, valid_queue = get_model_from_individual(individual,
                                                                                                              args)
                 weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
                 train_individual(model, individual_flops, individual_params, train_queue, criterion, optimizer, args, weight_individual, nadir_point, ideal_point, scheduler)
@@ -264,7 +291,7 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
             stream = torch.cuda.Stream(device=args.device)
             try:
                 with torch.cuda.stream(stream):
-                    model, optimizer, scheduler, individual_flops, individual_params = get_model_from_individual(
+                    model, optimizer, scheduler, individual_flops, individual_params, train_queue, valid_queue  = get_model_from_individual(
                         individual, args)
                     criterion = torch.nn.CrossEntropyLoss()
                     weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)

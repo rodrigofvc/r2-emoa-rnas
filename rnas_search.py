@@ -268,8 +268,8 @@ if __name__ == '__main__':
         alphas_dim, train_queue, valid_queue, weights_r2 = prepare_args_standard(args)
         archive, archive_accuracy, archive_losses, statistics = r2_emoa_rnas(
             alphas_dim=alphas_dim,
-            train_queue=train_queue,
-            valid_queue=valid_queue,
+            #train_queue=train_queue,
+            #valid_queue=valid_queue,
             weights_r2=weights_r2,
             args=args
         )
