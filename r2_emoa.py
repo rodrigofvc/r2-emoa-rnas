@@ -260,13 +260,12 @@ def r2_emoa_rnas(args, alphas_dim, weights_r2):
             individual.F[args.flops_index] = 1000
             individual.F[args.params_index] = 1000
         finally:
-            #stream.synchronize()
             torch.cuda.synchronize()
             model.cpu()
             del model, optimizer, scheduler, criterion, weight_individual, train_queue, valid_queue
-            #del stream
             gc.collect()
             torch.cuda.empty_cache()
+            torch.cuda.memory_summary()
     update_ref_points(pop, nadir_point, ideal_point)
 
     archive = archive_update_pq(archive, pop)
@@ -306,11 +305,9 @@ def r2_emoa_rnas(args, alphas_dim, weights_r2):
                 individual.F[args.flops_index] = 1000
                 individual.F[args.params_index] = 1000
             finally:
-                #stream.synchronize()
                 torch.cuda.synchronize()
                 model.cpu()
                 del model, optimizer, scheduler, criterion, weight_individual, train_queue, valid_queue
-                #del stream
                 gc.collect()
                 torch.cuda.empty_cache()
         architectures_evaluated += len(mutation)
