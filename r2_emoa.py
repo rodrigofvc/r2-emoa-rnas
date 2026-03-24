@@ -225,8 +225,8 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
                 time_evaluation = time.time()
                 eval_individual(individual, model, valid_queue, args, criterion)
                 print(f'Gen 0 Evaluation {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
-        except RuntimeError as e:
-            print(f"Error training/evaluating individual {i} in generation 0: {e.__str__()}")
+        except Exception as e:
+            print(f"Error training/evaluating individual {i} in generation 0: {type(e).__name__}: {e}")
             individual.std_acc = 0
             individual.adv_acc = 0
             individual.F[args.std_loss_index] = 1000
@@ -274,8 +274,8 @@ def r2_emoa_rnas(args, alphas_dim, train_queue, valid_queue, weights_r2):
                     time_evaluation = time.time()
                     eval_individual(individual, model, valid_queue, args, criterion)
                     print(f'Gen {generation + 1} Evaluation {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
-            except RuntimeError as e:
-                print(f"Error training/evaluating individual {i} in generation {generation + 1}: {e}")
+            except Exception as e:
+                print(f"Error training/evaluating individual {i} in generation {generation + 1}: {type(e).__name__}: {e}")
                 individual.std_acc = 0
                 individual.adv_acc = 0
                 individual.F[args.std_loss_index] = 1000
