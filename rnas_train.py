@@ -129,8 +129,7 @@ def train_individual(model, flops, params, train_queue, criterion, optimizer, ar
     z_ref_stch = torch.zeros(4, device=args.device)
     model_flops = torch.tensor(float(flops), device=args.device)
     model_parameters = torch.tensor(float(params), device=args.device)
-    #model.train()
-    #set_model_mode(model, True)
+    model.train()
     time_stamp = time.time()
     for epoch in range(args.epochs_train_individual):
         for n_batch, (inputs, target) in enumerate(train_queue):
@@ -145,9 +144,11 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
 
     optimizer.zero_grad(set_to_none=False)
 
-    set_attack_mode(model, True)
+    #set_attack_mode(model, True)
+    model.eval()
     adv_input = fgsm_simple(model, inputs, target)
-    set_model_mode(model, True)
+    model.train()
+    #set_model_mode(model, True)
 
     adv_input = adv_input.to(args.device)
 
@@ -176,16 +177,15 @@ def infer(valid_queue, model, criterion, args):
     std_loss_mean = 0
     adv_loss_mean = 0
     total = 0
-    set_model_mode(model, False)
+    #set_model_mode(model, False)
+    model.eval()
     with torch.no_grad():
         for step, (inputs, target) in enumerate(valid_queue):
             inputs  = inputs.to(args.device)
             target = target.to(args.device)
 
-            set_attack_mode(model, False)
             with torch.enable_grad():
                 adv_input = fgsm_simple(model, inputs, target)
-            set_model_mode(model, False)
             adv_input = adv_input.to(args.device)
 
             std_logits = model(inputs)
