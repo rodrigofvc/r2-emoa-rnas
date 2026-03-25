@@ -145,11 +145,9 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
     optimizer.zero_grad(set_to_none=False)
 
     #set_attack_mode(model, True)
-    model.eval()
     adv_input = fgsm_simple(model, inputs, target)
-    model.train()
     #set_model_mode(model, True)
-
+    torch.cuda.synchronize()
     adv_input = adv_input.to(args.device)
 
     std_logits = model(inputs)
@@ -164,6 +162,8 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
 
     nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
     optimizer.step()
+
+    torch.cuda.synchronize()
 
     std_predicts = std_logits.argmax(dim=1)
     adv_predicts = adv_logits.argmax(dim=1)
@@ -187,6 +187,8 @@ def infer(valid_queue, model, criterion, args):
             with torch.enable_grad():
                 adv_input = fgsm_simple(model, inputs, target)
             adv_input = adv_input.to(args.device)
+
+            torch.cuda.synchronize()
 
             std_logits = model(inputs)
             adv_logits = model(adv_input)
