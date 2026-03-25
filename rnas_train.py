@@ -177,32 +177,31 @@ def infer(valid_queue, model, criterion, args):
     std_loss_mean = 0
     adv_loss_mean = 0
     total = 0
-    #set_model_mode(model, False)
     model.eval()
-    with torch.no_grad():
-        for step, (inputs, target) in enumerate(valid_queue):
-            inputs  = inputs.to(args.device)
-            target = target.to(args.device)
+    for step, (inputs, target) in enumerate(valid_queue):
+        inputs  = inputs.to(args.device)
+        target = target.to(args.device)
 
-            with torch.enable_grad():
-                adv_input = fgsm_simple(model, inputs, target)
-            adv_input = adv_input.to(args.device)
+        with torch.enable_grad():
+            adv_input = fgsm_simple(model, inputs, target)
+        adv_input = adv_input.to(args.device)
 
-            torch.cuda.synchronize()
+        torch.cuda.synchronize()
 
+        with torch.no_grad():
             std_logits = model(inputs)
             adv_logits = model(adv_input)
             
-            adv_loss = criterion(adv_logits, target)
-            std_loss = criterion(std_logits, target)
+        adv_loss = criterion(adv_logits, target)
+        std_loss = criterion(std_logits, target)
 
-            std_predicts = std_logits.argmax(dim=1)
-            adv_predicts = adv_logits.argmax(dim=1)
-            std_correct += (std_predicts == target).sum().item()
-            adv_correct += (adv_predicts == target).sum().item()
-            total += target.size(0)
-            std_loss_mean += std_loss.item()
-            adv_loss_mean += adv_loss.item()
+        std_predicts = std_logits.argmax(dim=1)
+        adv_predicts = adv_logits.argmax(dim=1)
+        std_correct += (std_predicts == target).sum().item()
+        adv_correct += (adv_predicts == target).sum().item()
+        total += target.size(0)
+        std_loss_mean += std_loss.item()
+        adv_loss_mean += adv_loss.item()
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
     std_loss_mean /= total
