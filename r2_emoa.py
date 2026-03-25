@@ -188,8 +188,10 @@ def get_model_from_individual(individual, args):
     train_transform, valid_transform = utils.data_transforms_cifar10(args)
     if args.dataset == 'cifar10':
         train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
+        valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
     elif args.dataset == 'cifar100':
         train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
+        valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
     num_train = len(train_data)
@@ -207,7 +209,7 @@ def get_model_from_individual(individual, args):
         num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
 
     valid_queue = torch.utils.data.DataLoader(
-      train_data, batch_size=args.batch_size,
+      valid_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
         num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
 
