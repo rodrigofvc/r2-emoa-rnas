@@ -44,8 +44,7 @@ class DilConv(nn.Module):
         self.bn = nn.BatchNorm2d(C_out, affine=affine)
 
     def forward(self, x):
-        # Esta es la zona del crash (Línea 52)
-        x = self.relu(x.contiguous())
+        x = self.relu(x)
         x = self.conv1(x)
         x = self.conv2(x)
         x = self.bn(x)
@@ -68,7 +67,7 @@ class SepConv(nn.Module):
         )
 
     def forward(self, x):
-        out = self.op(x.contiguous())
+        out = self.op(x)
         return out
 
 
@@ -90,7 +89,7 @@ class Zero(nn.Module):
     def forward(self, x):
         if self.stride == 1:
             return torch.zeros_like(x)
-        return x[:, :, ::self.stride, ::self.stride].contiguous().mul(0.)
+        return x[:, :, ::self.stride, ::self.stride].mul(0.)
 
 
 class FactorizedReduce(nn.Module):
@@ -105,6 +104,6 @@ class FactorizedReduce(nn.Module):
 
     def forward(self, x):
         x = self.relu(x)
-        out = torch.cat([self.conv_1(x), self.conv_2(x[:, :, 1:, 1:].contiguous())], dim=1)
+        out = torch.cat([self.conv_1(x), self.conv_2(x[:, :, 1:, 1:])], dim=1)
         out = self.bn(out)
         return out

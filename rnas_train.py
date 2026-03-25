@@ -160,7 +160,7 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
 
     total_loss.backward()
 
-    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip, foreach=False)
     optimizer.step()
 
     torch.cuda.synchronize()
