@@ -15,7 +15,6 @@ from rnas_train import run_batch_epoch, train_individual, infer
 from evolutionary import unpack_alphas, tournament_selection, binary_crossover, polynomial_mutation, point_crossover
 import torch
 import torchvision
-import torchattacks
 
 from indicators import contribution_r2, update_ref_points
 

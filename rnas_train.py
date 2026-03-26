@@ -12,7 +12,6 @@ import utils
 import utils_train
 from micro_space.model import NetworkCIFAR
 from adversarial import fgsm_simple, set_model_mode, set_attack_mode
-#import torchattacks
 
 def prepare_args(args):
     if torch.cuda.is_available():
