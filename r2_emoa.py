@@ -15,6 +15,7 @@ from rnas_train import run_batch_epoch, train_individual, infer
 from evolutionary import unpack_alphas, tournament_selection, binary_crossover, polynomial_mutation, point_crossover
 import torch
 import torchvision
+import torchattacks
 
 from indicators import contribution_r2, update_ref_points
 
@@ -66,7 +67,8 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
     return len(pop)
 
 def eval_individual(individual, model, valid_queue, args, criterion):
-    std_acc, adv_acc, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
+    attack = torchattacks.FGSM(model, args.fgsm_eps)
+    std_acc, adv_acc, std_loss, adv_loss = infer(attack, valid_queue, model, criterion, args)
     individual.std_acc = std_acc
     individual.adv_acc = adv_acc
     individual.F[args.std_loss_index] = std_loss

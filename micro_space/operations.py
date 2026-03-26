@@ -77,7 +77,7 @@ class Identity(nn.Module):
         super(Identity, self).__init__()
 
     def forward(self, x):
-        return x.clone()
+        return x
 
 
 class Zero(nn.Module):

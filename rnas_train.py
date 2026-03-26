@@ -12,7 +12,7 @@ import utils
 import utils_train
 from micro_space.model import NetworkCIFAR
 from adversarial import fgsm_simple, set_model_mode, set_attack_mode
-
+import torchattacks
 
 def prepare_args(args):
     if torch.cuda.is_available():
@@ -131,13 +131,14 @@ def train_individual(model, flops, params, train_queue, criterion, optimizer, ar
     model_parameters = torch.tensor(float(params), device=args.device)
     model.train()
     time_stamp = time.time()
+    attack = torchattacks.FGSM(model, args.fgsm_eps)
     for epoch in range(args.epochs_train_individual):
         for n_batch, (inputs, target) in enumerate(train_queue):
-            std_acc, adv_acc, loss = run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
+            std_acc, adv_acc, loss = run_batch_epoch(attack, model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
         scheduler.step()
 
 
-def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
+def run_batch_epoch(attack, model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
 
     inputs = inputs.to(args.device)
     target = target.to(args.device)
@@ -145,7 +146,8 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
     optimizer.zero_grad(set_to_none=False)
 
     #set_attack_mode(model, True)
-    adv_input = fgsm_simple(model, inputs, target)
+    #adv_input = fgsm_simple(model, inputs, target)
+    adv_input = attack(inputs, target)
     #set_model_mode(model, True)
     adv_input = adv_input.to(args.device)
 
@@ -168,7 +170,7 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
     adv_correct = (adv_predicts == target).sum().item()
     return std_correct, adv_correct, total_loss.item()
 
-def infer(valid_queue, model, criterion, args):
+def infer(attack, valid_queue, model, criterion, args):
     std_correct = 0
     adv_correct = 0
     std_loss_mean = 0
@@ -180,7 +182,8 @@ def infer(valid_queue, model, criterion, args):
         target = target.to(args.device)
 
         with torch.enable_grad():
-            adv_input = fgsm_simple(model, inputs, target)
+            #adv_input = fgsm_simple(model, inputs, target)
+            adv_input = attack(inputs, target)
         adv_input = adv_input.to(args.device)
 
 
