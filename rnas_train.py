@@ -12,7 +12,7 @@ import utils
 import utils_train
 from micro_space.model import NetworkCIFAR
 from adversarial import fgsm_simple, set_model_mode, set_attack_mode
-import torchattacks
+#import torchattacks
 
 def prepare_args(args):
     if torch.cuda.is_available():
@@ -75,8 +75,8 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
     attack = attack_f(model)
     for n_batch, (input, target) in enumerate(train_queue):
         times_stamp = time.time()
-        input = input.to(args.device, non_blocking=True)
-        target = target.to(args.device, non_blocking=True)
+        input = input.to(args.device)
+        target = target.to(args.device)
 
         optimizer.zero_grad()
 
@@ -146,8 +146,8 @@ def run_batch_epoch(attack, model, inputs, target, criterion, optimizer, args, m
     optimizer.zero_grad(set_to_none=False)
 
     #set_attack_mode(model, True)
-    #adv_input = fgsm_simple(model, inputs, target)
-    adv_input = attack(inputs, target)
+    adv_input = fgsm_simple(model, inputs, target)
+    #adv_input = attack(inputs, target)
     #set_model_mode(model, True)
     adv_input = adv_input.to(args.device)
 
@@ -181,9 +181,9 @@ def infer(attack, valid_queue, model, criterion, args):
         inputs  = inputs.to(args.device)
         target = target.to(args.device)
 
-        with torch.enable_grad():
-            #adv_input = fgsm_simple(model, inputs, target)
-            adv_input = attack(inputs, target)
+        
+        adv_input = fgsm_simple(model, inputs, target)
+        #adv_input = attack(inputs, target)
         adv_input = adv_input.to(args.device)
 
 

@@ -14,7 +14,7 @@ import pickle
 from torch.utils.flop_counter import FlopCounterMode
 from micro_space.model import NetworkCIFAR
 from indicators import r2
-
+import copy
 
 # Load R2 weights for the i-th population size
 def get_weights_r2(n):
@@ -313,8 +313,8 @@ def get_model_metrics_dep(genotype, model, discrete=False):
 
     return flops, params
 
-def get_model_metrics(model):
-
+def get_model_metrics(model_):
+    model = copy.deepcopy(model_)
     params_num = sum(p.numel() for p in model.parameters() if p.requires_grad)
     params = round(float(params_num) / 1e6, 4)
 
@@ -323,7 +323,7 @@ def get_model_metrics(model):
         model(x)
 
     flops = round(float(flop_counter.get_total_flops()) / 1e6, 4)
-
+    del model 
     return flops, params
 
 def get_best_architecture_standard(archs_path):
