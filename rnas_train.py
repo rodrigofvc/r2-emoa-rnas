@@ -130,14 +130,13 @@ def train_individual(model, flops, params, train_queue, criterion, optimizer, ar
     model_parameters = torch.tensor(float(params), device=args.device)
     model.train()
     time_stamp = time.time()
-    attack = torchattacks.FGSM(model, args.fgsm_eps)
     for epoch in range(args.epochs_train_individual):
         for n_batch, (inputs, target) in enumerate(train_queue):
-            std_acc, adv_acc, loss = run_batch_epoch(attack, model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
+            std_acc, adv_acc, loss = run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
         scheduler.step()
 
 
-def run_batch_epoch(attack, model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
+def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
 
     inputs = inputs.to(args.device)
     target = target.to(args.device)
@@ -169,7 +168,7 @@ def run_batch_epoch(attack, model, inputs, target, criterion, optimizer, args, m
     adv_correct = (adv_predicts == target).sum().item()
     return std_correct, adv_correct, total_loss.item()
 
-def infer(attack, valid_queue, model, criterion, args):
+def infer(valid_queue, model, criterion, args):
     std_correct = 0
     adv_correct = 0
     std_loss_mean = 0
