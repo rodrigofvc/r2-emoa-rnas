@@ -1,5 +1,6 @@
 import torch
 import torch.nn.functional as F
+from torch.utils.checkpoint import checkpoint
 
 # Set the model to training mode for all layers, including BatchNorm and Dropout
 def set_model_mode(model, training):
@@ -23,3 +24,37 @@ def fgsm_simple(model, x, y, eps=8/255):
     grad = torch.autograd.grad(std_loss, x_adv, retain_graph=False, create_graph=False)[0]
     adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach()
     return adv.detach()
+
+
+def fgsm_simple_infer(model, x, y, eps=8 / 255):
+    x_adv = x.detach().clone().requires_grad_(True)
+
+    std_logits = model(x_adv)
+    std_loss = F.cross_entropy(std_logits, y)
+
+    grad = torch.autograd.grad(std_loss, x_adv, retain_graph=False, create_graph=False)[0]
+    adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach()
+    return adv.detach(), std_logits.detach()
+
+def fgsm_simple_checkpoint(model, x, y, eps=8/255):
+    x_adv = x.detach().clone().requires_grad_(True)
+    def forward_fn(x_in):
+        return model(x_in)
+
+    std_logits = checkpoint(forward_fn, x_adv, use_reentrant=False)
+    std_loss = F.cross_entropy(std_logits, y)
+    grad = torch.autograd.grad(std_loss, x_adv, retain_graph=False, create_graph=False)[0]
+    adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach()
+    return adv
+
+
+def fgsm_simple_reuse(model, x, y, eps=8 / 255):
+    x_adv = x.detach().clone().requires_grad_(True)
+
+    std_logits = model(x_adv)
+    std_loss = F.cross_entropy(std_logits, y)
+
+    grad = torch.autograd.grad(std_loss, x_adv, retain_graph=False, create_graph=False)[0]
+    adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach()
+    return adv.detach(), std_logits.detach()
+

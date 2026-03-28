@@ -11,7 +11,7 @@ import torchvision
 import utils
 import utils_train
 from micro_space.model import NetworkCIFAR
-from adversarial import fgsm_simple, set_model_mode, set_attack_mode
+from adversarial import fgsm_simple, fgsm_simple_infer
 
 def prepare_args(args):
     if torch.cuda.is_available():
@@ -122,6 +122,8 @@ def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, r2_weights
 
     values = torch.abs(losses - ideal) / torch.clamp(torch.abs(nadir - ideal), 1e-6)
     stch_value = mu * torch.logsumexp(weights * (values - z_ref) / mu, dim=-1)
+    if not torch.isfinite(stch_value):
+        raise ValueError(f"stch_value is not finite {stch_value.item()}")
     return stch_value
 
 def train_individual(model, flops, params, train_queue, criterion, optimizer, args, weight_individual, nadir_point, ideal_point, scheduler):
@@ -147,10 +149,15 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
     adv_input = fgsm_simple(model, inputs, target)
     #adv_input = attack(inputs, target)
     #set_model_mode(model, True)
-    adv_input = adv_input.to(args.device)
+    adv_input = adv_input.detach().to(args.device)
 
-    std_logits = model(inputs)
-    adv_logits = model(adv_input)
+    #std_logits = checkpoint(lambda x: model(x), inputs, use_reentrant=False)
+    #adv_logits = checkpoint(lambda x: model(x), adv_input, use_reentrant=False)
+
+    x_all = torch.cat([inputs, adv_input], dim=0)
+    logits_all = model(x_all)
+
+    std_logits, adv_logits = torch.chunk(logits_all, 2, dim=0)
 
     adv_loss = criterion(adv_logits, target)
     std_loss = criterion(std_logits, target)
@@ -180,13 +187,10 @@ def infer(valid_queue, model, criterion, args):
         target = target.to(args.device)
 
         
-        adv_input = fgsm_simple(model, inputs, target)
-        #adv_input = attack(inputs, target)
+        adv_input, std_logits = fgsm_simple_infer(model, inputs, target)
         adv_input = adv_input.to(args.device)
 
-
         with torch.no_grad():
-            std_logits = model(inputs)
             adv_logits = model(adv_input)
             
         adv_loss = criterion(adv_logits, target)
