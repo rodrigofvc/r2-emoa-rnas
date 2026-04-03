@@ -109,27 +109,29 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
     total_loss_mean /= total
     return std_accuracy * 100.0, adv_accuracy * 100.0, total_loss_mean
 
-def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, r2_weights, z_ref_stch, nadir_point, ideal_point):
+def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, weights, z_ref_stch, nadir_point, ideal_point):
     loss_type = std_loss.dtype
     losses_grad = torch.stack([std_loss, adv_loss])
     losses_const = torch.stack([flops, params]).detach().to(dtype=loss_type)
     losses = torch.cat([losses_grad, losses_const])
 
-    ideal = ideal_point.detach().to(dtype=loss_type)
-    nadir = nadir_point.detach().to(dtype=loss_type)
-    z_ref = z_ref_stch.detach().to(dtype=loss_type)
-    weights = r2_weights.detach().to(dtype=loss_type)
+    #ideal = torch.tensor(ideal_point, device=losses.device, dtype=loss_type)
+    #nadir = torch.tensor(nadir_point, device=losses.device, dtype=loss_type)
+    #z_ref = torch.tensor(z_ref_stch, device=losses.device, dtype=loss_type)
 
-    values = torch.abs(losses - ideal) / torch.clamp(torch.abs(nadir - ideal), 1e-6)
-    stch_value = mu * torch.logsumexp(weights * (values - z_ref) / mu, dim=-1)
+    values = torch.abs(losses - ideal_point) / torch.clamp(torch.abs(nadir_point - ideal_point), 1e-6)
+    stch_value = mu * torch.logsumexp(weights * (values - z_ref_stch) / mu, dim=-1)
     if not torch.isfinite(stch_value):
         raise ValueError(f"stch_value is not finite {stch_value.item()}")
     return stch_value
 
-def train_individual(model, flops, params, train_queue, criterion, optimizer, args, weight_individual, nadir_point, ideal_point, scheduler):
-    z_ref_stch = torch.zeros(4, device=args.device)
-    model_flops = torch.tensor(float(flops), device=args.device)
-    model_parameters = torch.tensor(float(params), device=args.device)
+def train_individual(model, flops, params, train_queue, criterion, optimizer, args, r2_weight, nadir_point, ideal_point, scheduler):
+    weight_individual = torch.tensor(r2_weight, device=args.device, dtype=torch.float32)
+    model_flops = torch.tensor(float(flops), device=args.device, dtype=torch.float32)
+    model_parameters = torch.tensor(float(params), device=args.device, dtype=torch.float32)
+    z_ref_stch = torch.zeros(4, device=args.device, dtype=torch.float32)
+    nadir_point = torch.tensor(nadir_point, device=args.device, dtype=torch.float32)
+    ideal_point = torch.tensor(ideal_point, device=args.device, dtype=torch.float32)
     model.train()
     time_stamp = time.time()
     for epoch in range(args.epochs_train_individual):
@@ -206,7 +208,6 @@ def infer(valid_queue, model, criterion, args):
             total += target.size(0)
             std_loss_mean += std_loss.item()
             adv_loss_mean += adv_loss.item()
-    torch.cuda.synchronize()
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
     std_loss_mean /= total

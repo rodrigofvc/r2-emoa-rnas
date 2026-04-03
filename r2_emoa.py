@@ -1,4 +1,5 @@
 import gc
+import multiprocessing as mp
 import time
 from collections import defaultdict
 
@@ -65,15 +66,9 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
     utils.store_statisctics(statisctics, objective_space)
     return len(pop)
 
-def eval_individual(individual, model, valid_queue, args, criterion):
+def eval_individual(model, valid_queue, args, criterion):
     std_acc, adv_acc, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
-    individual.std_acc = std_acc
-    individual.adv_acc = adv_acc
-    individual.F[args.std_loss_index] = float(std_loss)
-    individual.F[args.adv_loss_index] = float(adv_loss)
-    # pre-calculated FLOPs and parameters during get_model_from_individual, so we just retrieve them here
-    model_flops, model_parameters = individual.F[args.flops_index], individual.F[args.params_index]
-    print(f"Evaluation: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, std_loss {std_loss:.4f}, adv_loss {adv_loss:.4f} ,flops {model_flops:.2f}, params {model_parameters}")
+    return std_acc, adv_acc, std_loss, adv_loss
 
 def train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, attack_f, gen, scaler, args, r2_weights, nadir_point, ideal_point, warmup=False):
     model.train()
@@ -155,7 +150,7 @@ def r2_emoa_rnas_oneshot(args, train_queue, valid_queue, model, criterion, optim
     print(f">>>> Total search time: ({(time.time() - time_search) // 86400:02.0f}:{time.strftime('%H:%M:%S)', time.gmtime(time.time() - time_search))} (DD:HH:MM:SS)")
     return model, archive, archive_accuracy, archive_losses, statistics
 
-def get_model_from_individual(individual, args):
+def get_model_from_individual(individual_X, args):
     if args.dataset == 'cifar10':
         n_classes = 10
     elif args.dataset == 'cifar100':
@@ -165,11 +160,10 @@ def get_model_from_individual(individual, args):
     if args.search_space == 'continuous':
         k = sum(2 + i for i in range(args.steps))
         alphas_dim = (k, len(PRIMITIVES))
-        genotype = alphas_to_genotype(individual.X, alphas_dim, args)
+        genotype = alphas_to_genotype(individual_X, alphas_dim, args)
     else:
-        genome = micro_encoding.convert(individual.X)
+        genome = micro_encoding.convert(individual_X)
         genotype = micro_encoding.decode(genome, args.steps, args.multiplier)
-    individual.genotype = genotype
 
     model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype).to(args.device)
     optimizer = torch.optim.Adam(
@@ -183,16 +177,13 @@ def get_model_from_individual(individual, args):
         optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
     flops, params = utils.get_model_metrics(model)
 
-    individual.F[args.flops_index] = float(flops)
-    individual.F[args.params_index] = float(params)
-
     train_transform, valid_transform = utils.data_transforms_cifar10(args)
     if args.dataset == 'cifar10':
-        train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
-        valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
+        train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=False, transform=train_transform)
+        valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=False, transform=train_transform)
     elif args.dataset == 'cifar100':
-        train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
-        valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
+        train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=False, transform=train_transform)
+        valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=False, transform=train_transform)
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
     num_train = len(train_data)
@@ -230,40 +221,105 @@ def sanity_check_individual(model):
                 print("   ", n)
             raise RuntimeError("Shared module detected.")
 
+def worker_evaluate_individual(gen, i, individual_X, pop_len, weight_individual, nadir_point, ideal_point, args, return_dict):
+    try:
+        model, optimizer, scheduler, individual_flops, individual_params, train_queue, valid_queue, criterion = get_model_from_individual(
+            individual_X,
+            args)
+        time_training = time.time()
+        train_individual(model, individual_flops, individual_params, train_queue, criterion, optimizer, args,
+                         weight_individual, nadir_point, ideal_point, scheduler)
+        print(
+            f'Gen {gen} Training {i + 1}/{pop_len} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
+
+        time_evaluation = time.time()
+        std_acc, adv_acc, std_loss, adv_loss = eval_individual(model, valid_queue, args, criterion)
+        print(
+            f'Gen {gen} Evaluation {i + 1}/{pop_len} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS) std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, std_loss {std_loss:.4f}, adv_loss {adv_loss:.4f} ,flops {individual_flops:.2f}, params {individual_params:.2f}')
+
+        assert np.isfinite(std_acc) and np.isfinite(adv_acc) and np.isfinite(std_loss) and np.isfinite(adv_loss), f"Non-finite evaluation results for individual {i} of generation {gen}: std_acc {std_acc}, adv_acc {adv_acc}, std_loss {std_loss}, adv_loss {adv_loss}"
+
+        return_dict[i] = {
+            "std_acc": std_acc,
+            "adv_acc": adv_acc,
+            "std_loss": std_loss,
+            "adv_loss": adv_loss,
+            "flops": individual_flops,
+            "params": individual_params,
+        }
+    except Exception as e:
+        import traceback
+        print(f"Error in evaluating individual {i} of generation {gen}: {e}")
+        traceback.print_exc()
+    finally:
+        del model, optimizer, scheduler, train_queue, valid_queue, criterion
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
+
+def evaluate_population_multiprocessing(gen, pop, weights_r2, nadir_point, ideal_point, args):
+    if mp.get_start_method(allow_none=True) != "spawn":
+        mp.set_start_method("spawn", force=True)
+
+    manager = mp.Manager()
+    return_dict = manager.dict()
+
+    pop_len = len(pop)
+    to_remove = []
+    for i, individual in enumerate(pop):
+        weight_individual = weights_r2[len(pop)][i]
+        p = mp.Process(
+            target=worker_evaluate_individual,
+            args=(gen, i, individual.X, pop_len, weight_individual, nadir_point, ideal_point, args, return_dict)
+        )
+        p.start()
+        p.join(timeout=10*60)  # 10 minutes timeout per individual
+
+        if p.is_alive():
+            print(f"Timeout: Individual {i} of generation {gen} took too long to evaluate and will be removed from the population.")
+            p.terminate()
+            p.join()
+            to_remove.append(i)
+            continue
+
+        if p.exitcode != 0 or i not in return_dict:
+            # If the process did not finish successfully, we skip this individual in the population update
+            if p.exitcode == 11:
+                print(f"Segmentation fault detected for individual {i} of generation {gen}, and will be removed from the population")
+            else:
+                print(f"Error: Individual {i} of generation {gen} did not finish successfully (exit code {p.exitcode}) and will be removed from the population")
+            to_remove.append(i)
+        else:
+            # Update individual's results from the return_dict
+            res = return_dict[i]
+            individual.std_acc = res["std_acc"]
+            individual.adv_acc = res["adv_acc"]
+            individual.F[args.std_loss_index] = res["std_loss"]
+            individual.F[args.adv_loss_index] = res["adv_loss"]
+            individual.F[args.flops_index] = res["flops"]
+            individual.F[args.params_index] = res["params"]
+
+    for i in sorted(to_remove, reverse=True):
+        print(f"Removing individual {i} from generation {gen} due to evaluation failure.")
+        del pop[i]
+    assert len(pop) == pop_len - len(to_remove), f"Expected population size {pop_len - len(to_remove)}, but got {len(pop)} after removing failed evaluations."
+    return len(to_remove)
+
 # R2 version where each architecture has its own weights (no supernet training). This is a baseline to compare with the supernet version.
 def r2_emoa_rnas(args, alphas_dim, weights_r2):
     archive = []
     archive_accuracy = []
     archive_losses = []
     architectures_evaluated = 0
-    nadir_point = torch.ones(4, device=args.device)
-    ideal_point = torch.zeros(4, device=args.device)
+    nadir_point = np.ones(4, )
+    ideal_point = np.zeros(4,)
     time_search = time.time()
     pop = initial_population(args.n_population, alphas_dim, args.objectives, args)
     print(f">>>> Initial population of size {len(pop)} created.")
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'),
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
-    for i, individual in enumerate(pop):
-        time_training = time.time()
-        try:
-            model, optimizer, scheduler, individual_flops, individual_params, train_queue, valid_queue, criterion = get_model_from_individual(individual,
-                                                                                                             args)
-            weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
-            train_individual(model, individual_flops, individual_params, train_queue, criterion, optimizer, args, weight_individual, nadir_point, ideal_point, scheduler)
-            print(f'Gen 0 Training {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
-            time_evaluation = time.time()
-            eval_individual(individual, model, valid_queue, args, criterion)
-            print(f'Gen 0 Evaluation {i+1}/{len(pop)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
-        except Exception as e:
-            print(f"Error training/evaluating individual {i} in generation 0: {type(e).__name__}: {e}")
-            individual.std_acc = 0
-            individual.adv_acc = 0
-            individual.F[args.std_loss_index] = 1000
-            individual.F[args.adv_loss_index] = 1000
-            individual.F[args.flops_index] = 1000
-            individual.F[args.params_index] = 1000
-        finally:
-            del model, optimizer, scheduler, train_queue, valid_queue, criterion
+    individuals_failed = 0
+    individuals_failed += evaluate_population_multiprocessing(0, pop, weights_r2, nadir_point, ideal_point, args)
     update_ref_points(pop, nadir_point, ideal_point)
 
     archive = archive_update_pq(archive, pop)
@@ -281,36 +337,14 @@ def r2_emoa_rnas(args, alphas_dim, weights_r2):
             offsprings = binary_crossover(parents, n_childs=len(pop), eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
-        for i, individual in enumerate(mutation):
-            time_training = time.time()
-
-            try:
-                model, optimizer, scheduler, individual_flops, individual_params, train_queue, valid_queue, criterion  = get_model_from_individual(
-                        individual, args)
-                weight_individual = torch.tensor(weights_r2[len(pop)][i], device=args.device, dtype=torch.float32)
-                train_individual(model, individual_flops, individual_params, train_queue, criterion, optimizer, args, weight_individual, nadir_point,
-                                 ideal_point, scheduler)
-                print(f'Gen {generation + 1} Training {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
-                time_evaluation = time.time()
-                eval_individual(individual, model, valid_queue, args, criterion)
-                print(f'Gen {generation + 1} Evaluation {i+1}/{len(mutation)} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS)')
-            except Exception as e:
-                print(f"Error training/evaluating individual {i} in generation {generation + 1}: {type(e).__name__}: {e}")
-                individual.std_acc = 0
-                individual.adv_acc = 0
-                individual.F[args.std_loss_index] = 1000
-                individual.F[args.adv_loss_index] = 1000
-                individual.F[args.flops_index] = 1000
-                individual.F[args.params_index] = 1000
-            finally:
-                del model, optimizer, scheduler, train_queue, valid_queue, criterion
+        individuals_failed += evaluate_population_multiprocessing(generation, mutation, weights_r2, nadir_point, ideal_point, args)
         architectures_evaluated += len(mutation)
         update_ref_points(pop, nadir_point, ideal_point)
 
         archive = archive_update_pq(archive, pop + mutation)
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, pop + mutation)
         archive_losses = archive_update_pq(archive_losses, pop + mutation, k=2)
-        pop = update_population_r2(pop, mutation, weights_r2)
+        pop = update_population_r2(args.n_population, pop, mutation, weights_r2)
         hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args,
                                                              weights_r2, statistics)
         utils.save_architectures(archive, args.save_path_final_architect)
@@ -320,6 +354,7 @@ def r2_emoa_rnas(args, alphas_dim, weights_r2):
         print(f">>>> Gen {generation + 1} | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
         print(
             f">>>> Gen {generation + 1} DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_gen))} (HH:MM:SS)")
+    print(f">>>> Total architectures evaluated: {architectures_evaluated}, Individuals failed during training // evaluation: {individuals_failed}")
     print(
         f">>>> Total search time: ({(time.time() - time_search) // 86400:02.0f}:{time.strftime('%H:%M:%S)', time.gmtime(time.time() - time_search))} (DD:HH:MM:SS)")
     return archive, archive_accuracy, archive_losses, statistics
@@ -362,10 +397,8 @@ def non_dominated_sort(population):
 
     return [[population[i] for i in front] for front in fronts]
 
-def update_population_r2(pop, offspring, weights_r2):
+def update_population_r2(n, pop, offspring, weights_r2):
     c = pop + offspring
-    n = len(pop)
-    assert len(c) >= 2*n
     while len(c) > n:
         weights = weights_r2[len(c)]
         fronts = non_dominated_sort(c)
