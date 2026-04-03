@@ -2,11 +2,9 @@ import os
 import argparse
 import ssl
 import random
-
+os.environ["TORCH_COMPILE_DISABLE"] = "1"
 import numpy as np
 import torch
-
-
 import torchvision
 from torch import nn
 
@@ -17,6 +15,8 @@ from micro_space.micro_encoding import PRIMITIVES
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, message=".*MPS backend.*")
+
+
 # python rnas_search.py --seed 18906049 --algorithm r2-emoa-one-shot --dataset cifar10 --batch_size 96 --n_population 40 --generations 30 --epochs_warmup 100 --epochs_train_supernet 10 --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 --mu 0.1 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --report_freq 50 --gpu 0 --init_channels 16 --reduction True --layers 5 --steps 6 --multiplier 6 --attack FGSM --fgsm_eps 8/255 --cutout False --cutout_length 16 --drop_path_prob 0.3 --grad_clip 0.5 --train_portion 0.5
 # python rnas_search.py --seed 18906049 --algorithm r2-emoa --search_space discrete --dataset cifar10 --batch_size 96 --n_population 40 --epochs_train_individual 10 --generations 30 --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 --mu 0.1 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --report_freq 50 --gpu 0 --init_channels 16 --reduction True --layers 5 --steps 6 --multiplier 6 --attack FGSM --cutout_length 16 --drop_path_prob 0.3 --grad_clip 0.5 --train_portion 0.5
 
@@ -125,13 +125,12 @@ def prepare_args_supernet(args):
 """
 def prepare_args_standard(args):
     if torch.cuda.is_available():
-        device = torch.device(f'cuda:{args.gpu}')
+        device = f'cuda:{args.gpu}'
     elif torch.backends.mps.is_available():
-        device = torch.device("mps")
+        device = 'mps'
     else:
-        device = torch.device("cpu")
+        device = 'cpu'
     print("Using device:", device)
-    args.device = device
 
     ssl._create_default_https_context = ssl._create_unverified_context
 
@@ -187,6 +186,7 @@ if __name__ == '__main__':
     parser.add_argument('--grad_clip', type=float, default=5.0, help='gradient clipping')
     parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
     parser.add_argument('--synchronize', type=bool, default=False, help='synchronize CUDA operations or not')
+    parser.add_argument('--timestamp', type=int, default=10, help='timestamp in minutes for training/eval each architecture')
     args = parser.parse_args()
 
     print("Running with config:")

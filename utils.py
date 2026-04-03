@@ -3,7 +3,6 @@ import gc
 import json
 import lzma
 import time
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from torch import nn
@@ -160,6 +159,7 @@ def read_architectures(architect_path):
     return architectures
 
 def plot_archive_losses(archive_losses, archive_path):
+    import matplotlib.pyplot as plt
     archive_path += 'archive_losses.pdf'
     std_loss = [p.F[0] for p in archive_losses]
     adv_loss = [p.F[1] for p in archive_losses]
@@ -173,6 +173,7 @@ def plot_archive_losses(archive_losses, archive_path):
     plt.close()
 
 def plot_archive_accuracy(archive_accuracy, archive_path):
+    import matplotlib.pyplot as plt
     archive_path += 'archive_accuracy.pdf'
     std_acc = [p.std_acc for p in archive_accuracy]
     adv_acc = [p.adv_acc for p in archive_accuracy]
@@ -186,6 +187,7 @@ def plot_archive_accuracy(archive_accuracy, archive_path):
     plt.close()
 
 def plot_lr_scheduler(statistics, path):
+    import matplotlib.pyplot as plt
     path += 'lr_scheduler.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['lr_log'], marker='o', color='blue')
@@ -197,6 +199,7 @@ def plot_lr_scheduler(statistics, path):
     plt.close()
 
 def plot_hypervolume(statistics, path):
+    import matplotlib.pyplot as plt
     path += 'hypervolume.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['hyp_log'], marker='o', color='blue')
@@ -208,6 +211,7 @@ def plot_hypervolume(statistics, path):
     plt.close()
 
 def plot_hypervolume2(statistics, path):
+    import matplotlib.pyplot as plt
     path += 'hypervolume2.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['hyp2_log'], marker='o', color='blue')
@@ -219,6 +223,7 @@ def plot_hypervolume2(statistics, path):
     plt.close()
 
 def plot_r2(statistics, path):
+    import matplotlib.pyplot as plt
     path += 'r2.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['r2_log'], marker='o', color='red')
@@ -342,7 +347,6 @@ def get_best_architecture_standard(archs_path):
 def save_params(args, trained_arch_path):
     params_path = trained_arch_path + os.sep
     params_dict = vars(args)
-    params_dict['device'] = str(params_dict['device'])
     if not os.path.exists(os.path.dirname(params_path)):
         os.makedirs(os.path.dirname(params_path))
     params_path += 'params.json'

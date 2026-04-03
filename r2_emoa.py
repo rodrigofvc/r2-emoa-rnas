@@ -2,8 +2,9 @@ import gc
 import multiprocessing as mp
 import time
 from collections import defaultdict
-
+import copy 
 import numpy as np
+import time
 
 import utils
 from archivers import archive_update_pq, archive_update_pq_accuracy, dominates
@@ -62,7 +63,7 @@ def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_
         individual.genotype = model.genotype()
         individual.F_norm = np.zeros(args.objectives)
         objective_space[i, :] = individual.F
-        print(f"Evaluation {i + 1}/{len(pop)}: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, std_loss {std_loss:.4f}, adv_loss {adv_loss:.4f} ,flops {model_flops:.2f}, params {model_parameters} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))}) (HH:MM:SS)")
+        print(f"Evaluation {i + 1}/{len(pop)}: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, std_loss {std_loss:.4f}, adv_loss {adv_loss:.4f}, flops {model_flops:.2f}, params {model_parameters} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))}) (HH:MM:SS)")
     utils.store_statisctics(statisctics, objective_space)
     return len(pop)
 
@@ -192,8 +193,8 @@ def get_model_from_individual(individual_X, args):
 
     if torch.backends.mps.is_available():
         # testing
-        split = 32
-        num_train = split + 32
+        split = 96
+        num_train = split + 96
 
     train_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
@@ -223,6 +224,13 @@ def sanity_check_individual(model):
 
 def worker_evaluate_individual(gen, i, individual_X, pop_len, weight_individual, nadir_point, ideal_point, args, return_dict):
     try:
+        if torch.cuda.is_available():
+            device = torch.device(f'cuda:{args.gpu}')
+        elif torch.backends.mps.is_available():
+            device = torch.device("mps")
+        else:
+            device = torch.device("cpu")
+        args.device = device
         model, optimizer, scheduler, individual_flops, individual_params, train_queue, valid_queue, criterion = get_model_from_individual(
             individual_X,
             args)
@@ -236,7 +244,6 @@ def worker_evaluate_individual(gen, i, individual_X, pop_len, weight_individual,
         std_acc, adv_acc, std_loss, adv_loss = eval_individual(model, valid_queue, args, criterion)
         print(
             f'Gen {gen} Evaluation {i + 1}/{pop_len} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS) std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, std_loss {std_loss:.4f}, adv_loss {adv_loss:.4f} ,flops {individual_flops:.2f}, params {individual_params:.2f}')
-
         assert np.isfinite(std_acc) and np.isfinite(adv_acc) and np.isfinite(std_loss) and np.isfinite(adv_loss), f"Non-finite evaluation results for individual {i} of generation {gen}: std_acc {std_acc}, adv_acc {adv_acc}, std_loss {std_loss}, adv_loss {adv_loss}"
 
         return_dict[i] = {
@@ -248,9 +255,7 @@ def worker_evaluate_individual(gen, i, individual_X, pop_len, weight_individual,
             "params": individual_params,
         }
     except Exception as e:
-        import traceback
         print(f"Error in evaluating individual {i} of generation {gen}: {e}")
-        traceback.print_exc()
     finally:
         del model, optimizer, scheduler, train_queue, valid_queue, criterion
         if torch.cuda.is_available():
@@ -261,49 +266,57 @@ def evaluate_population_multiprocessing(gen, pop, weights_r2, nadir_point, ideal
     if mp.get_start_method(allow_none=True) != "spawn":
         mp.set_start_method("spawn", force=True)
 
-    manager = mp.Manager()
-    return_dict = manager.dict()
+    with mp.Manager() as manager:
+        return_dict = manager.dict()
 
-    pop_len = len(pop)
-    to_remove = []
-    for i, individual in enumerate(pop):
-        weight_individual = weights_r2[len(pop)][i]
-        p = mp.Process(
-            target=worker_evaluate_individual,
-            args=(gen, i, individual.X, pop_len, weight_individual, nadir_point, ideal_point, args, return_dict)
-        )
-        p.start()
-        p.join(timeout=10*60)  # 10 minutes timeout per individual
+        pop_len = len(pop)
+        to_remove = []
+        for i, individual in enumerate(pop):
+            weight_individual = weights_r2[len(pop)][i].copy()
+            args_individual = copy.deepcopy(args)
+            p = mp.Process(
+                target=worker_evaluate_individual,
+                args=(gen, i, individual.X.copy(), pop_len, weight_individual, nadir_point.copy(), ideal_point.copy(), args_individual, return_dict)
+            )
+            p.start()
+            time.sleep(1)
+            p.join(timeout=args.timestamp*60)  # 10 minutes timeout per individual
+            time.sleep(1)
+            
+            if p.is_alive():
+                print(f"Timeout: Individual {i} of generation {gen} took too long to evaluate and will be removed from the population.")
+                p.terminate()
+                p.join()
+                to_remove.append(i)
+                continue
 
-        if p.is_alive():
-            print(f"Timeout: Individual {i} of generation {gen} took too long to evaluate and will be removed from the population.")
-            p.terminate()
-            p.join()
-            to_remove.append(i)
-            continue
-
-        if p.exitcode != 0 or i not in return_dict:
-            # If the process did not finish successfully, we skip this individual in the population update
-            if p.exitcode == 11:
-                print(f"Segmentation fault detected for individual {i} of generation {gen}, and will be removed from the population")
+            if p.exitcode != 0 or i not in return_dict:
+                # If the process did not finish successfully, we skip this individual in the population update
+                if p.exitcode == 11:
+                    print(f"Segmentation fault detected for individual {i} of generation {gen}, and will be removed from the population")
+                else:
+                    print(f"Error: Individual {i} of generation {gen} did not finish successfully (exit code {p.exitcode}) and will be removed from the population")
+                to_remove.append(i)
+            elif not p.is_alive() and p.exitcode == 0:
+                # Update individual's results from the return_dict
+                res = return_dict.get(i)
+                if res is not None:
+                    individual.std_acc = res["std_acc"]
+                    individual.adv_acc = res["adv_acc"]
+                    individual.F[args.std_loss_index] = res["std_loss"]
+                    individual.F[args.adv_loss_index] = res["adv_loss"]
+                    individual.F[args.flops_index] = res["flops"]
+                    individual.F[args.params_index] = res["params"]
+                else:
+                    to_remove.append(i)    
             else:
-                print(f"Error: Individual {i} of generation {gen} did not finish successfully (exit code {p.exitcode}) and will be removed from the population")
-            to_remove.append(i)
-        else:
-            # Update individual's results from the return_dict
-            res = return_dict[i]
-            individual.std_acc = res["std_acc"]
-            individual.adv_acc = res["adv_acc"]
-            individual.F[args.std_loss_index] = res["std_loss"]
-            individual.F[args.adv_loss_index] = res["adv_loss"]
-            individual.F[args.flops_index] = res["flops"]
-            individual.F[args.params_index] = res["params"]
+                to_remove.append(i)
 
-    for i in sorted(to_remove, reverse=True):
-        print(f"Removing individual {i} from generation {gen} due to evaluation failure.")
-        del pop[i]
-    assert len(pop) == pop_len - len(to_remove), f"Expected population size {pop_len - len(to_remove)}, but got {len(pop)} after removing failed evaluations."
-    return len(to_remove)
+        for i in sorted(to_remove, reverse=True):
+            print(f"Removing individual {i} from generation {gen} due to evaluation failure.")
+            del pop[i]
+        assert len(pop) == pop_len - len(to_remove), f"Expected population size {pop_len - len(to_remove)}, but got {len(pop)} after removing failed evaluations."
+        return len(to_remove)
 
 # R2 version where each architecture has its own weights (no supernet training). This is a baseline to compare with the supernet version.
 def r2_emoa_rnas(args, alphas_dim, weights_r2):
@@ -330,16 +343,16 @@ def r2_emoa_rnas(args, alphas_dim, weights_r2):
     for generation in range(args.generations):
         time_stamp_gen = time.time()
 
-        parents = tournament_selection(pop, n_select=len(pop) // 2, tournament_size=5)
+        parents = tournament_selection(pop, n_select=args.n_population // 2, tournament_size=5)
         if args.search_space == 'discrete':
-            offsprings = point_crossover(parents, n_childs=len(pop), prob_cross=args.prob_cross)
+            offsprings = point_crossover(parents, n_childs=args.n_population, prob_cross=args.prob_cross)
         else:
-            offsprings = binary_crossover(parents, n_childs=len(pop), eta=args.eta_cross, prob_cross=args.prob_cross)
+            offsprings = binary_crossover(parents, n_childs=args.n_population, eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
-        individuals_failed += evaluate_population_multiprocessing(generation, mutation, weights_r2, nadir_point, ideal_point, args)
-        architectures_evaluated += len(mutation)
-        update_ref_points(pop, nadir_point, ideal_point)
+        individuals_failed += evaluate_population_multiprocessing(generation+1, mutation, weights_r2, nadir_point, ideal_point, args)
+        architectures_evaluated += args.n_population
+        update_ref_points(mutation, nadir_point, ideal_point)
 
         archive = archive_update_pq(archive, pop + mutation)
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, pop + mutation)

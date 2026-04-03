@@ -30,7 +30,7 @@ def get_weights_ponderated(n, k):
 def store_weights_ponderated(n, k):
     file = 'weights_' + str(n) + '.pkl'
     directions_set = {}
-    for i in range(n+1):
+    for i in range(2*n-9):
         size_pop = 2 * n - i
         directions_set[size_pop] = get_weights_ponderated(size_pop, k)
     for weight in directions_set.values():

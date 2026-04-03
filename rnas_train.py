@@ -115,10 +115,6 @@ def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, weights, z
     losses_const = torch.stack([flops, params]).detach().to(dtype=loss_type)
     losses = torch.cat([losses_grad, losses_const])
 
-    #ideal = torch.tensor(ideal_point, device=losses.device, dtype=loss_type)
-    #nadir = torch.tensor(nadir_point, device=losses.device, dtype=loss_type)
-    #z_ref = torch.tensor(z_ref_stch, device=losses.device, dtype=loss_type)
-
     values = torch.abs(losses - ideal_point) / torch.clamp(torch.abs(nadir_point - ideal_point), 1e-6)
     stch_value = mu * torch.logsumexp(weights * (values - z_ref_stch) / mu, dim=-1)
     if not torch.isfinite(stch_value):
@@ -133,10 +129,9 @@ def train_individual(model, flops, params, train_queue, criterion, optimizer, ar
     nadir_point = torch.tensor(nadir_point, device=args.device, dtype=torch.float32)
     ideal_point = torch.tensor(ideal_point, device=args.device, dtype=torch.float32)
     model.train()
-    time_stamp = time.time()
     for epoch in range(args.epochs_train_individual):
         for n_batch, (inputs, target) in enumerate(train_queue):
-            std_acc, adv_acc, loss = run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
+            run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
         scheduler.step()
 
 
@@ -147,21 +142,11 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
 
     optimizer.zero_grad(set_to_none=True)
 
-    #set_attack_mode(model, True)
     adv_input = fgsm_simple(model, inputs, target)
-    #set_model_mode(model, True)
     adv_input = adv_input.to(args.device)
-
-    #std_logits = checkpoint(lambda x: model(x), inputs, use_reentrant=False)
-    #adv_logits = checkpoint(lambda x: model(x), adv_input, use_reentrant=False)
 
     std_logits = model(inputs)
     adv_logits = model(adv_input)
-
-    #x_all = torch.cat([inputs, adv_input], dim=0)
-    #logits_all = model(x_all)
-
-    #std_logits, adv_logits = torch.chunk(logits_all, 2, dim=0)
 
     adv_loss = criterion(adv_logits, target)
     std_loss = criterion(std_logits, target)
