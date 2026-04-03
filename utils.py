@@ -1,21 +1,20 @@
 import csv
+import gc
 import json
 import lzma
 import time
-import matplotlib.pyplot as plt
-#from ultralytics.thop import profile
-#from thop import profile
-from torchinfo import summary
+
 import numpy as np
 import torch
+from torch import nn
 from pymoo.indicators.hv import HV
 import torchvision.transforms as transforms
 import os
 import pickle
-
+from torch.utils.flop_counter import FlopCounterMode
 from micro_space.model import NetworkCIFAR
 from indicators import r2
-
+import copy
 
 # Load R2 weights for the i-th population size
 def get_weights_r2(n):
@@ -72,17 +71,26 @@ def store_metrics(architectures_evaluated, population, population_2, args, weigh
     ind = HV(ref_point=np.array([max_f1, max_f2, max_f3, max_f4]))
     population_array = np.array([ind.F for ind in population])
     hyp = ind(population_array)
-    statistics['hyp_log'].append(hyp.item())
+    if type(hyp) == np.ndarray:
+        statistics['hyp_log'].append(hyp.item())
+    else:
+        statistics['hyp_log'].append(hyp)
     # compute hypervolume 2 (std_loss, adv_loss)
     ind2 = HV(ref_point=np.array([max_f1, max_f2]))
     population_array2 = np.array([[ind.F[0], ind.F[1]] for ind in population_2])
     hyp2 = ind2(population_array2)
-    statistics['hyp2_log'].append(hyp2.item())
+    if type(hyp2) == np.ndarray:
+        statistics['hyp2_log'].append(hyp2.item())
+    else:
+        statistics['hyp2_log'].append(hyp2)
     # compute r2
     z_ref = np.zeros(4)
     nadir_point = np.array([max_f1, max_f2, max_f3, max_f4])
     r2_population = r2(population, weights_r2[args.n_population], nadir_point, z_ref)
-    statistics['r2_log'].append(r2_population.item())
+    if type(r2_population) == np.ndarray:
+        statistics['r2_log'].append(r2_population.item())
+    else:
+        statistics['r2_log'].append(r2_population)
     row_hyp = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'hv', hyp, args.save_path_final_model.replace("\\", "/")]
     row_hyp2 = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'hv_2obj', hyp2, args.save_path_final_model.replace("\\", "/")]
     row_r2 = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'r2', r2_population, args.save_path_final_model.replace("\\", "/")]
@@ -152,6 +160,7 @@ def read_architectures(architect_path):
     return architectures
 
 def plot_archive_losses(archive_losses, archive_path):
+    import matplotlib.pyplot as plt
     archive_path += 'archive_losses.pdf'
     std_loss = [p.F[0] for p in archive_losses]
     adv_loss = [p.F[1] for p in archive_losses]
@@ -165,6 +174,7 @@ def plot_archive_losses(archive_losses, archive_path):
     plt.close()
 
 def plot_archive_accuracy(archive_accuracy, archive_path):
+    import matplotlib.pyplot as plt
     archive_path += 'archive_accuracy.pdf'
     std_acc = [p.std_acc for p in archive_accuracy]
     adv_acc = [p.adv_acc for p in archive_accuracy]
@@ -178,6 +188,7 @@ def plot_archive_accuracy(archive_accuracy, archive_path):
     plt.close()
 
 def plot_lr_scheduler(statistics, path):
+    import matplotlib.pyplot as plt
     path += 'lr_scheduler.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['lr_log'], marker='o', color='blue')
@@ -189,6 +200,7 @@ def plot_lr_scheduler(statistics, path):
     plt.close()
 
 def plot_hypervolume(statistics, path):
+    import matplotlib.pyplot as plt
     path += 'hypervolume.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['hyp_log'], marker='o', color='blue')
@@ -200,6 +212,7 @@ def plot_hypervolume(statistics, path):
     plt.close()
 
 def plot_hypervolume2(statistics, path):
+    import matplotlib.pyplot as plt
     path += 'hypervolume2.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['hyp2_log'], marker='o', color='blue')
@@ -211,6 +224,7 @@ def plot_hypervolume2(statistics, path):
     plt.close()
 
 def plot_r2(statistics, path):
+    import matplotlib.pyplot as plt
     path += 'r2.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['r2_log'], marker='o', color='red')
@@ -265,25 +279,58 @@ def data_transforms_cifar10(args):
         ])
     return train_transform, valid_transform
 
-# Returns the flops and number of parameters of a model given its genotype
-def get_model_metrics(genotype, model, discrete=False):
+def get_model_metrics_dep(genotype, model, discrete=False):
     if not discrete:
         # create a discretized version of the model using the provided genotype and model
         discretized_model = NetworkCIFAR(model.C, model.num_classes, model.layers, auxiliary=False, genotype=genotype)
     else:
         discretized_model = model
-    discretized_model.eval()
-    model_device = next(discretized_model.parameters()).device
-    input_size = (1, 3, 32, 32)
-    model_stats = summary(model, input_size=input_size, verbose=0, device=model_device)
-    macs = model_stats.total_mult_adds
-    params = model_stats.total_params
-    #with torch.no_grad():
-    #    macs, params = profile(discretized_model, inputs=(x,), verbose=False)
-    flops = (2 * macs) / 1e6
-    params = params / 1e6
-    return round(flops, 4), round(params, 4)
 
+    params_num = sum(p.numel() for p in discretized_model.parameters() if p.requires_grad)
+    params = round(float(params_num) / 1e6, 4)
+
+    def get_flops():
+        current_res = 32
+        macs = 0
+
+        for m in discretized_model.modules():
+            if isinstance(m, nn.Conv2d):
+                k = m.kernel_size[0]
+                s = m.stride[0]
+                p = m.padding[0]
+                d = m.dilation[0]
+
+                out_res = ((current_res + 2 * p - d * (k - 1) - 1) // s) + 1
+
+                # MACs = (k_h * k_w * in_c * out_c / groups) * out_h * out_w
+                layer_macs = (k * k * m.in_channels * m.out_channels // m.groups) * (out_res * out_res)
+                macs += layer_macs
+
+                if s > 1:
+                    current_res = out_res
+
+            elif isinstance(m, nn.Linear):
+                macs += m.in_features * m.out_features
+
+        return macs
+
+    total_macs = get_flops()
+    flops = round(float(total_macs) / 1e6, 4)
+
+    return flops, params
+
+def get_model_metrics(model_):
+    model = copy.deepcopy(model_)
+    params_num = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    params = round(float(params_num) / 1e6, 4)
+
+    x = torch.randn(1, 3, 32, 32).to(next(model.parameters()).device)
+    with FlopCounterMode(display=False) as flop_counter:
+        model(x)
+
+    flops = round(float(flop_counter.get_total_flops()) / 1e6, 4)
+    del model 
+    return flops, params
 
 def get_best_architecture_standard(archs_path):
     best_std_acc = -1.0
@@ -301,7 +348,6 @@ def get_best_architecture_standard(archs_path):
 def save_params(args, trained_arch_path):
     params_path = trained_arch_path + os.sep
     params_dict = vars(args)
-    params_dict['device'] = str(params_dict['device'])
     if not os.path.exists(os.path.dirname(params_path)):
         os.makedirs(os.path.dirname(params_path))
     params_path += 'params.json'

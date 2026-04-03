@@ -1,19 +1,24 @@
+import os
 import argparse
 import ssl
 import random
-
+os.environ["TORCH_COMPILE_DISABLE"] = "1"
 import numpy as np
 import torch
-
 import torchvision
 from torch import nn
 
 import utils
 from r2_emoa import r2_emoa_rnas_oneshot, r2_emoa_rnas
 from micro_space.model_search import Network
-from adversarial import get_attack_function
-from micro_space.genotypes import PRIMITIVES
+from micro_space.micro_encoding import PRIMITIVES
 
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning, message=".*MPS backend.*")
+
+
+# python rnas_search.py --seed 18906049 --algorithm r2-emoa-one-shot --dataset cifar10 --batch_size 96 --n_population 40 --generations 30 --epochs_warmup 100 --epochs_train_supernet 10 --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 --mu 0.1 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --report_freq 50 --gpu 0 --init_channels 16 --reduction True --layers 5 --steps 6 --multiplier 6 --attack FGSM --fgsm_eps 8/255 --cutout False --cutout_length 16 --drop_path_prob 0.3 --grad_clip 0.5 --train_portion 0.5
+# python rnas_search.py --seed 18906049 --algorithm r2-emoa --search_space discrete --dataset cifar10 --batch_size 96 --n_population 40 --epochs_train_individual 10 --generations 30 --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 --mu 0.1 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --report_freq 50 --gpu 0 --init_channels 16 --reduction True --layers 5 --steps 6 --multiplier 6 --attack FGSM --cutout_length 16 --drop_path_prob 0.3 --grad_clip 0.5 --train_portion 0.5
 
 """
  python3 rnas_search.py --seed 18906049 --algorithm r2-emoa-one-shot --dataset cifar10 --batch_size 32  \
@@ -60,10 +65,9 @@ def prepare_args_supernet(args):
         model = utils.load_supernet(args.pretrained_supernet)
         model = model.to(args.device)
 
-    optimizer = torch.optim.SGD(
+    optimizer = torch.optim.Adam(
       model.parameters(),
       args.learning_rate,
-      momentum=args.momentum,
       weight_decay=args.weight_decay)
 
     ssl._create_default_https_context = ssl._create_unverified_context
@@ -121,58 +125,22 @@ def prepare_args_supernet(args):
 """
 def prepare_args_standard(args):
     if torch.cuda.is_available():
-        device = torch.device(f'cuda:{args.gpu}')
+        device = f'cuda:{args.gpu}'
     elif torch.backends.mps.is_available():
-        device = torch.device("mps")
+        device = 'mps'
     else:
-        device = torch.device("cpu")
+        device = 'cpu'
     print("Using device:", device)
-    args.device = device
 
     ssl._create_default_https_context = ssl._create_unverified_context
-    train_transform, valid_transform = utils.data_transforms_cifar10(args)
-    if args.dataset == 'cifar10':
-        train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
-    elif args.dataset == 'cifar100':
-        train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
-    else:
-        raise ValueError(f"Unknown dataset: {args.dataset}")
-    num_train = len(train_data)
-    indices = list(range(num_train))
-    split = int(np.floor(args.train_portion * num_train))
-
-    if torch.backends.mps.is_available():
-        # testing
-        split = 32
-        num_train = split + 32
-    print(f"Training samples: {split}, Validation samples: {num_train - split}")
-
-    train_queue = torch.utils.data.DataLoader(
-      train_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-        num_workers=0, pin_memory=False, drop_last=True)
-
-    valid_queue = torch.utils.data.DataLoader(
-      train_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-        num_workers=0, pin_memory=False, drop_last=True)
-
-    attack_params = {
-        'name': args.attack,
-        'params': {
-            'eps': args.fgsm_eps
-        }
-    }
-
-    attack_f = get_attack_function(attack_params)
 
     weights_r2 = utils.get_weights_r2(args.n_population)
 
-    k = sum(1 for i in range(args.steps) for _ in range(2 + i))
+    k = sum(2 + i for i in range(args.steps))
     num_ops = len(PRIMITIVES)
     alphas_dim = (k, num_ops)
 
-    return alphas_dim, train_queue, valid_queue, attack_f, weights_r2
+    return alphas_dim, weights_r2
 
 
 if __name__ == '__main__':
@@ -211,18 +179,20 @@ if __name__ == '__main__':
     parser.add_argument('--steps', type=int, default=6, help='number of steps in one cell (intern nodes except input and output)')
     parser.add_argument('--multiplier', type=int, default=6, help='number of multiplier for number of channels (intern nodes to concat)')
     parser.add_argument('--attack', type=str, default='FGSM', help='adversarial attack to use')
-    parser.add_argument('--fgsm_eps', type=str, default="8/255", help='attack epsilon')
+    parser.add_argument('--fgsm_eps', type=float, default=8/255, help='attack epsilon')
     parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
     parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
     parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
     parser.add_argument('--grad_clip', type=float, default=5.0, help='gradient clipping')
     parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
     parser.add_argument('--synchronize', type=bool, default=False, help='synchronize CUDA operations or not')
+    parser.add_argument('--timestamp', type=int, default=10, help='timestamp in minutes for training/eval each architecture')
     args = parser.parse_args()
 
     print("Running with config:")
     for key, value in vars(args).items():
         print(f"{key}: {value}")
+    #print (f"CUDA_LAUNCH_BLOCKING: {os.environ['CUDA_LAUNCH_BLOCKING']}")
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     random.seed(args.seed)
@@ -273,12 +243,9 @@ if __name__ == '__main__':
         utils.save_params(args, args.save_path_final_architect)
         print(f"Experiment completed and results saved in {results_dir}")
     elif args.algorithm == 'r2-emoa':
-        alphas_dim, train_queue, valid_queue, attack_f, weights_r2 = prepare_args_standard(args)
+        alphas_dim, weights_r2 = prepare_args_standard(args)
         archive, archive_accuracy, archive_losses, statistics = r2_emoa_rnas(
             alphas_dim=alphas_dim,
-            train_queue=train_queue,
-            valid_queue=valid_queue,
-            attack_f=attack_f,
             weights_r2=weights_r2,
             args=args
         )

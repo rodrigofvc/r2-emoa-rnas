@@ -33,7 +33,7 @@ class Cell(nn.Module):
         for name, index in zip(op_names, indices):
             stride = 2 if reduction and index < 2 else 1
             op = OPS[name](C, stride, True)
-            self._ops += [op]
+            self._ops.append(op)
         self._indices = indices
 
     def forward(self, s0, s1):
@@ -48,8 +48,10 @@ class Cell(nn.Module):
             h1 = op1(h1)
             h2 = op2(h2)
             s = h1 + h2
-            states += [s]
-        return torch.cat([states[i] for i in self._concat], dim=1)
+            states.append(s)
+        out = torch.cat([states[i] for i in self._concat], dim=1)
+        del states
+        return out
 
 class AuxiliaryHeadCIFAR(nn.Module):
 
@@ -98,7 +100,7 @@ class NetworkCIFAR(nn.Module):
                 reduction = False
             cell = Cell(genotype, C_prev_prev, C_prev, C_curr, reduction, reduction_prev)
             reduction_prev = reduction
-            self.cells += [cell]
+            self.cells.append(cell)
             C_prev_prev, C_prev = C_prev, cell.multiplier * C_curr
             if i == 2 * layers // 3:
                 C_to_auxiliary = C_prev

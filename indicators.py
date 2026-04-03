@@ -54,10 +54,7 @@ def get_dynamic_r2_reference(population):
     return z_ref
 
 def update_ref_points(population, nadir_point, ideal_point):
-    device = nadir_point.device
-    dtype = nadir_point.dtype
-
     for ind in population:
-        F = torch.tensor(ind.F, device=device, dtype=dtype)
-        nadir_point[:] = torch.maximum(nadir_point, F)
-        ideal_point[:] = torch.minimum(ideal_point, F)
+        F = np.array(ind.F)
+        nadir_point[:] = np.maximum(nadir_point, F)
+        ideal_point[:] = np.minimum(ideal_point, F)

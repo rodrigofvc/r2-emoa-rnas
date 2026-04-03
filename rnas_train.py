@@ -4,14 +4,14 @@ import ssl
 import time
 
 import torch
-from torch import nn, amp
+from torch import nn
 import numpy as np
 import torchvision
 
 import utils
 import utils_train
 from micro_space.model import NetworkCIFAR
-from adversarial import get_attack_function
+from adversarial import fgsm_simple
 
 def prepare_args(args):
     if torch.cuda.is_available():
@@ -74,8 +74,8 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
     attack = attack_f(model)
     for n_batch, (input, target) in enumerate(train_queue):
         times_stamp = time.time()
-        input = input.to(args.device, non_blocking=True)
-        target = target.to(args.device, non_blocking=True)
+        input = input.to(args.device)
+        target = target.to(args.device)
 
         optimizer.zero_grad()
 
@@ -93,7 +93,6 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
         total_loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
         optimizer.step()
-        scheduler.step()
 
         std_predicts = logits.argmax(dim=1)
         adv_predicts = logits_adv.argmax(dim=1)
@@ -104,91 +103,96 @@ def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
         if n_batch % args.report_freq == 0:
             print(
                 f">>>> batch {n_batch + 1}/{len(train_queue)} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - times_stamp))}) (HH:MM:SS): std_acc {std_correct / total * 100:.2f}%, adv_acc {adv_correct / total * 100:.2f}%, loss {total_loss_mean:.4f}")
+    scheduler.step()
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
     total_loss_mean /= total
     return std_accuracy * 100.0, adv_accuracy * 100.0, total_loss_mean
 
-def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, r2_weights, z_ref_stch, nadir_point, ideal_point):
+def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, weights, z_ref_stch, nadir_point, ideal_point):
+    loss_type = std_loss.dtype
     losses_grad = torch.stack([std_loss, adv_loss])
-    losses_const = torch.stack([flops, params]).detach()
+    losses_const = torch.stack([flops, params]).detach().to(dtype=loss_type)
     losses = torch.cat([losses_grad, losses_const])
 
-    ideal = ideal_point.detach()
-    nadir = nadir_point.detach()
-    z_ref = z_ref_stch.detach()
-    weights = r2_weights.detach()
-
-    values = torch.abs(losses - ideal) / torch.clamp(torch.abs(nadir - ideal), 1e-6)
-    stch_value = mu * torch.logsumexp(weights * (values - z_ref) / mu, dim=-1)
+    values = torch.abs(losses - ideal_point) / torch.clamp(torch.abs(nadir_point - ideal_point), 1e-6)
+    stch_value = mu * torch.logsumexp(weights * (values - z_ref_stch) / mu, dim=-1)
+    if not torch.isfinite(stch_value):
+        raise ValueError(f"stch_value is not finite {stch_value.item()}")
     return stch_value
 
-def train_individual(model, train_queue, criterion, optimizer, attack_f, args, weight_individual, nadir_point, ideal_point, scheduler):
-    model.to(args.device)
-    attack = attack_f(model)
-    z_ref_stch = torch.zeros(4, device=args.device)
-    model_flops, model_parameters = utils.get_model_metrics(None, model, discrete=True)
-    model_flops, model_parameters = torch.tensor(float(model_flops), device=args.device), torch.tensor(
-        float(model_parameters), device=args.device)
+def train_individual(model, flops, params, train_queue, criterion, optimizer, args, r2_weight, nadir_point, ideal_point, scheduler):
+    weight_individual = torch.tensor(r2_weight, device=args.device, dtype=torch.float32)
+    model_flops = torch.tensor(float(flops), device=args.device, dtype=torch.float32)
+    model_parameters = torch.tensor(float(params), device=args.device, dtype=torch.float32)
+    z_ref_stch = torch.zeros(4, device=args.device, dtype=torch.float32)
+    nadir_point = torch.tensor(nadir_point, device=args.device, dtype=torch.float32)
+    ideal_point = torch.tensor(ideal_point, device=args.device, dtype=torch.float32)
     model.train()
-    time_stamp = time.time()    
     for epoch in range(args.epochs_train_individual):
-        for n_batch, (input, target) in enumerate(train_queue):
-            std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, attack, None, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
+        for n_batch, (inputs, target) in enumerate(train_queue):
+            run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
         scheduler.step()
 
-def run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
 
-    input = input.to(args.device)
+def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
+
+    inputs = inputs.to(args.device)
     target = target.to(args.device)
 
     optimizer.zero_grad(set_to_none=True)
 
-    # for adversarial training
-    input.requires_grad = True
+    adv_input = fgsm_simple(model, inputs, target)
+    adv_input = adv_input.to(args.device)
 
-    adv_X, std_logits, natural_loss = attack(input, target)
-    logits_adv = model(adv_X)
-    adv_loss = criterion(logits_adv, target)
+    std_logits = model(inputs)
+    adv_logits = model(adv_input)
 
-    total_loss = smooth_tchebycheff_sc_loss(args.mu, natural_loss, adv_loss, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point)
+    adv_loss = criterion(adv_logits, target)
+    std_loss = criterion(std_logits, target)
+    
+    total_loss = smooth_tchebycheff_sc_loss(args.mu, std_loss, adv_loss, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point)
 
     total_loss.backward()
-    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+
+    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip, foreach=False)
     optimizer.step()
 
     std_predicts = std_logits.argmax(dim=1)
-    adv_predicts = logits_adv.argmax(dim=1)
+    adv_predicts = adv_logits.argmax(dim=1)
     std_correct = (std_predicts == target).sum().item()
     adv_correct = (adv_predicts == target).sum().item()
     return std_correct, adv_correct, total_loss.item()
 
-def infer(valid_queue, model, criterion, attack, args):
+def infer(valid_queue, model, criterion, args):
     std_correct = 0
     adv_correct = 0
     std_loss_mean = 0
     adv_loss_mean = 0
     total = 0
     model.eval()
-    for step, (input, target) in enumerate(valid_queue):
-        input  = input.to(args.device)
+    for step, (inputs, target) in enumerate(valid_queue):
+        inputs  = inputs.to(args.device)
         target = target.to(args.device)
-        # For adversarial evaluation
-        input.requires_grad = True
-        adv_input, std_logits, std_loss = attack(input, target)
+
+        
+        adv_input = fgsm_simple(model, inputs, target)
         adv_input = adv_input.to(args.device)
 
         with torch.no_grad():
             adv_logits = model(adv_input)
-            adv_loss = criterion(adv_logits, target)
+            std_logits = model(inputs)
 
-        std_predicts = std_logits.argmax(dim=1)
-        adv_predicts = adv_logits.argmax(dim=1)
-        std_correct += (std_predicts == target).sum().item()
-        adv_correct += (adv_predicts == target).sum().item()
-        total += target.size(0)
-        std_loss_mean += std_loss.item()
-        adv_loss_mean += adv_loss.item()
+            adv_loss = criterion(adv_logits, target)
+            std_loss = criterion(std_logits, target)        
+        
+            std_predicts = std_logits.argmax(dim=1)
+            adv_predicts = adv_logits.argmax(dim=1)
+            std_correct += (std_predicts == target).sum().item()
+            adv_correct += (adv_predicts == target).sum().item()
+            total += target.size(0)
+            std_loss_mean += std_loss.item()
+            adv_loss_mean += adv_loss.item()
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
     std_loss_mean /= total
