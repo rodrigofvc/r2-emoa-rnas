@@ -11,7 +11,7 @@ import torchvision
 import utils
 import utils_train
 from micro_space.model import NetworkCIFAR
-from adversarial import fgsm_simple, fgsm_simple_infer
+from adversarial import fgsm_simple
 
 def prepare_args(args):
     if torch.cuda.is_available():
@@ -143,25 +143,27 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
     inputs = inputs.to(args.device)
     target = target.to(args.device)
 
-    optimizer.zero_grad(set_to_none=False)
+    optimizer.zero_grad(set_to_none=True)
 
     #set_attack_mode(model, True)
     adv_input = fgsm_simple(model, inputs, target)
-    #adv_input = attack(inputs, target)
     #set_model_mode(model, True)
-    adv_input = adv_input.detach().to(args.device)
+    adv_input = adv_input.to(args.device)
 
     #std_logits = checkpoint(lambda x: model(x), inputs, use_reentrant=False)
     #adv_logits = checkpoint(lambda x: model(x), adv_input, use_reentrant=False)
 
-    x_all = torch.cat([inputs, adv_input], dim=0)
-    logits_all = model(x_all)
+    std_logits = model(inputs)
+    adv_logits = model(adv_input)
 
-    std_logits, adv_logits = torch.chunk(logits_all, 2, dim=0)
+    #x_all = torch.cat([inputs, adv_input], dim=0)
+    #logits_all = model(x_all)
+
+    #std_logits, adv_logits = torch.chunk(logits_all, 2, dim=0)
 
     adv_loss = criterion(adv_logits, target)
     std_loss = criterion(std_logits, target)
-
+    
     total_loss = smooth_tchebycheff_sc_loss(args.mu, std_loss, adv_loss, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point)
 
     total_loss.backward()
@@ -187,22 +189,24 @@ def infer(valid_queue, model, criterion, args):
         target = target.to(args.device)
 
         
-        adv_input, std_logits = fgsm_simple_infer(model, inputs, target)
+        adv_input = fgsm_simple(model, inputs, target)
         adv_input = adv_input.to(args.device)
 
         with torch.no_grad():
             adv_logits = model(adv_input)
-            
-        adv_loss = criterion(adv_logits, target)
-        std_loss = criterion(std_logits, target)
+            std_logits = model(inputs)
 
-        std_predicts = std_logits.argmax(dim=1)
-        adv_predicts = adv_logits.argmax(dim=1)
-        std_correct += (std_predicts == target).sum().item()
-        adv_correct += (adv_predicts == target).sum().item()
-        total += target.size(0)
-        std_loss_mean += std_loss.item()
-        adv_loss_mean += adv_loss.item()
+            adv_loss = criterion(adv_logits, target)
+            std_loss = criterion(std_logits, target)        
+        
+            std_predicts = std_logits.argmax(dim=1)
+            adv_predicts = adv_logits.argmax(dim=1)
+            std_correct += (std_predicts == target).sum().item()
+            adv_correct += (adv_predicts == target).sum().item()
+            total += target.size(0)
+            std_loss_mean += std_loss.item()
+            adv_loss_mean += adv_loss.item()
+    torch.cuda.synchronize()
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
     std_loss_mean /= total

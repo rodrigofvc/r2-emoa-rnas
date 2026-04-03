@@ -69,8 +69,8 @@ def eval_individual(individual, model, valid_queue, args, criterion):
     std_acc, adv_acc, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
     individual.std_acc = std_acc
     individual.adv_acc = adv_acc
-    individual.F[args.std_loss_index] = std_loss
-    individual.F[args.adv_loss_index] = adv_loss
+    individual.F[args.std_loss_index] = float(std_loss)
+    individual.F[args.adv_loss_index] = float(adv_loss)
     # pre-calculated FLOPs and parameters during get_model_from_individual, so we just retrieve them here
     model_flops, model_parameters = individual.F[args.flops_index], individual.F[args.params_index]
     print(f"Evaluation: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, std_loss {std_loss:.4f}, adv_loss {adv_loss:.4f} ,flops {model_flops:.2f}, params {model_parameters}")
@@ -182,8 +182,9 @@ def get_model_from_individual(individual, args):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
     flops, params = utils.get_model_metrics(model)
-    individual.F[args.flops_index] = flops
-    individual.F[args.params_index] = params
+
+    individual.F[args.flops_index] = float(flops)
+    individual.F[args.params_index] = float(params)
 
     train_transform, valid_transform = utils.data_transforms_cifar10(args)
     if args.dataset == 'cifar10':
@@ -261,6 +262,8 @@ def r2_emoa_rnas(args, alphas_dim, weights_r2):
             individual.F[args.adv_loss_index] = 1000
             individual.F[args.flops_index] = 1000
             individual.F[args.params_index] = 1000
+        finally:
+            del model, optimizer, scheduler, train_queue, valid_queue, criterion
     update_ref_points(pop, nadir_point, ideal_point)
 
     archive = archive_update_pq(archive, pop)
@@ -299,6 +302,8 @@ def r2_emoa_rnas(args, alphas_dim, weights_r2):
                 individual.F[args.adv_loss_index] = 1000
                 individual.F[args.flops_index] = 1000
                 individual.F[args.params_index] = 1000
+            finally:
+                del model, optimizer, scheduler, train_queue, valid_queue, criterion
         architectures_evaluated += len(mutation)
         update_ref_points(pop, nadir_point, ideal_point)
 
