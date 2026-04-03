@@ -279,14 +279,15 @@ def evaluate_population_multiprocessing(gen, pop, weights_r2, nadir_point, ideal
                 args=(gen, i, individual.X.copy(), pop_len, weight_individual, nadir_point.copy(), ideal_point.copy(), args_individual, return_dict)
             )
             p.start()
-            time.sleep(1)
-            p.join(timeout=args.timestamp*60)  # 10 minutes timeout per individual
-            time.sleep(1)
+            p.join(timeout=args.timestamp*60)  # 10 args.timestamp timeout per individual
             
             if p.is_alive():
                 print(f"Timeout: Individual {i} of generation {gen} took too long to evaluate and will be removed from the population.")
                 p.terminate()
-                p.join()
+                p.join(timeout=5)
+                if p.is_alive():
+                    p.kill()
+                    p.join(timeout=5)
                 to_remove.append(i)
                 continue
 
