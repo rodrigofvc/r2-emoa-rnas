@@ -1,17 +1,13 @@
 import os
 import argparse
-import ssl
-import random
 os.environ["TORCH_COMPILE_DISABLE"] = "1"
-import numpy as np
-import torch
-import torchvision
-from torch import nn
 
-import utils
-from r2_emoa import r2_emoa_rnas_oneshot, r2_emoa_rnas
-from micro_space.model_search import Network
-from micro_space.micro_encoding import PRIMITIVES
+from utils import (create_experiment_dir, save_model,
+                   save_architecture, save_archive, save_archive_accuracy,
+                   save_archive_losses, plot_archive_losses,
+                   plot_archive_accuracy, plot_lr_scheduler,
+                   plot_hypervolume, plot_hypervolume2, plot_r2,
+                   save_statistics_to_csv, save_params)
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning, message=".*MPS backend.*")
@@ -19,129 +15,6 @@ warnings.filterwarnings("ignore", category=UserWarning, message=".*MPS backend.*
 
 # python rnas_search.py --seed 18906049 --algorithm r2-emoa-one-shot --dataset cifar10 --batch_size 96 --n_population 40 --generations 30 --epochs_warmup 100 --epochs_train_supernet 10 --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 --mu 0.1 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --report_freq 50 --gpu 0 --init_channels 16 --reduction True --layers 5 --steps 6 --multiplier 6 --attack FGSM --fgsm_eps 8/255 --cutout False --cutout_length 16 --drop_path_prob 0.3 --grad_clip 0.5 --train_portion 0.5
 # python rnas_search.py --seed 18906049 --algorithm r2-emoa --search_space discrete --dataset cifar10 --batch_size 96 --n_population 40 --epochs_train_individual 10 --generations 30 --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 --mu 0.1 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --report_freq 50 --gpu 0 --init_channels 16 --reduction True --layers 5 --steps 6 --multiplier 6 --attack FGSM --cutout_length 16 --drop_path_prob 0.3 --grad_clip 0.5 --train_portion 0.5
-
-"""
- python3 rnas_search.py --seed 18906049 --algorithm r2-emoa-one-shot --dataset cifar10 --batch_size 32  \
- --n_population 10 --generations 2 --epochs_warmup 0 --epochs_train_supernet 1 \
- --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 --mu 0.1 \
- --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 \
- --report_freq 50 --gpu 0 --init_channels 16 --reduction True --layers 5 --steps 6 --multiplier 6 \
- --attack FGSM --fgsm_eps 8/255 --cutout False --cutout_length 16 --drop_path_prob 0.3 \
- --grad_clip 0.5 --train_portion 0.5
-"""
-# Prepare all arguments and components such as model, optimizer, data loaders, weights, scheduler, attack.
-def prepare_args_supernet(args):
-    if torch.cuda.is_available():
-        device = torch.device(f'cuda:{args.gpu}')
-    elif torch.backends.mps.is_available():
-        device = torch.device("mps")
-    else:
-        device = torch.device("cpu")
-    print("Using device:", device)
-    args.device = device
-
-    criterion = nn.CrossEntropyLoss()
-
-    if args.dataset == 'cifar10':
-        n_classes = 10
-    elif args.dataset == 'cifar100':
-        n_classes = 100
-    else:
-        raise ValueError(f"Unknown dataset: {args.dataset}")
-
-    model = Network(
-        C=args.init_channels,
-        num_classes=n_classes,
-        layers=args.layers,
-        criterion=criterion,
-        steps=args.steps,
-        multiplier=args.multiplier,
-        stem_multiplier=3,
-        device=args.device,
-    ).to(args.device)
-
-    if args.pretrained_supernet is not None:
-        print(f"Loading pretrained supernet from {args.pretrained_supernet}")
-        model = utils.load_supernet(args.pretrained_supernet)
-        model = model.to(args.device)
-
-    optimizer = torch.optim.Adam(
-      model.parameters(),
-      args.learning_rate,
-      weight_decay=args.weight_decay)
-
-    ssl._create_default_https_context = ssl._create_unverified_context
-    train_transform, valid_transform = utils.data_transforms_cifar10(args)
-    if args.dataset == 'cifar10':
-        train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
-    elif args.dataset == 'cifar100':
-        train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
-    else:
-        raise ValueError(f"Unknown dataset: {args.dataset}")
-    num_train = len(train_data)
-    indices = list(range(num_train))
-    split = int(np.floor(args.train_portion * num_train))
-
-    if torch.backends.mps.is_available():
-        # testing
-        split = 32
-        num_train = split + 32
-    print(f"Training samples: {split}, Validation samples: {num_train - split}")
-
-    train_queue = torch.utils.data.DataLoader(
-      train_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-        num_workers=0, pin_memory=False, drop_last=True)
-
-    valid_queue = torch.utils.data.DataLoader(
-      train_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-        num_workers=0, pin_memory=False, drop_last=True)
-
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, (args.generations + 1) * args.epochs_train_supernet + args.epochs_warmup, eta_min=args.learning_rate_min)
-
-    attack_params = {
-        'name': args.attack,
-        'params': {
-            'eps': args.fgsm_eps
-        }
-    }
-
-    attack_f = get_attack_function(attack_params)
-
-    weights_r2 = utils.get_weights_r2(args.n_population)
-
-    return model, criterion, optimizer, scheduler, train_queue, valid_queue, attack_f, weights_r2
-
-"""
- python3 rnas_search.py --seed 18906049 --algorithm r2-emoa --dataset cifar10 --batch_size 32  \
- --n_population 10 --epochs_train_individual 2 --generations 2 \
- --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 --mu 0.1 \
- --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 \
- --report_freq 50 --gpu 0 --init_channels 16 --reduction True --layers 5 --steps 6 --multiplier 6 \
- --attack FGSM --fgsm_eps 8/255 --cutout False --cutout_length 16 --drop_path_prob 0.3 \
- --grad_clip 0.5 --train_portion 0.5
-"""
-def prepare_args_standard(args):
-    if torch.cuda.is_available():
-        device = f'cuda:{args.gpu}'
-    elif torch.backends.mps.is_available():
-        device = 'mps'
-    else:
-        device = 'cpu'
-    print("Using device:", device)
-
-    ssl._create_default_https_context = ssl._create_unverified_context
-
-    weights_r2 = utils.get_weights_r2(args.n_population)
-
-    k = sum(2 + i for i in range(args.steps))
-    num_ops = len(PRIMITIVES)
-    alphas_dim = (k, num_ops)
-
-    return alphas_dim, weights_r2
-
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Running R2-EMOA for RNAS")
@@ -185,7 +58,6 @@ if __name__ == '__main__':
     parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
     parser.add_argument('--grad_clip', type=float, default=5.0, help='gradient clipping')
     parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
-    parser.add_argument('--synchronize', type=bool, default=False, help='synchronize CUDA operations or not')
     parser.add_argument('--timestamp', type=int, default=10, help='timestamp in minutes for training/eval each architecture')
     args = parser.parse_args()
 
@@ -193,75 +65,56 @@ if __name__ == '__main__':
     for key, value in vars(args).items():
         print(f"{key}: {value}")
     #print (f"CUDA_LAUNCH_BLOCKING: {os.environ['CUDA_LAUNCH_BLOCKING']}")
-    np.random.seed(args.seed)
-    torch.manual_seed(args.seed)
-    random.seed(args.seed)
-
-    if torch.cuda.is_available():
-        torch.backends.cudnn.benchmark = False
-        torch.backends.cudnn.deterministic = True
-        torch.cuda.manual_seed(args.seed)
-        torch.backends.cudnn.enabled = True
 
 
-    results_dir = utils.create_experiment_dir(args.algorithm, args.dataset, args.seed)
+    results_dir = create_experiment_dir(args.algorithm, args.dataset, args.seed)
     print(f'Results dir: {results_dir}' )
     args.save_path_final_model = results_dir
     args.save_path_final_architect = results_dir
 
     if args.algorithm == 'r2-emoa-one-shot':
+        from r2_emoa_one_shot import r2_emoa_oneshot_nas
         # The search space is continuous because we are optimizing the architecture parameters (alphas) of the supernet
         args.search_space = 'continuous'
-        model, criterion, optimizer, scheduler, train_queue, valid_queue, attack_f, weights_r2 = prepare_args_supernet(args)
-        supernet, archive, archive_accuracy, archive_losses, statistics = r2_emoa_rnas_oneshot(
-            model=model,
-            criterion=criterion,
-            optimizer=optimizer,
-            scheduler=scheduler,
-            train_queue=train_queue,
-            valid_queue=valid_queue,
-            attack_f=attack_f,
-            weights_r2=weights_r2,
+        supernet, archive, archive_accuracy, archive_losses, statistics = r2_emoa_oneshot_nas(
             args=args
         )
-        utils.save_model(supernet, args.save_path_final_model, f"super-net.pt")
+        save_model(supernet, args.save_path_final_model, f"super-net.pt")
         print("Final archive:")
         for individual in archive:
             print(individual.F, individual.std_acc, individual.adv_acc)
         for i, individual in enumerate(archive):
-            utils.save_architecture(i, individual, args.save_path_final_architect)
-        utils.save_archive(archive, args.save_path_final_architect)
-        utils.save_archive_accuracy(archive_accuracy, args.save_path_final_architect)
-        utils.save_archive_losses(archive_losses, args.save_path_final_architect)
-        utils.plot_archive_losses(archive_losses, args.save_path_final_architect)
-        utils.plot_archive_accuracy(archive_accuracy, args.save_path_final_architect)
-        utils.plot_lr_scheduler(statistics, args.save_path_final_architect)
-        utils.plot_hypervolume(statistics, args.save_path_final_architect)
-        utils.plot_hypervolume2(statistics, args.save_path_final_architect)
-        utils.plot_r2(statistics, args.save_path_final_architect)
-        utils.save_statistics_to_csv(statistics, args.save_path_final_architect)
-        utils.save_params(args, args.save_path_final_architect)
+            save_architecture(i, individual, args.save_path_final_architect)
+        save_archive(archive, args.save_path_final_architect)
+        save_archive_accuracy(archive_accuracy, args.save_path_final_architect)
+        save_archive_losses(archive_losses, args.save_path_final_architect)
+        plot_archive_losses(archive_losses, args.save_path_final_architect)
+        plot_archive_accuracy(archive_accuracy, args.save_path_final_architect)
+        plot_lr_scheduler(statistics, args.save_path_final_architect)
+        plot_hypervolume(statistics, args.save_path_final_architect)
+        plot_hypervolume2(statistics, args.save_path_final_architect)
+        plot_r2(statistics, args.save_path_final_architect)
+        save_statistics_to_csv(statistics, args.save_path_final_architect)
+        save_params(args, args.save_path_final_architect)
         print(f"Experiment completed and results saved in {results_dir}")
     elif args.algorithm == 'r2-emoa':
-        alphas_dim, weights_r2 = prepare_args_standard(args)
+        from r2_emoa import r2_emoa_rnas
         archive, archive_accuracy, archive_losses, statistics = r2_emoa_rnas(
-            alphas_dim=alphas_dim,
-            weights_r2=weights_r2,
             args=args
         )
         print("Final archive:")
         for individual in archive:
             print(individual.F, individual.std_acc, individual.adv_acc)
         for i, individual in enumerate(archive):
-            utils.save_architecture(i, individual, args.save_path_final_architect)
-        utils.save_archive(archive, args.save_path_final_architect)
-        utils.save_archive_accuracy(archive_accuracy, args.save_path_final_architect)
-        utils.save_archive_losses(archive_losses, args.save_path_final_architect)
-        utils.plot_archive_losses(archive_losses, args.save_path_final_architect)
-        utils.plot_archive_accuracy(archive_accuracy, args.save_path_final_architect)
-        utils.plot_hypervolume(statistics, args.save_path_final_architect)
-        utils.plot_hypervolume2(statistics, args.save_path_final_architect)
-        utils.plot_r2(statistics, args.save_path_final_architect)
-        utils.save_statistics_to_csv(statistics, args.save_path_final_architect)
-        utils.save_params(args, args.save_path_final_architect)
+            save_architecture(i, individual, args.save_path_final_architect)
+        save_archive(archive, args.save_path_final_architect)
+        save_archive_accuracy(archive_accuracy, args.save_path_final_architect)
+        save_archive_losses(archive_losses, args.save_path_final_architect)
+        plot_archive_losses(archive_losses, args.save_path_final_architect)
+        plot_archive_accuracy(archive_accuracy, args.save_path_final_architect)
+        plot_hypervolume(statistics, args.save_path_final_architect)
+        plot_hypervolume2(statistics, args.save_path_final_architect)
+        plot_r2(statistics, args.save_path_final_architect)
+        save_statistics_to_csv(statistics, args.save_path_final_architect)
+        save_params(args, args.save_path_final_architect)
         print(f"Experiment completed and results saved in {results_dir}")

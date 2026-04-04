@@ -1,25 +1,45 @@
-import gc
 import multiprocessing as mp
 import time
 from collections import defaultdict
-import copy 
+import copy
+import random
+import ssl
+
 import numpy as np
 import time
 
 import utils
 from archivers import archive_update_pq, archive_update_pq_accuracy, dominates
-from micro_space import micro_encoding
-from micro_space.micro_encoding import PRIMITIVES
-from micro_space.model_search import discretize, Network, alphas_to_genotype
-from micro_space.model import NetworkCIFAR
+from micro_space.micro_encoding import PRIMITIVES, convert, decode
 from individual import Individual
-from rnas_train import run_batch_epoch, train_individual, infer
-from evolutionary import unpack_alphas, tournament_selection, binary_crossover, polynomial_mutation, point_crossover
-import torch
-import torchvision
+from evolutionary import tournament_selection, binary_crossover, polynomial_mutation, point_crossover
 
 from indicators import contribution_r2, update_ref_points
 
+
+"""
+ python3 rnas_search.py --seed 18906049 --algorithm r2-emoa --dataset cifar10 --batch_size 32  \
+ --n_population 10 --epochs_train_individual 2 --generations 2 \
+ --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 --mu 0.1 \
+ --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 \
+ --report_freq 50 --gpu 0 --init_channels 16 --reduction True --layers 5 --steps 6 --multiplier 6 \
+ --attack FGSM --fgsm_eps 8/255 --cutout False --cutout_length 16 --drop_path_prob 0.3 \
+ --grad_clip 0.5 --train_portion 0.5
+"""
+def prepare_args_standard(args):
+
+    np.random.seed(args.seed)
+    random.seed(args.seed)
+
+    ssl._create_default_https_context = ssl._create_unverified_context
+
+    weights_r2 = utils.get_weights_r2(args.n_population)
+
+    k = sum(2 + i for i in range(args.steps))
+    num_ops = len(PRIMITIVES)
+    alphas_dim = (k, num_ops)
+
+    return alphas_dim, weights_r2
 
 def initial_population(n_population, alphas_dim, k, args):
     individuals = []
@@ -38,120 +58,14 @@ def initial_population(n_population, alphas_dim, k, args):
                 h += 1
             flattened[n_var // 2:] = flattened[:n_var // 2]
         else:
-            flattened = torch.rand(alphas_dim[0]*alphas_dim[1]*2).detach().cpu().numpy()
+            flattened = np.random.rand(alphas_dim[0]*alphas_dim[1]*2)
         individuals.append(Individual(X=flattened.copy(), k=k, search_space=args.search_space))
     return individuals
 
-def eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, device, statisctics):
-    model.eval()
-    objective_space = np.empty((len(pop), args.objectives))
-    attack = attack_f(model)
-    for i, individual in enumerate(pop):
-        individual_architect = unpack_alphas(individual.X, model.alphas_dim, args)
-        model.update_arch_parameters(individual_architect)
-        discrete = discretize(individual_architect, model.genotype(), device)
-        model.update_arch_parameters(discrete)
-        time_stamp = time.time()
-        std_acc, adv_acc, std_loss, adv_loss = infer(valid_queue, model, criterion, attack, args)
-        individual.std_acc = std_acc
-        individual.adv_acc = adv_acc
-        individual.F[args.std_loss_index] = std_loss
-        individual.F[args.adv_loss_index] = adv_loss
-        model_flops, model_parameters = utils.get_model_metrics(model.genotype(), model)
-        individual.F[args.flops_index] = model_flops
-        individual.F[args.params_index] = model_parameters
-        individual.genotype = model.genotype()
-        individual.F_norm = np.zeros(args.objectives)
-        objective_space[i, :] = individual.F
-        print(f"Evaluation {i + 1}/{len(pop)}: std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, std_loss {std_loss:.4f}, adv_loss {adv_loss:.4f}, flops {model_flops:.2f}, params {model_parameters} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))}) (HH:MM:SS)")
-    utils.store_statisctics(statisctics, objective_space)
-    return len(pop)
-
-def eval_individual(model, valid_queue, args, criterion):
-    std_acc, adv_acc, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
-    return std_acc, adv_acc, std_loss, adv_loss
-
-def train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, attack_f, gen, scaler, args, r2_weights, nadir_point, ideal_point, warmup=False):
-    model.train()
-    attack = attack_f(model)
-    if warmup:
-        epochs = args.epochs_warmup
-    else:
-        epochs = args.epochs_train_supernet
-    r2_weights_pop = r2_weights[len(pop)]
-    r2_weights_pop = torch.tensor(r2_weights_pop, device=args.device, dtype=torch.float32)
-    z_ref_stch = torch.zeros(4, device=args.device)
-    assert r2_weights_pop.shape[0] == len(pop)
-    model_flops, model_parameters = utils.get_model_metrics(model)
-    model_flops, model_parameters = torch.tensor(float(model_flops), device=args.device), torch.tensor(
-        float(model_parameters), device=args.device)
-    for epoch in range(epochs):
-        for n_batch, (input, target) in enumerate(train_queue):
-            individual = pop[n_batch % args.n_population]
-            individual_r2_weights = r2_weights_pop[n_batch % args.n_population]
-            individual_architect = unpack_alphas(individual.X, model.alphas_dim, args)
-            model.update_arch_parameters(individual_architect)
-            discrete = discretize(individual_architect, model.genotype(), args.device)
-            model.update_arch_parameters(discrete)
-            time_stamp = time.time()
-            std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, attack, scaler, args, model_flops, model_parameters, individual_r2_weights, z_ref_stch, ideal_point, nadir_point)
-            if n_batch % args.report_freq == 0:
-                print(f'>>>> Gen {gen}/{args.generations} | Epoch {epoch}/{epochs} | Batch {n_batch}/{len(train_queue)} | Loss {loss:.4f} | Std Acc {std_acc:.2f}% | Adv Acc {adv_acc:.2f}% | Time {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_stamp))} (HH:MM:SS)')
-        scheduler.step()
-    update_ref_points(pop, nadir_point, ideal_point)
-
-def r2_emoa_rnas_oneshot(args, train_queue, valid_queue, model, criterion, optimizer, scheduler, attack_f, weights_r2):
-    archive = []
-    archive_accuracy = []
-    archive_losses = []
-    architectures_evaluated = 0
-    time_search = time.time()
-    pop = initial_population(args.n_population, model.alphas_dim, args.objectives, args)
-    print(f">>>> Initial population of size {len(pop)} created.")
-    scaler = None
-    nadir_point = torch.ones(4, device=args.device)
-    ideal_point = torch.zeros(4, device=args.device)
-    if args.epochs_warmup > 0:
-        print(">>>> Warmup training of the supernet...")
-        train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, attack_f, 0, scaler, args, weights_r2, nadir_point, ideal_point, warmup=True)
-        print(">>>> Warmup training DONE.")
-    train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, attack_f, 0, scaler, args, weights_r2, nadir_point, ideal_point)
-    statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'), 'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': [], 'lr_log': []}
-    eval_population(model, pop, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
-    archive = archive_update_pq(archive, pop)
-    archive_losses = archive_update_pq(archive_losses, pop, k=2)
-    hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args, weights_r2, statistics)
-    print(f"Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
-    for generation in range(args.generations):
-        start = time.time()
-        time_stamp_epoch = time.time()
-        train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, attack_f, generation + 1, scaler, args, weights_r2, nadir_point, ideal_point)
-        print(f">>>> Gen {generation + 1} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_epoch))} (HH:MM:SS)")
-
-        parents = tournament_selection(pop, n_select=len(pop)//2, tournament_size=5)
-        offsprings = binary_crossover(parents, n_childs=len(pop), eta=args.eta_cross, prob_cross=args.prob_cross)
-        mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
-
-        # Evaluate offspring
-        architectures_evaluated += eval_population(model, mutation, valid_queue, args, criterion, attack_f, weights_r2, args.device, statistics)
-        print(f"Tiempo total de entrenamiento/validacion {args.generations}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} (HH:MM:SS)")
-
-        archive = archive_update_pq(archive, pop + mutation)
-        archive_accuracy = archive_update_pq_accuracy(archive_accuracy, pop + mutation)
-        archive_losses = archive_update_pq(archive_losses, pop + mutation, k=2)
-        pop = update_population_r2(pop, mutation, weights_r2)
-        hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args, weights_r2, statistics)
-        utils.save_model(model, args.save_path_final_model, f"super-net.pt")
-        utils.save_architectures(archive, args.save_path_final_architect)
-        utils.plot_hypervolume(statistics, args.save_path_final_architect)
-        utils.plot_hypervolume2(statistics, args.save_path_final_architect)
-        utils.plot_r2(statistics, args.save_path_final_architect)
-        statistics['lr_log'].append(optimizer.param_groups[0]['lr'])
-        print(f"Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
-    print(f">>>> Total search time: ({(time.time() - time_search) // 86400:02.0f}:{time.strftime('%H:%M:%S)', time.gmtime(time.time() - time_search))} (DD:HH:MM:SS)")
-    return model, archive, archive_accuracy, archive_losses, statistics
-
 def get_model_from_individual(individual_X, args):
+    import torch, torchvision
+    from micro_space.model import NetworkCIFAR
+    from micro_space.model_search import alphas_to_genotype
     if args.dataset == 'cifar10':
         n_classes = 10
     elif args.dataset == 'cifar100':
@@ -163,8 +77,8 @@ def get_model_from_individual(individual_X, args):
         alphas_dim = (k, len(PRIMITIVES))
         genotype = alphas_to_genotype(individual_X, alphas_dim, args)
     else:
-        genome = micro_encoding.convert(individual_X)
-        genotype = micro_encoding.decode(genome, args.steps, args.multiplier)
+        genome = convert(individual_X)
+        genotype = decode(genome, args.steps, args.multiplier)
 
     model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype).to(args.device)
     optimizer = torch.optim.Adam(
@@ -223,6 +137,9 @@ def sanity_check_individual(model):
             raise RuntimeError("Shared module detected.")
 
 def worker_evaluate_individual(gen, i, individual_X, pop_len, weight_individual, nadir_point, ideal_point, args, return_dict):
+    import torch
+    from rnas_train import train_individual, infer
+    from micro_space.model_search import alphas_to_genotype
     try:
         if torch.cuda.is_available():
             device = torch.device(f'cuda:{args.gpu}')
@@ -231,6 +148,11 @@ def worker_evaluate_individual(gen, i, individual_X, pop_len, weight_individual,
         else:
             device = torch.device("cpu")
         args.device = device
+        if torch.cuda.is_available():
+            torch.backends.cudnn.benchmark = False
+            torch.backends.cudnn.deterministic = True
+            torch.cuda.manual_seed(args.seed + i) # Different seed for each process to avoid identical weight initialization
+            torch.backends.cudnn.enabled = True
         model, optimizer, scheduler, individual_flops, individual_params, train_queue, valid_queue, criterion = get_model_from_individual(
             individual_X,
             args)
@@ -241,10 +163,18 @@ def worker_evaluate_individual(gen, i, individual_X, pop_len, weight_individual,
             f'Gen {gen} Training {i + 1}/{pop_len} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
 
         time_evaluation = time.time()
-        std_acc, adv_acc, std_loss, adv_loss = eval_individual(model, valid_queue, args, criterion)
+        std_acc, adv_acc, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
         print(
             f'Gen {gen} Evaluation {i + 1}/{pop_len} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS) std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, std_loss {std_loss:.4f}, adv_loss {adv_loss:.4f} ,flops {individual_flops:.2f}, params {individual_params:.2f}')
         assert np.isfinite(std_acc) and np.isfinite(adv_acc) and np.isfinite(std_loss) and np.isfinite(adv_loss), f"Non-finite evaluation results for individual {i} of generation {gen}: std_acc {std_acc}, adv_acc {adv_acc}, std_loss {std_loss}, adv_loss {adv_loss}"
+
+        if args.search_space == 'continuous':
+            k = sum(2 + i for i in range(args.steps))
+            alphas_dim = (k, len(PRIMITIVES))
+            genotype = alphas_to_genotype(individual_X, alphas_dim, args)
+        else:
+            genome = convert(individual_X)
+            genotype = decode(genome, args.steps, args.multiplier)
 
         return_dict[i] = {
             "std_acc": std_acc,
@@ -253,6 +183,7 @@ def worker_evaluate_individual(gen, i, individual_X, pop_len, weight_individual,
             "adv_loss": adv_loss,
             "flops": individual_flops,
             "params": individual_params,
+            "genotype": genotype
         }
     except Exception as e:
         print(f"Error in evaluating individual {i} of generation {gen}: {e}")
@@ -308,6 +239,7 @@ def evaluate_population_multiprocessing(gen, pop, weights_r2, nadir_point, ideal
                     individual.F[args.adv_loss_index] = res["adv_loss"]
                     individual.F[args.flops_index] = res["flops"]
                     individual.F[args.params_index] = res["params"]
+                    individual.genotype = res["genotype"]
                 else:
                     to_remove.append(i)    
             else:
@@ -320,12 +252,13 @@ def evaluate_population_multiprocessing(gen, pop, weights_r2, nadir_point, ideal
         return len(to_remove)
 
 # R2 version where each architecture has its own weights (no supernet training). This is a baseline to compare with the supernet version.
-def r2_emoa_rnas(args, alphas_dim, weights_r2):
+def r2_emoa_rnas(args):
+    alphas_dim, weights_r2 = prepare_args_standard(args)
     archive = []
     archive_accuracy = []
     archive_losses = []
     architectures_evaluated = 0
-    nadir_point = np.ones(4, )
+    nadir_point = np.ones(4,)
     ideal_point = np.zeros(4,)
     time_search = time.time()
     pop = initial_population(args.n_population, alphas_dim, args.objectives, args)

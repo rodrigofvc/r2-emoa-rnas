@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 
 def normalize_objectives(population):
     n_obj = len(population[0].F)
