@@ -1,8 +1,8 @@
 import os
 import argparse
-os.environ["TORCH_COMPILE_DISABLE"] = "1"
-from r2_emoa import r2_emoa_rnas
-import multiprocessing as mp
+import shutil
+
+os.environ["CUDA_VISIBLE_DEVICES"] = "" # Disable GPU usage for this script, as it may cause issues with multiprocessing on some platforms
 
 from utils import (create_experiment_dir, save_model,
                    save_architecture, save_archive, save_archive_accuracy,
@@ -19,7 +19,6 @@ warnings.filterwarnings("ignore", category=UserWarning, message=".*MPS backend.*
 # python rnas_search.py --seed 18906049 --algorithm r2-emoa --search_space discrete --dataset cifar10 --batch_size 96 --n_population 40 --epochs_train_individual 10 --generations 30 --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 --mu 0.1 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --report_freq 50 --gpu 0 --init_channels 16 --reduction True --layers 5 --steps 6 --multiplier 6 --attack FGSM --cutout_length 16 --drop_path_prob 0.3 --grad_clip 0.5 --train_portion 0.5
 
 if __name__ == '__main__':
-    mp.set_start_method("spawn", force=True)
 
     parser = argparse.ArgumentParser(description="Running R2-EMOA for RNAS")
     parser.add_argument('--seed', type=int, default=0, help='random seed')
@@ -62,14 +61,17 @@ if __name__ == '__main__':
     parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
     parser.add_argument('--grad_clip', type=float, default=5.0, help='gradient clipping')
     parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
-    parser.add_argument('--timestamp', type=int, default=10, help='timestamp in minutes for training/eval each architecture')
+    parser.add_argument('--timestamp', type=int, default=6, help='timestamp in minutes for training/eval each architecture')
+    parser.add_argument('--debug_cuda', action='store_true', default=False, help='Enable CUDA_LAUNCH_BLOCKING for debugging')
     args = parser.parse_args()
+
+    if os.path.exists("logs"):
+        shutil.rmtree("logs")
+    os.makedirs("logs", exist_ok=True)
 
     print("Running with config:")
     for key, value in vars(args).items():
         print(f"{key}: {value}")
-    #print (f"CUDA_LAUNCH_BLOCKING: {os.environ['CUDA_LAUNCH_BLOCKING']}")
-
 
     results_dir = create_experiment_dir(args.algorithm, args.dataset, args.seed)
     print(f'Results dir: {results_dir}' )
@@ -84,9 +86,6 @@ if __name__ == '__main__':
             args=args
         )
         save_model(supernet, args.save_path_final_model, f"super-net.pt")
-        print("Final archive:")
-        for individual in archive:
-            print(individual.F, individual.std_acc, individual.adv_acc)
         for i, individual in enumerate(archive):
             save_architecture(i, individual, args.save_path_final_architect)
         save_archive(archive, args.save_path_final_architect)
@@ -102,12 +101,10 @@ if __name__ == '__main__':
         save_params(args, args.save_path_final_architect)
         print(f"Experiment completed and results saved in {results_dir}")
     elif args.algorithm == 'r2-emoa':
+        from r2_emoa import r2_emoa_rnas
         archive, archive_accuracy, archive_losses, statistics = r2_emoa_rnas(
             args=args
         )
-        print("Final archive:")
-        for individual in archive:
-            print(individual.F, individual.std_acc, individual.adv_acc)
         for i, individual in enumerate(archive):
             save_architecture(i, individual, args.save_path_final_architect)
         save_archive(archive, args.save_path_final_architect)

@@ -1,23 +1,18 @@
-import multiprocessing as mp
-import time
-from collections import defaultdict
-import copy
-import random
+import json
+import os
 import ssl
-import torch, torchvision
-from rnas_train import train_individual, infer
-from micro_space.model_search import alphas_to_genotype
-import gc
+import sys
+import subprocess
+import random
 
 import numpy as np
 import time
 
 import utils
 from archivers import archive_update_pq, archive_update_pq_accuracy, dominates
-from micro_space.micro_encoding import PRIMITIVES, convert, decode
+from micro_space.micro_encoding import PRIMITIVES, Genotype
 from individual import Individual
 from evolutionary import tournament_selection, binary_crossover, polynomial_mutation, point_crossover
-
 from indicators import contribution_r2, update_ref_points
 
 
@@ -66,194 +61,117 @@ def initial_population(n_population, alphas_dim, k, args):
         individuals.append(Individual(X=flattened.copy(), k=k, search_space=args.search_space))
     return individuals
 
-def get_model_from_individual(individual_X, args):
-    from micro_space.model import NetworkCIFAR
-    from micro_space.model_search import alphas_to_genotype
-    if args.dataset == 'cifar10':
-        n_classes = 10
-    elif args.dataset == 'cifar100':
-        n_classes = 100
-    else:
-        raise ValueError(f"Unknown dataset: {args.dataset}")
-    if args.search_space == 'continuous':
-        k = sum(2 + i for i in range(args.steps))
-        alphas_dim = (k, len(PRIMITIVES))
-        genotype = alphas_to_genotype(individual_X, alphas_dim, args)
-    else:
-        genome = convert(individual_X)
-        genotype = decode(genome, args.steps, args.multiplier)
+def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_point, ideal_point, args, return_dict):
+    log_file = f"logs/worker_{gen}_{i}.log"
+    result_file = f"result_gen{gen}_ind{i}.json"
 
-    model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype).to(args.device)
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        args.learning_rate,
-        weight_decay=args.weight_decay,
-        foreach=False,
-        fused=False
-    )
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
-    flops, params = utils.get_model_metrics(model)
+    process_args = [
+        sys.executable, 'individual_worker.py',
+        '--gen', str(gen),
+        '--i', str(i),
+        '--seed', str(args.seed + i),  # Different seed for each process to avoid identical weight initialization
+        '--individual_x', np.array2string(individual_X, separator=',', max_line_width=np.inf),
+        '--search_space', str(args.search_space),
+        '--dataset', str(args.dataset),
+        '--gpu', str(args.gpu),
+        '--batch_size', str(args.batch_size),
+        '--epochs_train_individual', str(args.epochs_train_individual),
+        '--data', str(args.data),
+        '--mu', str(args.mu),
+        '--learning_rate', str(args.learning_rate),
+        '--learning_rate_min', str(args.learning_rate_min),
+        '--momentum', str(args.momentum),
+        '--weight_decay', str(args.weight_decay),
+        '--init_channels', str(args.init_channels),
+        '--layers', str(args.layers),
+        '--steps', str(args.steps),
+        '--multiplier', str(args.multiplier),
+        '--fgsm_eps', str(args.fgsm_eps),
+        '--cutout_length', str(args.cutout_length),
+        '--drop_path_prob', str(args.drop_path_prob),
+        '--grad_clip', str(args.grad_clip),
+        '--train_portion', str(args.train_portion),
+        '--weight_individual', np.array2string(weight_individual, separator=',', max_line_width=np.inf),
+        '--nadir_point', np.array2string(nadir_point, separator=',', max_line_width=np.inf),
+        '--ideal_point', np.array2string(ideal_point, separator=',', max_line_width=np.inf)
+    ]
 
-    train_transform, valid_transform = utils.data_transforms_cifar10(args)
-    if args.dataset == 'cifar10':
-        train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=False, transform=train_transform)
-        valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=False, transform=train_transform)
-    elif args.dataset == 'cifar100':
-        train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=False, transform=train_transform)
-        valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=False, transform=train_transform)
-    else:
-        raise ValueError(f"Unknown dataset: {args.dataset}")
-    num_train = len(train_data)
-    indices = list(range(num_train))
-    split = int(np.floor(args.train_portion * num_train))
+    if args.reduction:
+        process_args.append('--reduction')
+    if args.cutout:
+        process_args.append('--cutout')
+    env_worker = os.environ.copy()
+    env_worker['CUDA_VISIBLE_DEVICES'] = str(args.gpu) # Set the GPU device for the subprocess
+    if args.debug_cuda:
+        env_worker['CUDA_LAUNCH_BLOCKING'] = '1'
+        env_worker['TORCH_USE_CUDA_DSA'] = '1'
 
-    if torch.backends.mps.is_available():
-        # testing
-        split = 96
-        num_train = split + 96
+    with open(log_file, 'w') as f_log:
+        process = subprocess.Popen(process_args,
+                                   stdout=f_log,
+                                   stderr=f_log,
+                                   text=True,
+                                   env=env_worker)
 
-    train_queue = torch.utils.data.DataLoader(
-      train_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-        num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+        try:
+            process.communicate(timeout=args.timestamp * 60)
 
-    valid_queue = torch.utils.data.DataLoader(
-      valid_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-        num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+            if process.returncode == 0 and os.path.exists(result_file):
+                with open(result_file, 'r') as f:
+                    res_dict = json.load(f)
+                    res_dict['genotype'] = Genotype(**res_dict['genotype'])
+                    return_dict[i] = res_dict
+                os.remove(result_file)
+                print(f"Gen {gen} Individual {i}: std_acc {return_dict[i]['std_acc']:.2f}, adv_acc {return_dict[i]['adv_acc']:.2f} std_loss {return_dict[i]['std_loss']:.2f}, adv_loss {return_dict[i]['adv_loss']:.2f}, flops {return_dict[i]['flops']:.2f}, params {return_dict[i]['params']:.2f}")
+            else:
+                print(f"Gen {gen} Individual {i} failed with return code {process.returncode}")
 
-    criterion = torch.nn.CrossEntropyLoss()
+        except subprocess.TimeoutExpired:
+            print(f"Individual {i} exceed timestamp, it will be removed from the population.")
+            process.terminate()
+            process.wait(timeout=10)
+            if process.poll() is None:
+                process.kill()
+        except KeyboardInterrupt:
+            print(f"KeyboardInterrupt received. Terminating individual {i} process.")
+            process.terminate()
+            process.wait(timeout=5)
+            if process.poll() is None:
+                process.kill()
+            sys.exit('Search interrupted by user.')
+        except Exception as e:
+            print(f"Failed {i}: {e}")
+        finally:
+            # set default values for failed individuals
+            if i not in return_dict:
+                return_dict[i] = {
+                    "std_acc": 0.0,
+                    "adv_acc": 0.0,
+                    "std_loss": 1000.0,
+                    "adv_loss": 1000.0,
+                    "flops": 1000.0,
+                    "params": 1000.0,
+                    "genotype": None
+                }
 
-    return model, optimizer, scheduler, flops, params, train_queue, valid_queue, criterion
 
-def sanity_check_individual(model):
-    seen = defaultdict(list)
-    for name, module in model.named_modules():
-        seen[id(module)].append(name)
-
-    for module_id, names in seen.items():
-        if len(names) > 1:
-            print("Shared module detected:")
-            for n in names:
-                print("   ", n)
-            raise RuntimeError("Shared module detected.")
-
-def worker_evaluate_individual(gen, i, individual_X, pop_len, weight_individual, nadir_point, ideal_point, args, return_dict):
-    try:
-        if torch.cuda.is_available():
-            device = torch.device(f'cuda:{args.gpu}')
-        elif torch.backends.mps.is_available():
-            device = torch.device("mps")
-        else:
-            device = torch.device("cpu")
-        args.device = device
-        if torch.cuda.is_available():
-            torch.backends.cudnn.benchmark = False
-            torch.backends.cudnn.deterministic = True
-            torch.cuda.manual_seed(args.seed + i) # Different seed for each process to avoid identical weight initialization
-            torch.backends.cudnn.enabled = True
-        model, optimizer, scheduler, individual_flops, individual_params, train_queue, valid_queue, criterion = get_model_from_individual(
-            individual_X,
-            args)
-        time_training = time.time()
-        train_individual(model, individual_flops, individual_params, train_queue, criterion, optimizer, args,
-                         weight_individual, nadir_point, ideal_point, scheduler)
-        print(
-            f'Gen {gen} Training {i + 1}/{pop_len} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
-
-        time_evaluation = time.time()
-        std_acc, adv_acc, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
-        print(
-            f'Gen {gen} Evaluation {i + 1}/{pop_len} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS) std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, std_loss {std_loss:.4f}, adv_loss {adv_loss:.4f} ,flops {individual_flops:.2f}, params {individual_params:.2f}')
-        assert np.isfinite(std_acc) and np.isfinite(adv_acc) and np.isfinite(std_loss) and np.isfinite(adv_loss), f"Non-finite evaluation results for individual {i} of generation {gen}: std_acc {std_acc}, adv_acc {adv_acc}, std_loss {std_loss}, adv_loss {adv_loss}"
-
-        if args.search_space == 'continuous':
-            k = sum(2 + i for i in range(args.steps))
-            alphas_dim = (k, len(PRIMITIVES))
-            genotype = alphas_to_genotype(individual_X, alphas_dim, args)
-        else:
-            genome = convert(individual_X)
-            genotype = decode(genome, args.steps, args.multiplier)
-
-        return_dict[i] = {
-            "std_acc": std_acc,
-            "adv_acc": adv_acc,
-            "std_loss": std_loss,
-            "adv_loss": adv_loss,
-            "flops": individual_flops,
-            "params": individual_params,
-            "genotype": genotype
-        }
-    except Exception as e:
-        print(f"Error in evaluating individual {i} of generation {gen}: {e}")
-    finally:
-        del model, optimizer, scheduler, train_queue, valid_queue, criterion
-        import gc
-        gc.collect()
-        if torch.cuda.is_available():
-            torch.cuda.empty_cache()
-            torch.cuda.ipc_collect()
 
 
 def evaluate_population_multiprocessing(gen, pop, weights_r2, nadir_point, ideal_point, args):
-    with mp.Manager() as manager:
-        return_dict = manager.dict()
+    return_dict = {}
+    for i, individual in enumerate(pop):
+        weight_individual = weights_r2[len(pop)][i].copy()
+        worker_evaluate_individual(gen, i, individual.X.copy(),
+                                   weight_individual, nadir_point.copy(),
+                                   ideal_point.copy(), args, return_dict)
+        individual.std_acc = float(return_dict[i]["std_acc"])
+        individual.adv_acc = float(return_dict[i]["adv_acc"])
+        individual.F[args.std_loss_index] = float(return_dict[i]["std_loss"])
+        individual.F[args.adv_loss_index] = float(return_dict[i]["adv_loss"])
+        individual.F[args.flops_index] = float(return_dict[i]["flops"])
+        individual.F[args.params_index] = float(return_dict[i]["params"])
+        individual.genotype = return_dict[i]["genotype"]
 
-        pop_len = len(pop)
-        to_remove = []
-        for i, individual in enumerate(pop):
-            weight_individual = weights_r2[len(pop)][i].copy()
-            args_individual = copy.deepcopy(args)
-            p = mp.Process(
-                target=worker_evaluate_individual,
-                args=(gen, i, individual.X.copy(), pop_len, weight_individual, nadir_point.copy(), ideal_point.copy(), args_individual, return_dict)
-            )
-            p.start()
-            p.join(timeout=args.timestamp*60)  # 10 args.timestamp timeout per individual
-            
-            if p.is_alive():
-                print(f"Timeout: Individual {i} of generation {gen} took too long to evaluate and will be removed from the population.")
-                p.terminate()
-                p.join(timeout=10)
-                if p.is_alive():
-                    p.kill()
-                    p.join(timeout=5)
-                to_remove.append(i)
-                time.sleep(8)
-                continue
-            time.sleep(10)    
-
-            if p.exitcode != 0 or i not in return_dict:
-                # If the process did not finish successfully, we skip this individual in the population update
-                print(f"Error: Individual {i} of generation {gen} did not finish successfully (exit code {p.exitcode}) and will be removed from the population")
-                to_remove.append(i)
-                time.sleep(10)
-            elif not p.is_alive() and p.exitcode == 0:
-                # Update individual's results from the return_dict
-                res = return_dict.get(i)
-                if res is not None:
-                    individual.std_acc = res["std_acc"]
-                    individual.adv_acc = res["adv_acc"]
-                    individual.F[args.std_loss_index] = res["std_loss"]
-                    individual.F[args.adv_loss_index] = res["adv_loss"]
-                    individual.F[args.flops_index] = res["flops"]
-                    individual.F[args.params_index] = res["params"]
-                    individual.genotype = res["genotype"]
-                else:
-                    to_remove.append(i)    
-            else:
-                to_remove.append(i)
-            if torch.cuda.is_available():
-                torch.cuda.empty_cache()
-            gc.collect()
-
-
-        for i in sorted(to_remove, reverse=True):
-            print(f"Removing individual {i} from generation {gen} due to evaluation failure.")
-            del pop[i]
-        assert len(pop) == pop_len - len(to_remove), f"Expected population size {pop_len - len(to_remove)}, but got {len(pop)} after removing failed evaluations."
-        return len(to_remove)
 
 # R2 version where each architecture has its own weights (no supernet training). This is a baseline to compare with the supernet version.
 def r2_emoa_rnas(args):
@@ -269,8 +187,7 @@ def r2_emoa_rnas(args):
     print(f">>>> Initial population of size {len(pop)} created.")
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'),
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
-    individuals_failed = 0
-    individuals_failed += evaluate_population_multiprocessing(0, pop, weights_r2, nadir_point, ideal_point, args)
+    evaluate_population_multiprocessing(0, pop, weights_r2, nadir_point, ideal_point, args)
     update_ref_points(pop, nadir_point, ideal_point)
 
     archive = archive_update_pq(archive, pop)
@@ -288,7 +205,7 @@ def r2_emoa_rnas(args):
             offsprings = binary_crossover(parents, n_childs=args.n_population, eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
-        individuals_failed += evaluate_population_multiprocessing(generation+1, mutation, weights_r2, nadir_point, ideal_point, args)
+        evaluate_population_multiprocessing(generation+1, mutation, weights_r2, nadir_point, ideal_point, args)
         architectures_evaluated += args.n_population
         update_ref_points(mutation, nadir_point, ideal_point)
 
@@ -305,7 +222,7 @@ def r2_emoa_rnas(args):
         print(f">>>> Gen {generation + 1} | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
         print(
             f">>>> Gen {generation + 1} DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_gen))} (HH:MM:SS)")
-    print(f">>>> Total architectures evaluated: {architectures_evaluated}, Individuals failed during training // evaluation: {individuals_failed}")
+    print(f">>>> Total architectures evaluated: {architectures_evaluated}")
     print(
         f">>>> Total search time: ({(time.time() - time_search) // 86400:02.0f}:{time.strftime('%H:%M:%S)', time.gmtime(time.time() - time_search))} (DD:HH:MM:SS)")
     return archive, archive_accuracy, archive_losses, statistics
@@ -316,9 +233,6 @@ def non_dominated_sort(population):
     S = [[] for _ in range(N)] # solutions dominated by i
     n = [0] * N # number of solutions dominating i
     fronts = [[]]
-    print(f"DEBUG: type of n is {type(n)}") 
-    print(f"DEBUG: type of N is {type(N)}")
-    print(f"DEBUG: type of population is {type(population)}")
     for i in range(N):
         for j in range(N):
             if i == j:
