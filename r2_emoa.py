@@ -4,6 +4,10 @@ from collections import defaultdict
 import copy
 import random
 import ssl
+import torch, torchvision
+from rnas_train import train_individual, infer
+from micro_space.model_search import alphas_to_genotype
+import gc
 
 import numpy as np
 import time
@@ -63,7 +67,6 @@ def initial_population(n_population, alphas_dim, k, args):
     return individuals
 
 def get_model_from_individual(individual_X, args):
-    import torch, torchvision
     from micro_space.model import NetworkCIFAR
     from micro_space.model_search import alphas_to_genotype
     if args.dataset == 'cifar10':
@@ -137,9 +140,6 @@ def sanity_check_individual(model):
             raise RuntimeError("Shared module detected.")
 
 def worker_evaluate_individual(gen, i, individual_X, pop_len, weight_individual, nadir_point, ideal_point, args, return_dict):
-    import torch
-    from rnas_train import train_individual, infer
-    from micro_space.model_search import alphas_to_genotype
     try:
         if torch.cuda.is_available():
             device = torch.device(f'cuda:{args.gpu}')
@@ -189,14 +189,14 @@ def worker_evaluate_individual(gen, i, individual_X, pop_len, weight_individual,
         print(f"Error in evaluating individual {i} of generation {gen}: {e}")
     finally:
         del model, optimizer, scheduler, train_queue, valid_queue, criterion
+        import gc
+        gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
+            torch.cuda.ipc_collect()
 
 
 def evaluate_population_multiprocessing(gen, pop, weights_r2, nadir_point, ideal_point, args):
-    if mp.get_start_method(allow_none=True) != "spawn":
-        mp.set_start_method("spawn", force=True)
-
     with mp.Manager() as manager:
         return_dict = manager.dict()
 
@@ -215,20 +215,20 @@ def evaluate_population_multiprocessing(gen, pop, weights_r2, nadir_point, ideal
             if p.is_alive():
                 print(f"Timeout: Individual {i} of generation {gen} took too long to evaluate and will be removed from the population.")
                 p.terminate()
-                p.join(timeout=5)
+                p.join(timeout=10)
                 if p.is_alive():
                     p.kill()
                     p.join(timeout=5)
                 to_remove.append(i)
+                time.sleep(8)
                 continue
+            time.sleep(10)    
 
             if p.exitcode != 0 or i not in return_dict:
                 # If the process did not finish successfully, we skip this individual in the population update
-                if p.exitcode == 11:
-                    print(f"Segmentation fault detected for individual {i} of generation {gen}, and will be removed from the population")
-                else:
-                    print(f"Error: Individual {i} of generation {gen} did not finish successfully (exit code {p.exitcode}) and will be removed from the population")
+                print(f"Error: Individual {i} of generation {gen} did not finish successfully (exit code {p.exitcode}) and will be removed from the population")
                 to_remove.append(i)
+                time.sleep(10)
             elif not p.is_alive() and p.exitcode == 0:
                 # Update individual's results from the return_dict
                 res = return_dict.get(i)
@@ -244,6 +244,10 @@ def evaluate_population_multiprocessing(gen, pop, weights_r2, nadir_point, ideal
                     to_remove.append(i)    
             else:
                 to_remove.append(i)
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            gc.collect()
+
 
         for i in sorted(to_remove, reverse=True):
             print(f"Removing individual {i} from generation {gen} due to evaluation failure.")
@@ -312,7 +316,9 @@ def non_dominated_sort(population):
     S = [[] for _ in range(N)] # solutions dominated by i
     n = [0] * N # number of solutions dominating i
     fronts = [[]]
-
+    print(f"DEBUG: type of n is {type(n)}") 
+    print(f"DEBUG: type of N is {type(N)}")
+    print(f"DEBUG: type of population is {type(population)}")
     for i in range(N):
         for j in range(N):
             if i == j:
@@ -346,13 +352,21 @@ def non_dominated_sort(population):
 
 def update_population_r2(n, pop, offspring, weights_r2):
     c = pop + offspring
+    fronts = non_dominated_sort(c)
+    last_front = len(fronts) - 1
     while len(c) > n:
         weights = weights_r2[len(c)]
-        fronts = non_dominated_sort(c)
-        front_k = fronts[-1]
+        front_k = fronts[last_front]
+        if last_front < 0:
+            break
+        if len(front_k) == 0:
+            last_front -= 1
+            continue
         if len(front_k) == 1:
             worst = front_k[0]
             c.remove(worst)
+            front_k.remove(worst)
+            last_front -= 1
             continue
         z_ref = np.min([ind.F for ind in front_k], axis=0)
         nadir_point = np.max([ind.F for ind in front_k], axis=0)
@@ -361,5 +375,6 @@ def update_population_r2(n, pop, offspring, weights_r2):
             print(f"Individual {ind.F} R2 contribution {ind.c_r2}")
         worst = sorted(front_k, key=lambda x: x.c_r2)[0]
         c.remove(worst)
+        front_k.remove(worst)
     assert len(c) == n, f"len(c)={len(c)}, n={n}"
     return c
