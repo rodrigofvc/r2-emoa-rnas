@@ -1,8 +1,13 @@
 import argparse
 import json
 import sys
+import os
 
-import torchvision
+import logging
+logging.basicConfig(level=logging.ERROR)
+os.environ["TORCH_LOGS"] = "-all" 
+os.environ["PYTHONASYNCIODEBUG"] = "0"
+
 import time
 
 import utils
@@ -12,6 +17,7 @@ from micro_space.model_search import alphas_to_genotype
 
 import numpy as np
 import torch
+import torchvision
 
 from rnas_train import train_individual, infer
 
@@ -45,11 +51,11 @@ def get_model_from_individual(individual_X, args):
 
     train_transform, valid_transform = utils.data_transforms_cifar10(args)
     if args.dataset == 'cifar10':
-        train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=False, transform=train_transform)
-        valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=False, transform=train_transform)
+        train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
+        valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
     elif args.dataset == 'cifar100':
-        train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=False, transform=train_transform)
-        valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=False, transform=train_transform)
+        train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
+        valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
     num_train = len(train_data)
@@ -165,7 +171,7 @@ if __name__ == '__main__':
            "genotype": genotype._asdict()}
     print(f"RESULT:{json.dumps(res)}")
 
-    output_filename = f"result_gen{args.gen}_ind{args.i}.json"
+    output_filename = "logs" + os.sep + f"result_gen{args.gen}_ind{args.i}.json"
     with open(output_filename, 'w') as f:
         json.dump(res, f)
     sys.exit(0)
