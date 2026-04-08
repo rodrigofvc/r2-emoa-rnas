@@ -8,6 +8,12 @@ logging.basicConfig(level=logging.ERROR)
 os.environ["TORCH_LOGS"] = "-all" 
 os.environ["PYTHONASYNCIODEBUG"] = "0"
 
+os.environ["OMP_NUM_THREADS"] = "1"
+os.environ["MKL_NUM_THREADS"] = "1"
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+os.environ["MKL_INTERFACE_LAYER"] = "LP64"
+os.environ["MKL_DYNAMIC"] = "FALSE"
+
 import time
 
 import utils
@@ -174,4 +180,6 @@ if __name__ == '__main__':
     output_filename = "logs" + os.sep + f"result_gen{args.gen}_ind{args.i}.json"
     with open(output_filename, 'w') as f:
         json.dump(res, f)
+    torch.cuda.synchronize()
+    torch.cuda.empty_cache()    
     sys.exit(0)

@@ -140,7 +140,7 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
         except Exception as e:
             print(f"Failed {i}: {e}")
         finally:
-            time.sleep(2)
+            time.sleep(5)
             # set default values for failed individuals
             if i not in return_dict:
                 return_dict[i] = {
