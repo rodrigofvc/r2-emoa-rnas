@@ -140,6 +140,7 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
         except Exception as e:
             print(f"Failed {i}: {e}")
         finally:
+            # wait a bit to ensure the process has terminated and released resources before starting the next one
             time.sleep(5)
             # set default values for failed individuals
             if i not in return_dict:
@@ -172,6 +173,7 @@ def evaluate_population_multiprocessing(gen, pop, weights_r2, nadir_point, ideal
             float(return_dict[i]["params"])
         ], dtype=np.float64)
         individual.genotype = return_dict[i]["genotype"]
+        individual.feasible = True if individual.genotype is not None else False
 
 
 # R2 version where each architecture has its own weights (no supernet training). This is a baseline to compare with the supernet version.
@@ -267,6 +269,8 @@ def non_dominated_sort(population):
 
 def update_population_r2(n, pop, offspring, weights_r2):
     c = pop + offspring
+    # Remove unfeasible solutions before sorting and calculating contributions
+    c = [p for p in c if p.feasible]
     fronts = non_dominated_sort(c)
     last_front = len(fronts) - 1
     while len(c) > n:
@@ -287,7 +291,7 @@ def update_population_r2(n, pop, offspring, weights_r2):
         nadir_point = np.max([ind.F for ind in front_k], axis=0)
         for ind in front_k:
             ind.c_r2 = contribution_r2(front_k, ind, weights, nadir_point, z_ref)
-            print(f"Individual {ind.F} R2 contribution {ind.c_r2}")
+            #print(f"Individual {ind.F} R2 contribution {ind.c_r2}")
         worst = sorted(front_k, key=lambda x: x.c_r2)[0]
         c.remove(worst)
         front_k.remove(worst)

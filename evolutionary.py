@@ -3,8 +3,9 @@ import numpy as np
 from individual import Individual
 
 
-def tournament_selection(pop, n_select, tournament_size=5):
+def tournament_selection(pop_, n_select, tournament_size=5):
     winners = []
+    pop = [ind for ind in pop_ if ind.feasible]
     while len(winners) < n_select:
         P = random.sample(pop, k=tournament_size)
         winner = min(P, key=lambda ind: ind.c_r2)

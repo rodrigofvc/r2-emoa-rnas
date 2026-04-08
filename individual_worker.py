@@ -180,6 +180,7 @@ if __name__ == '__main__':
     output_filename = "logs" + os.sep + f"result_gen{args.gen}_ind{args.i}.json"
     with open(output_filename, 'w') as f:
         json.dump(res, f)
-    torch.cuda.synchronize()
-    torch.cuda.empty_cache()    
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
     sys.exit(0)
