@@ -140,7 +140,7 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
     inputs = inputs.to(args.device)
     target = target.to(args.device)
 
-    optimizer.zero_grad(set_to_none=True)
+    optimizer.zero_grad()
 
     adv_input = fgsm_simple(model, inputs, target)
     adv_input = adv_input.to(args.device)

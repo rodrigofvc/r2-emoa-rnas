@@ -1,4 +1,4 @@
-import pickle
+import json
 import numpy as np
 
 from pymoo.util.ref_dirs import get_reference_directions
@@ -11,10 +11,10 @@ def store_weights(n, k):
         size_pop = 2 * n - i
         w = get_reference_directions("energy", k, size_pop, seed=1)
         directions_set[size_pop] = w
-    for v,k in directions_set.items():
-        print(v, k.shape)
-    with open(file, 'wb') as f:
-        pickle.dump(directions_set, f)
+    json_data = {str(k): v.tolist() for k, v in directions_set.items()}
+    with open(file, 'w') as f:
+        json.dump(json_data, f)
+    print('Weights stored in file:', file)
 
 def get_weights_ponderated(n, k):
     seed = 1
@@ -28,18 +28,15 @@ def get_weights_ponderated(n, k):
     return np.array(w_p)
 
 def store_weights_ponderated(n, k):
-    file = 'weights_' + str(n) + '.pkl'
+    file = 'weights_' + str(n) + '.json'
     directions_set = {}
     for i in range(2*n-9):
         size_pop = 2 * n - i
         directions_set[size_pop] = get_weights_ponderated(size_pop, k)
-    for weight in directions_set.values():
-        print(weight)
-    for v, key in directions_set.items():
-        print(v, key.shape)
-    with open(file, 'wb') as f:
-        pickle.dump(directions_set, f)
-    return directions_set
+    json_data = {str(k): v.tolist() for k, v in directions_set.items()}
+    with open(file, 'w') as f:
+        json.dump(json_data, f)
+    print('Weights stored in file:', file)
 
 if __name__ == '__main__':
     n = 40

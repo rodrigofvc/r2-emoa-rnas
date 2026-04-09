@@ -1,24 +1,11 @@
 import random
-
 import numpy as np
-import torch
 from individual import Individual
 
 
-def unpack_alphas(vec, shape_alphas, args):
-    n_norm = shape_alphas[0] * shape_alphas[1]
-    if isinstance(vec, torch.Tensor):
-        vec = vec.detach().cpu().numpy()
-
-    a_norm_np = vec[:n_norm].reshape(shape_alphas).copy()
-    a_norm = torch.tensor(a_norm_np, dtype=torch.float32, device=args.device).requires_grad_(False)
-
-    a_reduction_np = vec[n_norm:].reshape(shape_alphas).copy()
-    a_reduction = torch.tensor(a_reduction_np, dtype=torch.float32, device=args.device).requires_grad_(False)
-    return [a_norm, a_reduction]
-
-def tournament_selection(pop, n_select, tournament_size=5):
+def tournament_selection(pop_, n_select, tournament_size=5):
     winners = []
+    pop = [ind for ind in pop_ if ind.feasible]
     while len(winners) < n_select:
         P = random.sample(pop, k=tournament_size)
         winner = min(P, key=lambda ind: ind.c_r2)

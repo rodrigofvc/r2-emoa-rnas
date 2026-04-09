@@ -1,27 +1,21 @@
 import csv
-import gc
 import json
 import lzma
 import time
 
 import numpy as np
-import torch
-from torch import nn
 from pymoo.indicators.hv import HV
-import torchvision.transforms as transforms
 import os
 import pickle
-from torch.utils.flop_counter import FlopCounterMode
-from micro_space.model import NetworkCIFAR
 from indicators import r2
 import copy
 
 # Load R2 weights for the i-th population size
 def get_weights_r2(n):
-    file = 'r2_weights' + os.sep + 'weights_' + str(n) + '.pkl'
-    with open(file, 'rb') as f:
-        weights_r2 = pickle.load(f)
-    return weights_r2
+    file = 'r2_weights' + os.sep + 'weights_' + str(n) + '.json'
+    with open(file, 'r') as f:
+        json_data = json.load(f)
+    return {int(k): np.array(v) for k, v in json_data.items()}
 
 
 def save_archive_accuracy(archive, archive_path):
@@ -104,6 +98,7 @@ def store_metrics(architectures_evaluated, population, population_2, args, weigh
 
 
 def save_supernet(model, model_path):
+    import torch
     model_path += 'super-net.pt'
     cpu_state = {k: v.detach().cpu().contiguous() for k, v in model.state_dict().items()}
     torch.save(cpu_state, model_path)
@@ -111,6 +106,7 @@ def save_supernet(model, model_path):
         model.to('cuda')
 
 def save_model(model, model_path, name):
+    import torch
     if not os.path.exists(model_path):
         os.makedirs(model_path)
     model_path += os.sep + name
@@ -125,6 +121,7 @@ def save_log_train(arch_path, log):
 
 # Load the supernet model from the specified path
 def load_supernet(model_path):
+    import torch
     model = torch.load(model_path, weights_only=False)
     return model
 
@@ -242,6 +239,7 @@ class Cutout(object):
         self.length = length
 
     def __call__(self, img):
+        import torch
         h, w = img.size(1), img.size(2)
 
         y = torch.randint(0, h, (1,)).item()
@@ -259,7 +257,7 @@ class Cutout(object):
         return img
 
 def data_transforms_cifar10(args):
-
+    import torchvision.transforms as transforms
     CIFAR_MEAN = [0.49139968, 0.48215827, 0.44653124]
     CIFAR_STD = [0.24703233, 0.24348505, 0.26158768]
 
@@ -279,47 +277,9 @@ def data_transforms_cifar10(args):
         ])
     return train_transform, valid_transform
 
-def get_model_metrics_dep(genotype, model, discrete=False):
-    if not discrete:
-        # create a discretized version of the model using the provided genotype and model
-        discretized_model = NetworkCIFAR(model.C, model.num_classes, model.layers, auxiliary=False, genotype=genotype)
-    else:
-        discretized_model = model
-
-    params_num = sum(p.numel() for p in discretized_model.parameters() if p.requires_grad)
-    params = round(float(params_num) / 1e6, 4)
-
-    def get_flops():
-        current_res = 32
-        macs = 0
-
-        for m in discretized_model.modules():
-            if isinstance(m, nn.Conv2d):
-                k = m.kernel_size[0]
-                s = m.stride[0]
-                p = m.padding[0]
-                d = m.dilation[0]
-
-                out_res = ((current_res + 2 * p - d * (k - 1) - 1) // s) + 1
-
-                # MACs = (k_h * k_w * in_c * out_c / groups) * out_h * out_w
-                layer_macs = (k * k * m.in_channels * m.out_channels // m.groups) * (out_res * out_res)
-                macs += layer_macs
-
-                if s > 1:
-                    current_res = out_res
-
-            elif isinstance(m, nn.Linear):
-                macs += m.in_features * m.out_features
-
-        return macs
-
-    total_macs = get_flops()
-    flops = round(float(total_macs) / 1e6, 4)
-
-    return flops, params
-
 def get_model_metrics(model_):
+    import torch
+    from torch.utils.flop_counter import FlopCounterMode
     model = copy.deepcopy(model_)
     params_num = sum(p.numel() for p in model.parameters() if p.requires_grad)
     params = round(float(params_num) / 1e6, 4)

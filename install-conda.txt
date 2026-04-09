@@ -1,0 +1,5 @@
+conda install pytorch=2.9.1 torchvision=0.24.1 -c pytorch -c nvidia
+conda install numpy=1.26.4 scipy=1.17.1 mkl=2025.0.0 mkl-service=2.5.2 intel-openmp=2025.0.0 -c defaults
+conda install pymoo=0.6.1.5 alive-progress=3.3.0 about-time=4.2.1 -c conda-forge
+conda install pillow==10.4.0 matplotlib-base=3.10.8 networkx=3.6.1 sympy=1.14.0 -c defaults
+#pip install cma==4.4.4 moocore==0.2.0 wrapt==2.1.2 cffi==2.0.0

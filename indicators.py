@@ -1,5 +1,4 @@
 import numpy as np
-import torch
 
 def normalize_objectives(population):
     n_obj = len(population[0].F)
@@ -56,5 +55,6 @@ def get_dynamic_r2_reference(population):
 def update_ref_points(population, nadir_point, ideal_point):
     for ind in population:
         F = np.array(ind.F)
-        nadir_point[:] = np.maximum(nadir_point, F)
-        ideal_point[:] = np.minimum(ideal_point, F)
+        if ind.feasible:
+            nadir_point[:] = np.maximum(nadir_point, F)
+            ideal_point[:] = np.minimum(ideal_point, F)
