@@ -108,9 +108,9 @@ def decode_cell(genome, norm=True):
     cell, cell_concat = [], list(range(2, len(genome)+2))
     for block in genome:
         for unit in block:
-            cell.append((PRIMITIVES[unit[0]], unit[1]))
+            cell.append((PRIMITIVES[int(unit[0])], int(unit[1])))
             if unit[1] in cell_concat:
-                cell_concat.remove(unit[1])
+                cell_concat.remove(int(unit[1]))
 
     if norm:
         return Genotype_norm(normal=cell, normal_concat=cell_concat)
@@ -129,11 +129,11 @@ def decode(genome, steps=6, multiplier=6):
 
     for block in normal_cell:
         for unit in block:
-            normal.append((PRIMITIVES[unit[0]], unit[1]))
+            normal.append((PRIMITIVES[int(unit[0])], int(unit[1])))
 
     for block in reduce_cell:
         for unit in block:
-            reduce.append((PRIMITIVES[unit[0]], unit[1]))
+            reduce.append((PRIMITIVES[int(unit[0])], int(unit[1])))
 
     return Genotype(
         normal=normal, normal_concat=normal_concat,

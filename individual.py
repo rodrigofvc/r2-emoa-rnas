@@ -14,5 +14,6 @@ class Individual:
         self.std_acc = 0.0
         self.adv_acc = 0.0
         self.genotype = None
+        self.feasible = False
 
 
