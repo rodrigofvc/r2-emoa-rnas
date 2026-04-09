@@ -11,10 +11,10 @@ import copy
 
 # Load R2 weights for the i-th population size
 def get_weights_r2(n):
-    file = 'r2_weights' + os.sep + 'weights_' + str(n) + '.pkl'
-    with open(file, 'rb') as f:
-        weights_r2 = pickle.load(f)
-    return weights_r2
+    file = 'r2_weights' + os.sep + 'weights_' + str(n) + '.json'
+    with open(file, 'r') as f:
+        json_data = json.load(f)
+    return {int(k): np.array(v) for k, v in json_data.items()}
 
 
 def save_archive_accuracy(archive, archive_path):
