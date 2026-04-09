@@ -105,7 +105,7 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
     if args.debug_cuda:
         env_worker['CUDA_LAUNCH_BLOCKING'] = '1'
         env_worker['TORCH_USE_CUDA_DSA'] = '1'
-
+    clean_file = False
     with open(log_file, 'w') as f_log:
         process = subprocess.Popen(process_args,
                                    stdout=f_log,
@@ -122,6 +122,7 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
                     res_dict['genotype'] = Genotype(**res_dict['genotype'])
                     return_dict[i] = res_dict
                 os.remove(result_file)
+                clean_file = True
                 print(f"Gen {gen} Individual {i}: std_acc {return_dict[i]['std_acc']:.2f}, adv_acc {return_dict[i]['adv_acc']:.2f} std_loss {return_dict[i]['std_loss']:.3f}, adv_loss {return_dict[i]['adv_loss']:.3f}, flops {return_dict[i]['flops']:.2f}, params {return_dict[i]['params']:.2f}")
             else:
                 print(f"Gen {gen} Individual {i} failed with return code {process.returncode}")
@@ -153,6 +154,9 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
                     "params": 1000.0,
                     "genotype": None
                 }
+    # Remove log file of successful evaluations, keep logs of failed evaluations for debugging
+    if clean_file and os.path.exists(log_file):
+        os.remove(log_file)
 
 
 
