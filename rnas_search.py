@@ -1,6 +1,7 @@
 import os
 import argparse
 import shutil
+import logging
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "" # Disable GPU usage for this script, as it may cause issues with multiprocessing on some platforms
 
@@ -64,6 +65,12 @@ if __name__ == '__main__':
     parser.add_argument('--debug_cuda', action='store_true', default=False, help='Enable CUDA_LAUNCH_BLOCKING for debugging')
     args = parser.parse_args()
 
+    logging.basicConfig(
+        level=logging.INFO,
+        format='[%(asctime)s] %(levelname)s: %(message)s',
+        datefmt='%H:%M:%S'
+    )
+
     if os.path.exists("logs"):
         shutil.rmtree("logs")
     os.makedirs("logs", exist_ok=True)
@@ -98,7 +105,7 @@ if __name__ == '__main__':
         plot_r2(statistics, args.save_path_final_architect)
         save_statistics_to_csv(statistics, args.save_path_final_architect)
         save_params(args, args.save_path_final_architect)
-        print(f"Experiment completed and results saved in {results_dir}")
+        logging.info(f"Experiment completed and results saved in {results_dir}")
     elif args.algorithm == 'r2-emoa':
         from r2_emoa import r2_emoa_rnas
         archive, archive_accuracy, archive_losses, statistics = r2_emoa_rnas(
@@ -116,4 +123,4 @@ if __name__ == '__main__':
         plot_r2(statistics, args.save_path_final_architect)
         save_statistics_to_csv(statistics, args.save_path_final_architect)
         save_params(args, args.save_path_final_architect)
-        print(f"Experiment completed and results saved in {results_dir}")
+        logging.info(f"Experiment completed and results saved in {results_dir}")

@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import time
+import logging
 
 import numpy as np
 
@@ -81,26 +82,26 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
                     return_dict[i] = res_dict
                 os.remove(result_file)
                 clean_file = True
-                print(f"Gen {gen} Individual {i}: std_acc {return_dict[i]['std_acc']:.2f}, adv_acc {return_dict[i]['adv_acc']:.2f} std_loss {return_dict[i]['std_loss']:.3f}, adv_loss {return_dict[i]['adv_loss']:.3f}, flops {return_dict[i]['flops']:.2f}, params {return_dict[i]['params']:.2f}")
+                logging.info(f"Gen {gen} Individual {i}: std_acc {return_dict[i]['std_acc']:.2f}, adv_acc {return_dict[i]['adv_acc']:.2f} std_loss {return_dict[i]['std_loss']:.3f}, adv_loss {return_dict[i]['adv_loss']:.3f}, flops {return_dict[i]['flops']:.2f}, params {return_dict[i]['params']:.2f}")
             else:
-                print(f"Gen {gen} Individual {i} failed with return code {process.returncode}")
+                logging.info(f"Gen {gen} Individual {i} failed with return code {process.returncode}")
 
         except subprocess.TimeoutExpired:
-            print(f"Individual {i} exceed timestamp, it will be removed from the population.")
+            logging.info(f"Individual {i} exceed timestamp, it will be removed from the population.")
             process.kill()
             process.communicate(timeout=10)
         except KeyboardInterrupt:
-            print(f"KeyboardInterrupt received. Terminating individual {i} process.")
+            logging.info(f"KeyboardInterrupt received. Terminating individual {i} process.")
             process.terminate()
             if process.poll() is None:
                 process.kill()
                 process.communicate(timeout=10)
             sys.exit('Search interrupted by user.')
         except Exception as e:
-            print(f"Failed {i}: {e}")
+            logging.info(f"Failed {i}: {e}")
         finally:
             # wait a bit to ensure the process has terminated and released resources before starting the next one
-            time.sleep(1)
+            time.sleep(5)
             # set default values for failed individuals
             if i not in return_dict:
                 return_dict[i] = {

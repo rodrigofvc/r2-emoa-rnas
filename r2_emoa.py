@@ -1,3 +1,4 @@
+import logging
 import ssl
 import random
 
@@ -70,7 +71,7 @@ def r2_emoa_rnas(args):
     ideal_point = np.zeros(4,)
     time_search = time.time()
     pop = initial_population(args.n_population, alphas_dim, args.objectives, args)
-    print(f">>>> Initial population of size {len(pop)} created.")
+    logging.info(f">>>> Initial population of size {len(pop)} created.")
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'),
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
     evaluate_population_multiprocessing(args.n_population, 0, pop, weights_r2, nadir_point, ideal_point, args)
@@ -80,7 +81,7 @@ def r2_emoa_rnas(args):
     archive_losses = archive_update_pq(archive_losses, pop, k=2)
     hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args,
                                                          weights_r2, statistics)
-    print(f">>>> Gen 0 | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
+    logging.info(f">>>> Gen 0 | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
     for generation in range(args.generations):
         time_stamp_gen = time.time()
 
@@ -106,10 +107,10 @@ def r2_emoa_rnas(args):
         utils.plot_hypervolume2(statistics, args.save_path_final_architect)
         utils.plot_r2(statistics, args.save_path_final_architect)
         utils.store_statisctics(statistics, np.array([p.F for p in mutation if p.feasible]))
-        print(f">>>> Gen {generation + 1} | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
-        print(
+        logging.info(f">>>> Gen {generation + 1} | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
+        logging.info(
             f">>>> Gen {generation + 1} DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_gen))} (HH:MM:SS)")
-    print(f">>>> Total architectures evaluated: {architectures_evaluated}")
-    print(
+    logging.info(f">>>> Total architectures evaluated: {architectures_evaluated}")
+    logging.info(
         f">>>> Total search time: ({(time.time() - time_search) // 86400:02.0f}:{time.strftime('%H:%M:%S)', time.gmtime(time.time() - time_search))} (DD:HH:MM:SS)")
     return archive, archive_accuracy, archive_losses, statistics

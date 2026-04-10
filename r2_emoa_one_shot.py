@@ -2,6 +2,7 @@ import numpy as np
 import time
 import random
 import ssl
+import logging
 
 import utils
 from archivers import archive_update_pq, archive_update_pq_accuracy
@@ -68,7 +69,7 @@ def prepare_args_supernet(args):
     ).to(args.device)
 
     if args.pretrained_supernet is not None:
-        print(f"Loading pretrained supernet from {args.pretrained_supernet}")
+        logging.info(f"Loading pretrained supernet from {args.pretrained_supernet}")
         model = utils.load_supernet(args.pretrained_supernet)
         model = model.to(args.device)
 
@@ -95,7 +96,7 @@ def prepare_args_supernet(args):
         # testing
         split = 96
         num_train = split + 96
-    print(f"Training samples: {split}, Validation samples: {num_train - split}")
+    logging.info(f"Training samples: {split}, Validation samples: {num_train - split}")
 
     train_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
@@ -161,7 +162,7 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, gen
                                                      model_flops, model_parameters, individual_r2_weights, z_ref_stch,
                                                      nadir_point, ideal_point)
             if n_batch % args.report_freq == 0:
-                print(
+                logging.info(
                     f'>>>> Gen {gen}/{args.generations} | Epoch {epoch}/{epochs} | Batch {n_batch}/{len(train_queue)} | Loss {loss:.4f} | Std Acc {std_acc:.2f}% | Adv Acc {adv_acc:.2f}% | Time {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_stamp))} (HH:MM:SS)')
         scheduler.step()
     update_ref_points(pop, nadir_point_, ideal_point_)
@@ -175,14 +176,14 @@ def r2_emoa_oneshot_nas(args):
     architectures_evaluated = 0
     time_search = time.time()
     pop = initial_population(args.n_population, model.alphas_dim, args.objectives, args)
-    print(f">>>> Initial population of size {len(pop)} created.")
+    logging.info(f">>>> Initial population of size {len(pop)} created.")
     nadir_point = np.ones(4, )
     ideal_point = np.zeros(4, )
     if args.epochs_warmup > 0:
-        print(">>>> Warmup training of the supernet...")
+        logging.info(">>>> Warmup training of the supernet...")
         train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, 0, args, weights_r2,
                        nadir_point, ideal_point, warmup=True)
-        print(">>>> Warmup training DONE.")
+        logging.info(">>>> Warmup training DONE.")
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'),
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': [],
                   'lr_log': []}
@@ -191,13 +192,13 @@ def r2_emoa_oneshot_nas(args):
     archive_losses = archive_update_pq(archive_losses, pop, k=2)
     hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args,
                                                          weights_r2, statistics)
-    print(f"Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
+    logging.info(f"Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
     for generation in range(args.generations):
         start = time.time()
         time_stamp_epoch = time.time()
         train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, generation + 1, args,
                        weights_r2, nadir_point, ideal_point)
-        print(
+        logging.info(
             f">>>> Gen {generation + 1} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_epoch))} (HH:MM:SS)")
 
         parents = tournament_selection(pop, n_select=args.n_population // 2, tournament_size=5)
@@ -207,7 +208,7 @@ def r2_emoa_oneshot_nas(args):
         # Evaluate offspring
         evaluate_population_multiprocessing(args.n_population, generation, mutation, weights_r2, nadir_point, ideal_point, args)
         update_ref_points(mutation, nadir_point, ideal_point)
-        print(
+        logging.info(
             f"Tiempo total de entrenamiento/validacion {args.generations}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} (HH:MM:SS)")
 
         archive = archive_update_pq(archive, pop + mutation)
@@ -223,7 +224,7 @@ def r2_emoa_oneshot_nas(args):
         utils.plot_r2(statistics, args.save_path_final_architect)
         statistics['lr_log'].append(optimizer.param_groups[0]['lr'])
         utils.store_statisctics(statistics, np.array([p.F for p in mutation if p.feasible]))
-        print(f"Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
-    print(
+        logging.info(f"Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
+    logging.info(
         f">>>> Total search time: ({(time.time() - time_search) // 86400:02.0f}:{time.strftime('%H:%M:%S)', time.gmtime(time.time() - time_search))} (DD:HH:MM:SS)")
     return model, archive, archive_accuracy, archive_losses, statistics

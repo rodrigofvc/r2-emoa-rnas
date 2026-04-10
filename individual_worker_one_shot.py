@@ -8,7 +8,11 @@ import logging
 from micro_space.model import NetworkCIFAR
 from r2_emoa_one_shot import unpack_alphas
 
-logging.basicConfig(level=logging.ERROR)
+logging.basicConfig(
+        level=logging.INFO,
+        format='[%(asctime)s] %(levelname)s: %(message)s',
+        datefmt='%H:%M:%S'
+)
 os.environ["TORCH_LOGS"] = "-all" 
 os.environ["PYTHONASYNCIODEBUG"] = "0"
 
@@ -164,7 +168,7 @@ if __name__ == '__main__':
 
     time_evaluation = time.time()
     std_acc, adv_acc, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
-    print(
+    logging.info(
         f'Gen {args.gen} Evaluation {args.i + 1} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS) std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, std_loss {std_loss:.4f}, adv_loss {adv_loss:.4f} ,flops {individual_flops:.2f}, params {individual_params:.2f}')
     assert np.isfinite(std_acc) and np.isfinite(adv_acc) and np.isfinite(std_loss) and np.isfinite(
         adv_loss), f"Non-finite evaluation results for individual {args.i} of generation {args.gen}: std_acc {std_acc}, adv_acc {adv_acc}, std_loss {std_loss}, adv_loss {adv_loss}"

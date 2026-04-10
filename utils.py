@@ -308,7 +308,8 @@ def get_best_architecture_standard(archs_path):
 def save_params(args, trained_arch_path):
     params_path = trained_arch_path + os.sep
     params_dict = vars(args)
-    params_dict.pop('device')
+    if 'device' in params_dict:
+        params_dict.pop('device')
     if not os.path.exists(os.path.dirname(params_path)):
         os.makedirs(os.path.dirname(params_path))
     params_path += 'params.json'
