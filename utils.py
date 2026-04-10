@@ -109,8 +109,8 @@ def save_model(model, model_path, name):
     import torch
     if not os.path.exists(model_path):
         os.makedirs(model_path)
-    model_path += os.sep + name
-    torch.save(model, model_path)
+    model_path_ = model_path + os.sep + name
+    torch.save(model, model_path_)
 
 def save_log_train(arch_path, log):
     arch_path += 'train_log.csv'
@@ -308,6 +308,7 @@ def get_best_architecture_standard(archs_path):
 def save_params(args, trained_arch_path):
     params_path = trained_arch_path + os.sep
     params_dict = vars(args)
+    params_dict.pop('device')
     if not os.path.exists(os.path.dirname(params_path)):
         os.makedirs(os.path.dirname(params_path))
     params_path += 'params.json'
