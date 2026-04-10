@@ -186,7 +186,7 @@ def r2_emoa_oneshot_nas(args):
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'),
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': [],
                   'lr_log': []}
-    evaluate_population_multiprocessing(0, pop, weights_r2, nadir_point, ideal_point, args)
+    evaluate_population_multiprocessing(args.n_population,0, pop, weights_r2, nadir_point, ideal_point, args)
     archive = archive_update_pq(archive, pop)
     archive_losses = archive_update_pq(archive_losses, pop, k=2)
     hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args,
@@ -200,12 +200,12 @@ def r2_emoa_oneshot_nas(args):
         print(
             f">>>> Gen {generation + 1} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_epoch))} (HH:MM:SS)")
 
-        parents = tournament_selection(pop, n_select=len(pop) // 2, tournament_size=5)
-        offsprings = binary_crossover(parents, n_childs=len(pop), eta=args.eta_cross, prob_cross=args.prob_cross)
+        parents = tournament_selection(pop, n_select=args.n_population // 2, tournament_size=5)
+        offsprings = binary_crossover(parents, n_childs=args.n_population*2, eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
         # Evaluate offspring
-        evaluate_population_multiprocessing(generation, mutation, weights_r2, nadir_point, ideal_point, args)
+        evaluate_population_multiprocessing(args.n_population, generation, mutation, weights_r2, nadir_point, ideal_point, args)
         update_ref_points(mutation, nadir_point, ideal_point)
         print(
             f"Tiempo total de entrenamiento/validacion {args.generations}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} (HH:MM:SS)")

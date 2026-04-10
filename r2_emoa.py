@@ -73,7 +73,7 @@ def r2_emoa_rnas(args):
     print(f">>>> Initial population of size {len(pop)} created.")
     statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'),
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
-    evaluate_population_multiprocessing(0, pop, weights_r2, nadir_point, ideal_point, args)
+    evaluate_population_multiprocessing(args.n_population, 0, pop, weights_r2, nadir_point, ideal_point, args)
     update_ref_points(pop, nadir_point, ideal_point)
 
     archive = archive_update_pq(archive, pop)
@@ -86,12 +86,12 @@ def r2_emoa_rnas(args):
 
         parents = tournament_selection(pop, n_select=args.n_population // 2, tournament_size=5)
         if args.search_space == 'discrete':
-            offsprings = point_crossover(parents, n_childs=args.n_population, prob_cross=args.prob_cross)
+            offsprings = point_crossover(parents, n_childs=args.n_population*2, prob_cross=args.prob_cross)
         else:
-            offsprings = binary_crossover(parents, n_childs=args.n_population, eta=args.eta_cross, prob_cross=args.prob_cross)
+            offsprings = binary_crossover(parents, n_childs=args.n_population*2, eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
-        evaluate_population_multiprocessing(generation+1, mutation, weights_r2, nadir_point, ideal_point, args)
+        evaluate_population_multiprocessing(args.n_population, generation+1, mutation, weights_r2, nadir_point, ideal_point, args)
         architectures_evaluated += args.n_population
         update_ref_points(mutation, nadir_point, ideal_point)
 

@@ -100,7 +100,7 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
             print(f"Failed {i}: {e}")
         finally:
             # wait a bit to ensure the process has terminated and released resources before starting the next one
-            time.sleep(5)
+            time.sleep(1)
             # set default values for failed individuals
             if i not in return_dict:
                 return_dict[i] = {
@@ -116,9 +116,13 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
     if clean_file and os.path.exists(log_file):
         os.remove(log_file)
 
-def evaluate_population_multiprocessing(gen, pop, weights_r2, nadir_point, ideal_point, args):
+def evaluate_population_multiprocessing(n_evaluations, gen, pop, weights_r2, nadir_point, ideal_point, args):
     return_dict = {}
+    feasible_solutions = 0
     for i, individual in enumerate(pop):
+        if feasible_solutions >= n_evaluations:
+            # Skip the evaluation of the remaining individuals in the population if we have already evaluated enough feasible solutions
+            break
         weight_individual = weights_r2[len(pop)][i].copy()
         worker_evaluate_individual(gen, i, individual.X.copy(),
                                    weight_individual, nadir_point.copy(),
@@ -133,3 +137,5 @@ def evaluate_population_multiprocessing(gen, pop, weights_r2, nadir_point, ideal
         ], dtype=np.float64)
         individual.genotype = return_dict[i]["genotype"]
         individual.feasible = True if individual.genotype is not None else False
+        if individual.feasible:
+            feasible_solutions += 1
