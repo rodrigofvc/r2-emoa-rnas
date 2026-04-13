@@ -63,6 +63,7 @@ if __name__ == '__main__':
     parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
     parser.add_argument('--timestamp', type=int, default=6, help='timestamp in minutes for training/eval each architecture')
     parser.add_argument('--debug_cuda', action='store_true', default=False, help='Enable CUDA_LAUNCH_BLOCKING for debugging')
+    parser.add_argument('--increase_epochs', action='store_true', default=False, help='Increase the number of epochs to train the supernet and individuals as generations progress')
     args = parser.parse_args()
 
     logging.basicConfig(

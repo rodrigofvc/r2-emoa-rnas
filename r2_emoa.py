@@ -83,6 +83,9 @@ def r2_emoa_rnas(args):
                                                          weights_r2, statistics)
     logging.info(f">>>> Gen 0 | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
     for generation in range(args.generations):
+        if args.increase_epochs and (generation + 1) % 10 == 0 and generation != 0:
+            args.epochs_train_supernet += 5
+            args.epochs_train_individual += 5
         time_stamp_gen = time.time()
 
         parents = tournament_selection(pop, n_select=args.n_population // 2, tournament_size=5)
