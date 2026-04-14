@@ -22,7 +22,7 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
         raise ValueError(f"Unknown algorithm: {args.algorithm}")
 
     process_args = [
-        sys.executable, "-X dev -u", file,
+        sys.executable, "-X", "dev", "-u", file,
         '--gen', str(gen),
         '--i', str(i),
         '--seed', str(args.seed + i),  # Different seed for each process to avoid identical weight initialization
@@ -87,9 +87,12 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
                 logging.info(f"Gen {gen} Individual {i} failed with return code {process.returncode}")
 
         except subprocess.TimeoutExpired:
-            logging.info(f"Individual {i} exceed timestamp, it will be removed from the population.")
+            logging.info(f"Individual {i} exceed timestamp: {args.timestamp}, it will be removed from the population. If you want to increase the timestamp, please set --timestamp argument to a higher value (in minutes).")
             process.kill()
-            process.communicate(timeout=10)
+            try:
+                process.communicate(timeout=args.timestamp * 60)
+            except subprocess.TimeoutExpired:
+                logging.info(f"Failed to kill process for individual {i} after timeout.")
         except KeyboardInterrupt:
             logging.info(f"KeyboardInterrupt received. Terminating individual {i} process.")
             process.terminate()
