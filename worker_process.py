@@ -85,6 +85,10 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
                 logging.info(f"Gen {gen} Individual {i}: std_acc {return_dict[i]['std_acc']:.2f}, adv_acc {return_dict[i]['adv_acc']:.2f} std_loss {return_dict[i]['std_loss']:.3f}, adv_loss {return_dict[i]['adv_loss']:.3f}, flops {return_dict[i]['flops']:.2f}, params {return_dict[i]['params']:.2f}")
             else:
                 logging.info(f"Gen {gen} Individual {i} failed with return code {process.returncode}")
+                if process.returncode < 0 or process.returncode > 128:
+                    # Process was killed by the system (segmentation fault, out of memory, etc.)
+                    # Wait a bit to ensure the process has terminated and released resources before starting the next one
+                    time.sleep(10)
 
         except subprocess.TimeoutExpired:
             logging.info(f"Individual {i} exceed timestamp: {args.timestamp}, it will be removed from the population. If you want to increase the timestamp, please set --timestamp argument to a higher value (in minutes).")
