@@ -1,3 +1,4 @@
+import argparse
 import csv
 import json
 import lzma
@@ -9,6 +10,9 @@ import os
 import pickle
 from indicators import r2
 import copy
+
+from individual import create_from_json
+
 
 # Load R2 weights for the i-th population size
 def get_weights_r2(n):
@@ -31,7 +35,7 @@ def save_archive_losses(archive, archive_path):
     np.savez_compressed(archive_path, np_archive)
 
 def save_archive(archive, archive_path):
-    archive_path += 'archive'
+    archive_path += os.sep + 'archive'
     np_archive = [p.F for p in archive]
     np_archive = np.array(np_archive)
     np.savez_compressed(archive_path, np_archive)
@@ -126,7 +130,7 @@ def load_supernet(model_path):
     return model
 
 def save_architecture(i, individual, architect_path):
-    architect_path += 'architectures' + os.sep
+    architect_path += os.sep + 'architectures' + os.sep
     if not os.path.exists(architect_path):
         os.makedirs(architect_path)
     architect_path += f'arch_{i}.xz'
@@ -135,7 +139,7 @@ def save_architecture(i, individual, architect_path):
 
 
 def save_architectures(architectures, architect_path):
-    architect_path += 'architectures.xz'
+    architect_path += os.sep + 'architectures.xz'
     with lzma.open(architect_path, 'wb') as f:
         pickle.dump(architectures, f)
 
@@ -198,7 +202,7 @@ def plot_lr_scheduler(statistics, path):
 
 def plot_hypervolume(statistics, path):
     import matplotlib.pyplot as plt
-    path += 'hypervolume.pdf'
+    path += os.sep + 'hypervolume.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['hyp_log'], marker='o', color='blue')
     plt.title('Hypervolume per evaluations (std_loss, adv_loss, flops, n_params)')
@@ -210,7 +214,7 @@ def plot_hypervolume(statistics, path):
 
 def plot_hypervolume2(statistics, path):
     import matplotlib.pyplot as plt
-    path += 'hypervolume2.pdf'
+    path += os.sep + 'hypervolume2.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['hyp2_log'], marker='o', color='blue')
     plt.title('Hypervolume per evaluations (std_loss, adv_loss)')
@@ -222,7 +226,7 @@ def plot_hypervolume2(statistics, path):
 
 def plot_r2(statistics, path):
     import matplotlib.pyplot as plt
-    path += 'r2.pdf'
+    path += os.sep + 'r2.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['r2_log'], marker='o', color='red')
     plt.title('R2 per evaluations (std_loss, adv_loss, flops, n_params)')
@@ -315,6 +319,45 @@ def save_params(args, trained_arch_path):
     params_path += 'params.json'
     with open(params_path, 'w') as f:
         json.dump(params_dict, f, indent=4)
+
+def store_population_data(generation, pop, archive, archive_accuracy, archive_losses, statistics, nadir_point, ideal_point, time_search, save_path_final_architect):
+    population_data_dir = save_path_final_architect + os.sep + 'population_data.json'
+    population_data = {
+        'generation': generation,
+        'population': [ind.to_dict() for ind in pop],
+        'archive': [ind.to_dict() for ind in archive],
+        'archive_accuracy': [ind.to_dict() for ind in archive_accuracy],
+        'archive_losses': [ind.to_dict() for ind in archive_losses],
+        'statistics': statistics,
+        'nadir_point': nadir_point.tolist(),
+        'ideal_point': ideal_point.tolist(),
+        'time_search': time_search
+    }
+    with open(population_data_dir, 'w') as f:
+        json.dump(population_data, f, indent=4)
+
+
+
+# read the json file with the parameters used for training the architecture and return it as a dictionary
+def load_execution(args_dir):
+    with open(args_dir + os.sep + 'params.json', 'r') as f:
+        args_dict = json.load(f)
+        args = argparse.Namespace(**args_dict)
+    with open(args_dir + os.sep + 'population_data.json', 'r') as f:
+        population_data = json.load(f)
+        generation = population_data['generation']
+        pop = [create_from_json(ind_json, args.search_space) for ind_json in population_data['population']]
+        archive = [create_from_json(ind_json, args.search_space) for ind_json in population_data['archive']]
+        archive_accuracy = [create_from_json(ind_json, args.search_space) for ind_json in population_data['archive_accuracy']]
+        archive_losses = [create_from_json(ind_json, args.search_space) for ind_json in population_data['archive_losses']]
+        statistics = population_data['statistics']
+        nadir_point = np.array(population_data['nadir_point'])
+        ideal_point = np.array(population_data['ideal_point'])
+        time_search = int(population_data['time_search'])
+        generation = int(generation)
+        generation += 1
+
+    return args, statistics, generation, pop, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, time_search
 
 if __name__ == '__main__':
     """
