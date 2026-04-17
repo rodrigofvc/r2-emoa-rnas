@@ -356,7 +356,8 @@ def load_execution(args_dir):
         time_search = int(population_data['time_search'])
         generation = int(generation)
         generation += 1
-
+    args.epochs_train_individual = args.epochs_train_individual + (generation // 10) * 5 if args.increase_epochs else args.epochs_train_individual
+    print(f"Updated epochs for training individuals: {args.epochs_train_individual}")
     return args, statistics, generation, pop, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, time_search
 
 if __name__ == '__main__':
