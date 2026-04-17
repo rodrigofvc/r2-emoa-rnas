@@ -3,7 +3,8 @@ import sys
 
 from archivers import archive_update_pq
 from utils_search import store_metrics, save_architecture, save_archive, plot_hypervolume, plot_hypervolume2, plot_r2, \
-    save_statistics_to_csv, save_params, save_archive_2, plot_archive
+    save_statistics_to_csv, save_params, save_archive_losses, plot_archive_losses
+from worker_process import worker_evaluate_individual
 
 # update your projecty root path before running
 if os.path.exists('/Users/rodrigofvc/Documents/doctorado/r2-emoa-rnas/algorithms/nsga-net'):
@@ -21,8 +22,7 @@ import argparse
 from misc import utils
 
 import numpy as np
-from search import train_search
-from search import micro_encoding
+import micro_encoding
 from search import macro_encoding
 from search import nsganet as engine
 from models.micro_models import NetworkCIFAR as Network
@@ -48,7 +48,28 @@ parser.add_argument('--n_offspring', type=int, default=40, help='number of offsp
 # arguments for back-propagation training during search
 parser.add_argument('--init_channels', type=int, default=24, help='# of filters for first cell')
 parser.add_argument('--layers', type=int, default=11, help='equivalent with N = 3')
+parser.add_argument('--batch_size', type=int, default=64, help='batch size for training')
+parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
+parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
+parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
+parser.add_argument('--weight_decay', type=float, default=3e-4, help='weight decay')
+parser.add_argument('--report_freq', type=float, default=45, help='report frequency')
+parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
+parser.add_argument('--init_channels', type=int, default=16, help='init channels')
+parser.add_argument('--reduction', action='store_true', default=False, help='use reduction cell or not')
+parser.add_argument('--steps', type=int, default=6, help='number of steps in one cell (intern nodes except input and output)')
+parser.add_argument('--multiplier', type=int, default=6, help='number of multiplier for number of channels (intern nodes to concat)')
+parser.add_argument('--fgsm_eps', type=float, default=8 / 255, help='attack epsilon')
+parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
+parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
+parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
+parser.add_argument('--grad_clip', type=float, default=5.0, help='gradient clipping')
 parser.add_argument('--epochs', type=int, default=25, help='# of epochs to train during architecture search')
+parser.add_argument('--timestamp', type=int, default=6, help='timestamp in minutes for training/eval each architecture')
+parser.add_argument('--debug_cuda', action='store_true', default=False,
+                    help='Enable CUDA_LAUNCH_BLOCKING for debugging')
+parser.add_argument('--increase_epochs', action='store_true', default=False,
+                    help='Increase the number of epochs to train the supernet and individuals as generations progress')
 args = parser.parse_args()
 args.save = 'search-{}-{}-{}'.format(args.save, args.search_space, time.strftime("%Y%m%d-%H%M%S"))
 utils.create_exp_dir(args.save)
@@ -56,9 +77,6 @@ utils.create_exp_dir(args.save)
 log_format = '%(asctime)s %(message)s'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
                     format=log_format, datefmt='%m/%d %I:%M:%S %p')
-#fh = logging.FileHandler(os.path.join(args.save, 'log.txt'))
-#fh.setFormatter(logging.Formatter(log_format))
-#logging.getLogger().addHandler(fh)
 
 pop_hist = []  # keep track of every evaluated architecture
 
@@ -92,23 +110,14 @@ class NAS(Problem):
         for i in range(x.shape[0]):
             arch_id = self._n_evaluated + 1
 
-            # call back-propagation training
-            if self._search_space == 'micro':
-                genome = micro_encoding.convert(x[i, :])
-            elif self._search_space == 'macro':
-                genome = macro_encoding.convert(x[i, :])
-            performance = train_search.main(dataset=self.dataset,
-                                            n_classes=self.n_classes,
-                                            genome=genome,
-                                            search_space=self._search_space,
-                                            init_channels=self._init_channels,
-                                            layers=self._layers, cutout=False,
-                                            epochs=self._epochs,
-                                            save='arch_{}'.format(arch_id),
-                                            expr_root=self.save_dir)
-
-            objs[i, 0] = performance['std_error']
-            objs[i, 1] = performance['adv_error']
+            args_individual = args.copy()
+            args_individual.seed = args_individual.seed + arch_id
+            args_individual.epochs_train_individual = args.epochs
+            args_individual.gen = -1 # not used in individual worker
+            gen = len(self.statistics['hyp_log']) + 1
+            performance = worker_evaluate_individual(gen, i, x[i, :].copy(), args_individual)
+            objs[i, 0] = performance['std_loss']
+            objs[i, 1] = performance['adv_loss']
             objs[i, 2] = performance['flops']
             objs[i, 3] = performance['params']
 
@@ -189,8 +198,8 @@ def main():
         model = Network(args.init_channels, 10, args.layers, False, genotype)
         save_architecture(i, genotype, res.F[i], args.save)
     save_archive(np.array(problem.archive), args.save)
-    save_archive_2(np.array(problem.archive_2), args.save)
-    plot_archive(np.array(problem.archive_2), args.save)
+    save_archive_losses(np.array(problem.archive_2), args.save)
+    plot_archive_losses(np.array(problem.archive_2), args.save)
     plot_hypervolume(problem.statistics, args.save)
     plot_hypervolume2(problem.statistics, args.save)
     plot_r2(problem.statistics, args.save)

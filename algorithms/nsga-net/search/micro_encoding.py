@@ -1,19 +1,12 @@
-# NASNet Search Space https://arxiv.org/pdf/1707.07012.pdf
-# code modified from DARTS https://github.com/quark0/darts
-import math
-
-import numpy as np
 from collections import namedtuple
 
-import torch
-from models.micro_models import NetworkCIFAR as Network
 
 Genotype = namedtuple('Genotype', 'normal normal_concat reduce reduce_concat')
 Genotype_norm = namedtuple('Genotype', 'normal normal_concat')
 Genotype_redu = namedtuple('Genotype', 'reduce reduce_concat')
 
-# what you want to search should be defined here and in micro_operations
 PRIMITIVES = [
+    'none',
     'max_pool_3x3',
     'avg_pool_3x3',
     'skip_connect',
@@ -24,6 +17,77 @@ PRIMITIVES = [
     'sep_conv_7x7',
     'conv_7x1_1x7',
 ]
+
+NASNet = Genotype(
+    normal=[
+        ('sep_conv_5x5', 1),
+        ('sep_conv_3x3', 0),
+        ('sep_conv_5x5', 0),
+        ('sep_conv_3x3', 0),
+        ('avg_pool_3x3', 1),
+        ('skip_connect', 0),
+        ('avg_pool_3x3', 0),
+        ('avg_pool_3x3', 0),
+        ('sep_conv_3x3', 1),
+        ('skip_connect', 1),
+    ],
+    normal_concat=[2, 3, 4, 5, 6],
+    reduce=[
+        ('sep_conv_5x5', 1),
+        ('sep_conv_7x7', 0),
+        ('max_pool_3x3', 1),
+        ('sep_conv_7x7', 0),
+        ('avg_pool_3x3', 1),
+        ('sep_conv_5x5', 0),
+        ('skip_connect', 3),
+        ('avg_pool_3x3', 2),
+        ('sep_conv_3x3', 2),
+        ('max_pool_3x3', 1),
+    ],
+    reduce_concat=[4, 5, 6],
+)
+
+AmoebaNet = Genotype(
+    normal=[
+        ('avg_pool_3x3', 0),
+        ('max_pool_3x3', 1),
+        ('sep_conv_3x3', 0),
+        ('sep_conv_5x5', 2),
+        ('sep_conv_3x3', 0),
+        ('avg_pool_3x3', 3),
+        ('sep_conv_3x3', 1),
+        ('skip_connect', 1),
+        ('skip_connect', 0),
+        ('avg_pool_3x3', 1),
+    ],
+    normal_concat=[4, 5, 6],
+    reduce=[
+        ('avg_pool_3x3', 0),
+        ('sep_conv_3x3', 1),
+        ('max_pool_3x3', 0),
+        ('sep_conv_7x7', 2),
+        ('sep_conv_7x7', 0),
+        ('avg_pool_3x3', 1),
+        ('max_pool_3x3', 0),
+        ('max_pool_3x3', 1),
+        ('conv_7x1_1x7', 0),
+        ('sep_conv_3x3', 5),
+    ],
+    reduce_concat=[3, 4, 6]
+)
+
+DARTS_V1 = Genotype(
+    normal=[('sep_conv_3x3', 1), ('sep_conv_3x3', 0), ('skip_connect', 0), ('sep_conv_3x3', 1), ('skip_connect', 0),
+            ('sep_conv_3x3', 1), ('sep_conv_3x3', 0), ('skip_connect', 2)], normal_concat=[2, 3, 4, 5],
+    reduce=[('max_pool_3x3', 0), ('max_pool_3x3', 1), ('skip_connect', 2), ('max_pool_3x3', 0), ('max_pool_3x3', 0),
+            ('skip_connect', 2), ('skip_connect', 2), ('avg_pool_3x3', 0)], reduce_concat=[2, 3, 4, 5])
+DARTS_V2 = Genotype(
+    normal=[('sep_conv_3x3', 0), ('sep_conv_3x3', 1), ('sep_conv_3x3', 0), ('sep_conv_3x3', 1), ('sep_conv_3x3', 1),
+            ('skip_connect', 0), ('skip_connect', 0), ('dil_conv_3x3', 2)], normal_concat=[2, 3, 4, 5],
+    reduce=[('max_pool_3x3', 0), ('max_pool_3x3', 1), ('skip_connect', 2), ('max_pool_3x3', 1), ('max_pool_3x3', 0),
+            ('skip_connect', 2), ('skip_connect', 2), ('max_pool_3x3', 1)], reduce_concat=[2, 3, 4, 5])
+
+DARTS = DARTS_V2
 
 
 def convert_cell(cell_bit_string):
@@ -44,9 +108,9 @@ def decode_cell(genome, norm=True):
     cell, cell_concat = [], list(range(2, len(genome)+2))
     for block in genome:
         for unit in block:
-            cell.append((PRIMITIVES[unit[0]], unit[1]))
+            cell.append((PRIMITIVES[int(unit[0])], int(unit[1])))
             if unit[1] in cell_concat:
-                cell_concat.remove(unit[1])
+                cell_concat.remove(int(unit[1]))
 
     if norm:
         return Genotype_norm(normal=cell, normal_concat=cell_concat)
@@ -54,25 +118,22 @@ def decode_cell(genome, norm=True):
         return Genotype_redu(reduce=cell, reduce_concat=cell_concat)
 
 
-def decode(genome):
+def decode(genome, steps=6, multiplier=6):
     # decodes genome to architecture
     normal_cell = genome[0]
     reduce_cell = genome[1]
 
-    normal, normal_concat = [], list(range(2, len(normal_cell)+2))
-    reduce, reduce_concat = [], list(range(2, len(reduce_cell)+2))
+    # intern nodes are concatenad, except the input nodes (0,1)
+    normal, normal_concat = [], list(range(2 + steps - multiplier, steps + 2))
+    reduce, reduce_concat = [], list(range(2 + steps - multiplier, steps + 2))
 
     for block in normal_cell:
         for unit in block:
-            normal.append((PRIMITIVES[math.floor(unit[0])], math.floor(unit[1])))
-            if unit[1] in normal_concat:
-                normal_concat.remove(unit[1])
+            normal.append((PRIMITIVES[int(unit[0])], int(unit[1])))
 
     for block in reduce_cell:
         for unit in block:
-            reduce.append((PRIMITIVES[math.floor(unit[0])], math.floor(unit[1])))
-            if unit[1] in reduce_concat:
-                reduce_concat.remove(math.floor(unit[1]))
+            reduce.append((PRIMITIVES[int(unit[0])], int(unit[1])))
 
     return Genotype(
         normal=normal, normal_concat=normal_concat,
@@ -105,65 +166,3 @@ def compare(string1, string2):
             return True
 
     return False
-
-
-def debug():
-    # design to debug the encoding scheme
-    seed = 0
-    np.random.seed(seed)
-    budget = 2000
-    B, n_ops, n_cell = 5, 7, 2
-    networks = []
-    design_id = 1
-    while len(networks) < budget:
-        bit_string = []
-        for c in range(n_cell):
-            for b in range(B):
-                bit_string += [np.random.randint(n_ops),
-                               np.random.randint(b + 2),
-                               np.random.randint(n_ops),
-                               np.random.randint(b + 2)
-                               ]
-
-        genome = convert(bit_string)
-        # check against evaluated networks in case of duplicates
-        doTrain = True
-        for network in networks:
-            if compare(genome, network):
-                doTrain = False
-                break
-
-        if doTrain:
-            genotype = decode(genome)
-            model = Network(16, 10, 8, False, genotype)
-            model.drop_path_prob = 0.0
-            data = torch.randn(1, 3, 32, 32)
-            output, output_aux = model(torch.autograd.Variable(data))
-            networks.append(genome)
-            design_id += 1
-            print(design_id)
-
-
-if __name__ == "__main__":
-    # debug()
-    # genome1 = [[[[3, 0], [3, 1]], [[3, 0], [3, 1]],
-    #             [[3, 1], [2, 0]], [[2, 0], [5, 2]]],
-    #            [[[0, 0], [0, 1]], [[2, 2], [0, 1]],
-    #             [[0, 0], [2, 2]], [[2, 2], [0, 1]]]]
-    # genome2 = [[[[3, 1], [3, 0]], [[3, 1], [3, 0]],
-    #             [[3, 1], [2, 0]], [[2, 0], [5, 2]]],
-    #            [[[0, 1], [0, 0]], [[2, 2], [0, 1]],
-    #             [[0, 0], [2, 2]], [[2, 2], [0, 0]]]]
-    #
-    # print(compare(genome1, genome2))
-    # print(genome1)
-    # print(genome2)
-    # bit_string1 = [3,1,3,0,3,1,3,0,3,1,2,0,2,0,5,2,0,0,0,1,2,2,0,1,0,0,2,2,2,2,0,1]
-    # bit_string2 = [3, 0, 3, 1, 3, 0, 3, 1, 3, 1, 2, 0, 2, 0, 5, 2,
-    #                0, 0, 0, 1, 2, 2, 0, 1, 0, 0, 2, 2, 2, 2, 0, 1]
-    # # print(convert(bit_string1))
-    # print(compare(bit_string1, bit_string2))
-    # print(decode(convert(bit_string)))
-
-    cell_bit_string = [3, 0, 3, 1, 3, 0, 3, 1, 3, 1, 2, 0, 2, 0, 5, 2]
-    print(decode_cell(convert_cell(cell_bit_string), norm=False))
