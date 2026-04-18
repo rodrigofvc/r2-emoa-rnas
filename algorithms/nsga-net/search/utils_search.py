@@ -59,7 +59,7 @@ def store_metrics(dataset, architectures_evaluated, population, population_2, sa
     max_f4 = 5 * 1.5
     # compute hypervolume
     ind = HV(ref_point=np.array([max_f1, max_f2, max_f3, max_f4]))
-    population_array = np.array([ind.F for ind in population])
+    population_array = np.array([ind for ind in population])
     hyp = ind(population_array)
     if type(hyp) == np.ndarray:
         statistics['hyp_log'].append(hyp.item())
@@ -67,7 +67,7 @@ def store_metrics(dataset, architectures_evaluated, population, population_2, sa
         statistics['hyp_log'].append(hyp)
     # compute hypervolume 2 (std_loss, adv_loss)
     ind2 = HV(ref_point=np.array([max_f1, max_f2]))
-    population_array2 = np.array([[ind.F[0], ind.F[1]] for ind in population_2])
+    population_array2 = np.array([[ind[0], ind[1]] for ind in population_2])
     hyp2 = ind2(population_array2)
     if type(hyp2) == np.ndarray:
         statistics['hyp2_log'].append(hyp2.item())
@@ -77,7 +77,7 @@ def store_metrics(dataset, architectures_evaluated, population, population_2, sa
     weights_r2 = get_weights_r2(40)
     z_ref = np.zeros(4)
     nadir_point = np.array([max_f1, max_f2, max_f3, max_f4])
-    r2_population = r2(population, weights_r2, nadir_point, z_ref)
+    r2_population = r2(population, weights_r2[40], nadir_point, z_ref)
     if type(r2_population) == np.ndarray:
         statistics['r2_log'].append(r2_population.item())
     else:

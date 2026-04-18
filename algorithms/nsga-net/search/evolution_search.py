@@ -1,4 +1,6 @@
+import copy
 import os
+import shutil
 import sys
 
 from archivers import archive_update_pq
@@ -29,8 +31,17 @@ from models.micro_models import NetworkCIFAR as Network
 from pymoo.core.problem import Problem
 from pymoo.optimize import minimize
 
+
+"""
+python3 search/evolution_search.py --seed 18906049 --search_space micro \
+--dataset cifar10 --n_classes 10 --init_channels 16 --layers 5 --n_gens 2 --epochs 1 \
+--pop_size 10  --batch_size 32 --n_offspring 10 \
+--learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 \
+--layers 5 --steps 4 --multiplier 4 --cutout_length 16 --drop_path_prob 0.3 \cd 
+"""
 parser = argparse.ArgumentParser("Multi-objetive Genetic Algorithm for NAS")
 parser.add_argument('--save', type=str, default='NSGA-Net', help='experiment name')
+parser.add_argument('--data', type=str, default='../../data', help='location of the data corpus')
 parser.add_argument('--dataset', type=str, default='cifar10', choices=['cifar10', 'cifar100'], help='dataset name')
 parser.add_argument('--n_classes', type=int, choices=[10, 100], help='number of classes')
 parser.add_argument('--seed', type=int, default=0, help='random seed')
@@ -46,8 +57,8 @@ parser.add_argument('--pop_size', type=int, default=5, help='population size of 
 parser.add_argument('--n_gens', type=int, default=50, help='population size')
 parser.add_argument('--n_offspring', type=int, default=40, help='number of offspring created per generation')
 # arguments for back-propagation training during search
-parser.add_argument('--init_channels', type=int, default=24, help='# of filters for first cell')
-parser.add_argument('--layers', type=int, default=11, help='equivalent with N = 3')
+parser.add_argument('--init_channels', type=int, default=16, help='# of filters for first cell')
+parser.add_argument('--layers', type=int, default=4, help='equivalent with N = 3')
 parser.add_argument('--batch_size', type=int, default=64, help='batch size for training')
 parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
 parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
@@ -55,7 +66,6 @@ parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
 parser.add_argument('--weight_decay', type=float, default=3e-4, help='weight decay')
 parser.add_argument('--report_freq', type=float, default=45, help='report frequency')
 parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
-parser.add_argument('--init_channels', type=int, default=16, help='init channels')
 parser.add_argument('--reduction', action='store_true', default=False, help='use reduction cell or not')
 parser.add_argument('--steps', type=int, default=6, help='number of steps in one cell (intern nodes except input and output)')
 parser.add_argument('--multiplier', type=int, default=6, help='number of multiplier for number of channels (intern nodes to concat)')
@@ -65,6 +75,7 @@ parser.add_argument('--cutout_length', type=int, default=16, help='cutout length
 parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
 parser.add_argument('--grad_clip', type=float, default=5.0, help='gradient clipping')
 parser.add_argument('--epochs', type=int, default=25, help='# of epochs to train during architecture search')
+parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
 parser.add_argument('--timestamp', type=int, default=6, help='timestamp in minutes for training/eval each architecture')
 parser.add_argument('--debug_cuda', action='store_true', default=False,
                     help='Enable CUDA_LAUNCH_BLOCKING for debugging')
@@ -73,6 +84,10 @@ parser.add_argument('--increase_epochs', action='store_true', default=False,
 args = parser.parse_args()
 args.save = 'search-{}-{}-{}'.format(args.save, args.search_space, time.strftime("%Y%m%d-%H%M%S"))
 utils.create_exp_dir(args.save)
+
+if os.path.exists("logs"):
+    shutil.rmtree("logs")
+os.makedirs("logs", exist_ok=True)
 
 log_format = '%(asctime)s %(message)s'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
@@ -87,7 +102,7 @@ pop_hist = []  # keep track of every evaluated architecture
 class NAS(Problem):
     # first define the NAS problem (inherit from pymop)
     def __init__(self, dataset, n_classes, search_space='micro', n_var=20, n_obj=4, n_constr=0, lb=None, ub=None,
-                 init_channels=16, layers=5, epochs=25, save_dir=None):
+                 init_channels=16, layers=5, epochs=25, args_problem=None, save_dir=None):
         super().__init__(n_var=n_var, n_obj=n_obj, n_constr=n_constr)
         self.xl = lb
         self.xu = ub
@@ -102,6 +117,7 @@ class NAS(Problem):
         self.statistics = {'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
         self.archive = []
         self.archive_2 = []
+        self.args_problem = args_problem
 
     def _evaluate(self, x, out, *args, **kwargs):
 
@@ -110,9 +126,9 @@ class NAS(Problem):
         for i in range(x.shape[0]):
             arch_id = self._n_evaluated + 1
 
-            args_individual = args.copy()
+            args_individual = copy.copy(self.args_problem)
             args_individual.seed = args_individual.seed + arch_id
-            args_individual.epochs_train_individual = args.epochs
+            args_individual.epochs_train_individual = self.args_problem.epochs
             args_individual.gen = -1 # not used in individual worker
             gen = len(self.statistics['hyp_log']) + 1
             performance = worker_evaluate_individual(gen, i, x[i, :].copy(), args_individual)
@@ -177,7 +193,7 @@ def main():
     problem = NAS(dataset=args.dataset, n_classes=args.n_classes, n_var=n_var, search_space=args.search_space,
                   n_obj=4, n_constr=0, lb=lb, ub=ub,
                   init_channels=args.init_channels, layers=args.layers,
-                  epochs=args.epochs, save_dir=args.save)
+                  epochs=args.epochs, args_problem=copy.copy(args), save_dir=args.save)
 
     # configure the nsga-net method
     method = engine.nsganet(pop_size=args.pop_size,
