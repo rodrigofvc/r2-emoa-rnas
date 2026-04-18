@@ -64,6 +64,7 @@ if __name__ == '__main__':
     parser.add_argument('--timestamp', type=int, default=6, help='timestamp in minutes for training/eval each architecture')
     parser.add_argument('--debug_cuda', action='store_true', default=False, help='Enable CUDA_LAUNCH_BLOCKING for debugging')
     parser.add_argument('--increase_epochs', action='store_true', default=False, help='Increase the number of epochs to train the supernet and individuals as generations progress')
+    parser.add_argument('--reload_dir', type=str, default=None, help='Directory to reload the experiment from if --reload is set')
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -80,7 +81,10 @@ if __name__ == '__main__':
     for key, value in vars(args).items():
         print(f"{key}: {value}")
 
-    results_dir = create_experiment_dir(args.algorithm, args.dataset, args.seed)
+    if args.reload_dir is None:
+        results_dir = create_experiment_dir(args.algorithm, args.dataset, args.seed)
+    else:
+        results_dir = args.reload_dir
     print(f'Results dir: {results_dir}' )
     args.save_path_final_model = results_dir
     args.save_path_final_architect = results_dir
@@ -89,6 +93,7 @@ if __name__ == '__main__':
         from r2_emoa_one_shot import r2_emoa_oneshot_nas
         # The search space is continuous because we are optimizing the architecture parameters (alphas) of the supernet
         args.search_space = 'continuous'
+        save_params(args, args.save_path_final_architect)
         supernet, archive, archive_accuracy, archive_losses, statistics = r2_emoa_oneshot_nas(
             args=args
         )
@@ -105,10 +110,10 @@ if __name__ == '__main__':
         plot_hypervolume2(statistics, args.save_path_final_architect)
         plot_r2(statistics, args.save_path_final_architect)
         save_statistics_to_csv(statistics, args.save_path_final_architect)
-        save_params(args, args.save_path_final_architect)
         logging.info(f"Experiment completed and results saved in {results_dir}")
     elif args.algorithm == 'r2-emoa':
         from r2_emoa import r2_emoa_rnas
+        save_params(args, args.save_path_final_architect)
         archive, archive_accuracy, archive_losses, statistics = r2_emoa_rnas(
             args=args
         )
@@ -123,5 +128,4 @@ if __name__ == '__main__':
         plot_hypervolume2(statistics, args.save_path_final_architect)
         plot_r2(statistics, args.save_path_final_architect)
         save_statistics_to_csv(statistics, args.save_path_final_architect)
-        save_params(args, args.save_path_final_architect)
         logging.info(f"Experiment completed and results saved in {results_dir}")

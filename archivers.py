@@ -29,7 +29,8 @@ def dominates(ind1, ind2, k):
     return better_in_any
 
 # Return non-dominated points in archive
-def archive_update_pq(archive, population, k=4):
+def archive_update_pq(archive, population_, k=4):
+    population = [ind for ind in population_ if ind.feasible]
     for ind in population:
         dominated = False
         to_remove = []
@@ -45,7 +46,8 @@ def archive_update_pq(archive, population, k=4):
             archive.append(ind)
     return archive
 
-def archive_update_pq_losses(archive, population):
+def archive_update_pq_losses(archive, population_):
+    population = [ind for ind in population_ if ind.feasible]
     for ind in population:
         dominated = False
         to_remove = []
@@ -67,7 +69,8 @@ def archive_update_pq_losses(archive, population):
             archive.append(ind)
     return archive
 
-def archive_update_pq_accuracy(archive, population):
+def archive_update_pq_accuracy(archive, population_):
+    population = [ind for ind in population_ if ind.feasible]
     for ind in population:
         dominated = False
         to_remove = []
