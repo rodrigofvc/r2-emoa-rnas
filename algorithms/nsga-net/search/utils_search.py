@@ -1,3 +1,4 @@
+import argparse
 import csv
 import json
 import lzma
@@ -25,11 +26,11 @@ def save_archive_accuracy(archive, archive_path):
     np.savez_compressed(archive_path, np_archive)
 
 def save_archive_losses(archive, archive_path):
-    archive_path += 'archive_losses'
+    archive_path += os.sep + 'archive_losses'
     np.savez_compressed(archive_path, archive)
 
 def save_archive(archive, archive_path):
-    archive_path += 'archive'
+    archive_path += os.sep + 'archive'
     np.savez_compressed(archive_path, archive)
 
 # Create experiment directory structure for searching algorithms
@@ -82,7 +83,7 @@ def store_metrics(dataset, architectures_evaluated, population, population_2, sa
         statistics['r2_log'].append(r2_population.item())
     else:
         statistics['r2_log'].append(r2_population)
-    row_hyp = ['nsga-net', dataset, 'FGSM', architectures_evaluated, 'hv', hyp, dir]
+    row_hyp = ['nsga-net', dataset, 'FGSM', architectures_evaluated, 'hv', hyp, save_dir]
     row_hyp2 = ['nsga-net', dataset, 'FGSM', architectures_evaluated, 'hv_2obj', hyp2, save_dir]
     row_r2 = ['nsga-net', dataset, 'FGSM', architectures_evaluated, 'r2', r2_population, save_dir]
     file = open('evaluations.csv', 'a', newline='')
@@ -122,13 +123,13 @@ def load_supernet(model_path):
     model = torch.load(model_path, weights_only=False)
     return model
 
-def save_architecture(i, individual, architect_path):
-    architect_path += 'architectures' + os.sep
+def save_architecture(i, genotype, individual_F, architect_path):
+    architect_path += os.sep + 'architectures' + os.sep
     if not os.path.exists(architect_path):
         os.makedirs(architect_path)
     architect_path += f'arch_{i}.xz'
     with lzma.open(architect_path, 'wb') as f:
-        pickle.dump(individual, f)
+        pickle.dump((genotype, individual_F), f)
 
 
 def save_architectures(architectures, architect_path):
@@ -137,7 +138,7 @@ def save_architectures(architectures, architect_path):
         pickle.dump(architectures, f)
 
 def save_statistics_to_csv(statistics, csv_path):
-    csv_path += 'statistics.csv'
+    csv_path += os.sep + 'statistics.csv'
     with open(csv_path, mode='w', newline='') as file:
         writer = csv.writer(file)
         writer.writerow(['Key', 'Value'])
@@ -155,7 +156,7 @@ def read_architectures(architect_path):
 
 def plot_archive_losses(archive_losses, archive_path):
     import matplotlib.pyplot as plt
-    archive_path += 'archive_losses.pdf'
+    archive_path += os.sep + 'archive_losses.pdf'
     std_loss = [p[0] for p in archive_losses]
     adv_loss = [p[1] for p in archive_losses]
     plt.figure(figsize=(8, 6))
@@ -195,7 +196,7 @@ def plot_lr_scheduler(statistics, path):
 
 def plot_hypervolume(statistics, path):
     import matplotlib.pyplot as plt
-    path += 'hypervolume.pdf'
+    path += os.sep + 'hypervolume.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['hyp_log'], marker='o', color='blue')
     plt.title('Hypervolume per evaluations (std_loss, adv_loss, flops, n_params)')
@@ -207,7 +208,7 @@ def plot_hypervolume(statistics, path):
 
 def plot_hypervolume2(statistics, path):
     import matplotlib.pyplot as plt
-    path += 'hypervolume2.pdf'
+    path += os.sep + 'hypervolume2.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['hyp2_log'], marker='o', color='blue')
     plt.title('Hypervolume per evaluations (std_loss, adv_loss)')
@@ -219,7 +220,7 @@ def plot_hypervolume2(statistics, path):
 
 def plot_r2(statistics, path):
     import matplotlib.pyplot as plt
-    path += 'r2.pdf'
+    path += os.sep + 'r2.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['r2_log'], marker='o', color='red')
     plt.title('R2 per evaluations (std_loss, adv_loss, flops, n_params)')
@@ -312,3 +313,39 @@ def save_params(args, trained_arch_path):
     params_path += 'params.json'
     with open(params_path, 'w') as f:
         json.dump(params_dict, f, indent=4)
+
+def store_population_data(generation, n_evaluated, pop_obj, pop_X, archive, archive_2, statistics, elapsed_time, save_dir):
+    population_data_dir = save_dir + os.sep + 'population_data.json'
+    population_data = {
+        'generation': generation,
+        'n_evaluated': n_evaluated,
+        'pop_obj': pop_obj.tolist(),
+        'pop_X': pop_X.tolist(),
+        'archive': [ind.tolist() for ind in archive],
+        'archive_2': [ind.tolist() for ind in archive_2],
+        'statistics': statistics,
+        'elapsed_time': elapsed_time
+    }
+    with open(population_data_dir, 'w') as f:
+        json.dump(population_data, f, indent=4)
+
+def load_execution(args_dir):
+    with open(args_dir + os.sep + 'params.json', 'r') as f:
+        args_dict = json.load(f)
+        args = argparse.Namespace(**args_dict)
+    with open(args_dir + os.sep + 'population_data.json', 'r') as f:
+        population_data = json.load(f)
+        generation = population_data['generation']
+        n_evaluated = population_data['n_evaluated']
+        pop_obj = np.array(population_data['pop_obj'])
+        pop_X = np.array(population_data['pop_X'])
+
+        archive = [np.array(ind) for ind in population_data['archive']]
+        archive_2 = [np.array(ind) for ind in population_data['archive_2']]
+        statistics = population_data['statistics']
+        elapsed_time = int(population_data['elapsed_time'])
+        generation = int(generation)
+        generation += 1 # We want to start from the next generation after the one we loaded
+    args.epochs = args.epochs + (generation // 10) * 5 if args.increase_epochs else args.epochs
+    print(f"Updated epochs for training individuals: {args.epochs}")
+    return args, statistics, generation, n_evaluated, pop_obj, pop_X, archive, archive_2, elapsed_time

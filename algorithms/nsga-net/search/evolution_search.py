@@ -1,11 +1,16 @@
 import copy
+import json
 import os
+import random
 import shutil
 import sys
 
+from pymoo.core.termination import NoTermination
+from pymoo.core.individual import Individual
+
 from archivers import archive_update_pq
 from utils_search import store_metrics, save_architecture, save_archive, plot_hypervolume, plot_hypervolume2, plot_r2, \
-    save_statistics_to_csv, save_params, save_archive_losses, plot_archive_losses
+    save_statistics_to_csv, save_params, save_archive_losses, plot_archive_losses, store_population_data, load_execution
 from worker_process import worker_evaluate_individual
 
 # update your projecty root path before running
@@ -32,12 +37,13 @@ from pymoo.core.problem import Problem
 from pymoo.optimize import minimize
 
 
+
 """
 python3 search/evolution_search.py --seed 18906049 --search_space micro \
 --dataset cifar10 --n_classes 10 --init_channels 16 --layers 5 --n_gens 2 --epochs 1 \
 --pop_size 10  --batch_size 32 --n_offspring 10 \
 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 \
---layers 5 --steps 4 --multiplier 4 --cutout_length 16 --drop_path_prob 0.3 \cd 
+--layers 5 --steps 4 --multiplier 4 --cutout_length 16 --drop_path_prob 0.3 --train_portion 0.5 
 """
 parser = argparse.ArgumentParser("Multi-objetive Genetic Algorithm for NAS")
 parser.add_argument('--save', type=str, default='NSGA-Net', help='experiment name')
@@ -81,9 +87,20 @@ parser.add_argument('--debug_cuda', action='store_true', default=False,
                     help='Enable CUDA_LAUNCH_BLOCKING for debugging')
 parser.add_argument('--increase_epochs', action='store_true', default=False,
                     help='Increase the number of epochs to train the supernet and individuals as generations progress')
+parser.add_argument('--reload_dir', type=str, default=None,
+                    help='Directory to reload the experiment from if --reload is set')
 args = parser.parse_args()
-args.save = 'search-{}-{}-{}'.format(args.save, args.search_space, time.strftime("%Y%m%d-%H%M%S"))
-utils.create_exp_dir(args.save)
+
+if args.reload_dir is not None:
+    with open(args.reload_dir + os.sep + 'params.json', 'r') as f:
+        args_dict = json.load(f)
+        args_dict['reload_dir'] = args.reload_dir
+        args = argparse.Namespace(**args_dict)
+else:
+    args.save = 'search-{}-{}-{}'.format(args.save, args.search_space, time.strftime("%Y%m%d-%H%M%S"))
+    utils.create_exp_dir(args.save)
+    save_params(args, args.save)
+
 
 if os.path.exists("logs"):
     shutil.rmtree("logs")
@@ -118,6 +135,8 @@ class NAS(Problem):
         self.archive = []
         self.archive_2 = []
         self.args_problem = args_problem
+        self.elapsed_time = 0
+        self.start_time = time.time()
 
     def _evaluate(self, x, out, *args, **kwargs):
 
@@ -130,7 +149,7 @@ class NAS(Problem):
             args_individual.seed = args_individual.seed + arch_id
             args_individual.epochs_train_individual = self.args_problem.epochs
             args_individual.gen = -1 # not used in individual worker
-            gen = len(self.statistics['hyp_log']) + 1
+            gen = len(self.statistics['hyp_log'])
             performance = worker_evaluate_individual(gen, i, x[i, :].copy(), args_individual)
             objs[i, 0] = performance['std_loss']
             objs[i, 1] = performance['adv_loss']
@@ -159,6 +178,10 @@ def do_every_generations(algorithm):
     plot_hypervolume(algorithm.problem.statistics, algorithm.problem.save_dir)
     plot_hypervolume2(algorithm.problem.statistics, algorithm.problem.save_dir)
     plot_r2(algorithm.problem.statistics, algorithm.problem.save_dir)
+
+    elapsed_time = time.time() - algorithm.problem.start_time
+    algorithm.problem.elapsed_time = elapsed_time
+    utils.store_population_data(gen, pop_obj, algorithm.problem.archive, algorithm.problem.archive_2, algorithm.problem.statistics, elapsed_time, algorithm.problem.save_dir)
 
     # report generation info to files
     logging.info(">>>>>> generation = {}".format(gen))
@@ -195,15 +218,68 @@ def main():
                   init_channels=args.init_channels, layers=args.layers,
                   epochs=args.epochs, args_problem=copy.copy(args), save_dir=args.save)
 
+
     # configure the nsga-net method
-    method = engine.nsganet(pop_size=args.pop_size,
+    algorithm = engine.nsganet(pop_size=args.pop_size,
                             n_offsprings=args.n_offspring,
                             eliminate_duplicates=True)
-
+    """
     res = minimize(problem,
                    method,
                    callback=do_every_generations,
                    termination=('n_gen', args.n_gens))
+    """
+    algorithm.setup(problem, seed=args.seed, termination=NoTermination(), verbose=False)
+
+    init_generation = 0
+    if args.reload_dir is not None:
+        logging.info(">>>>>> loading checkpoint from {}".format(args.reload_dir))
+        args_execution, statistics, init_generation, n_evaluated, pop_obj, pop_X, archive, archive_2, elapsed_time = load_execution(args.reload_dir)
+        algorithm.problem.start_time = time.time()
+        algorithm.problem.elapsed_time = elapsed_time
+        algorithm.problem.statistics = statistics
+        algorithm.problem._n_evaluated = n_evaluated
+        algorithm.problem.archive = archive
+        algorithm.problem.archive_2 = archive_2
+        algorithm.problem.args_problem = args_execution
+        # initialize the population with the loaded one
+        pop_initialized = algorithm.ask()
+        pop_initialized.set("F", pop_obj)
+        pop_initialized.set("X", pop_X)
+        algorithm.tell(infills=pop_initialized)
+
+    for gen in range(init_generation, args.n_gens):
+        np.random.seed(args.seed + gen)
+        random.seed(args.seed + gen)
+
+        pop = algorithm.ask()
+        algorithm.evaluator.eval(problem, pop)
+        pop_obj = pop.get("F")
+        pop_X = pop.get("X")
+
+        algorithm.problem.archive = archive_update_pq(algorithm.problem.archive, pop_obj)
+        algorithm.problem.archive_2 = archive_update_pq(algorithm.problem.archive_2, pop_obj[:, :2])
+        hyp, hyp_2, r2 = store_metrics(algorithm.problem.dataset, algorithm.problem._n_evaluated,
+                                       np.array(algorithm.problem.archive), np.array(algorithm.problem.archive_2),
+                                       algorithm.problem.save_dir, algorithm.problem.statistics)
+        plot_hypervolume(algorithm.problem.statistics, algorithm.problem.save_dir)
+        plot_hypervolume2(algorithm.problem.statistics, algorithm.problem.save_dir)
+        plot_r2(algorithm.problem.statistics, algorithm.problem.save_dir)
+
+        elapsed_time = time.time() - algorithm.problem.start_time
+        algorithm.problem.elapsed_time = elapsed_time
+        store_population_data(gen, algorithm.problem._n_evaluated, pop_obj, pop_X, algorithm.problem.archive, algorithm.problem.archive_2,
+                                    algorithm.problem.statistics, elapsed_time, algorithm.problem.save_dir)
+
+        # report generation info to files
+        logging.info(">>>>>> generation = {}".format(gen))
+        logging.info("       hyp_4 = {}, hyp_2 = {} r2 = {}".format(hyp, hyp_2, r2))
+        logging.info('       evaluated so far {} architectures'.format(algorithm.problem._n_evaluated))
+
+        algorithm.tell(infills=pop)
+
+    res = algorithm.result()
+
     args.time_taken = time.time() - start
     print(f">>>> Total search time: ({(time.time() - start) // 86400:02.0f}:{time.strftime('%H:%M:%S)', time.gmtime(time.time() - start))} (DD:HH:MM:SS)")
     # store non-dominated solutions
@@ -220,7 +296,6 @@ def main():
     plot_hypervolume2(problem.statistics, args.save)
     plot_r2(problem.statistics, args.save)
     save_statistics_to_csv(problem.statistics, args.save)
-    save_params(args, args.save)
     print('Results stored in {}'.format(args.save))
 
 if __name__ == "__main__":

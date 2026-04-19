@@ -101,7 +101,8 @@ def worker_evaluate_individual(gen, i, individual_X, args):
             logging.info(f"Failed {i}: {e}")
         finally:
             # wait a bit to ensure the process has terminated and released resources before starting the next one
-            time.sleep(5)
+            #time.sleep(5)
+            pass
     # Remove log file of successful evaluations, keep logs of failed evaluations for debugging
     if clean_file and os.path.exists(log_file):
         os.remove(log_file)
