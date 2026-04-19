@@ -6,7 +6,6 @@ import shutil
 import sys
 
 from pymoo.core.termination import NoTermination
-from pymoo.core.individual import Individual
 
 from archivers import archive_update_pq
 from utils_search import store_metrics, save_architecture, save_archive, plot_hypervolume, plot_hypervolume2, plot_r2, \
@@ -32,9 +31,7 @@ import numpy as np
 import micro_encoding
 from search import macro_encoding
 from search import nsganet as engine
-from models.micro_models import NetworkCIFAR as Network
 from pymoo.core.problem import Problem
-from pymoo.optimize import minimize
 
 
 
@@ -286,8 +283,6 @@ def main():
     for i, arch in enumerate(res.X):
         genome = micro_encoding.convert(arch) if args.search_space == 'micro' else macro_encoding.convert(arch)
         genotype = micro_encoding.decode(genome) if args.search_space == 'micro' else macro_encoding.decode(genome)
-        # check architecture
-        model = Network(args.init_channels, 10, args.layers, False, genotype)
         save_architecture(i, genotype, res.F[i], args.save)
     save_archive(np.array(problem.archive), args.save)
     save_archive_losses(np.array(problem.archive_2), args.save)
