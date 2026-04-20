@@ -98,7 +98,6 @@ def r2_emoa_rnas(args_):
     for generation in range(initial_generation, args.generations):
         set_random_seed(args.seed + generation)  # Ensure reproducibility across generations
         if args.increase_epochs and generation % 10 == 0 and generation != initial_generation:
-            args.epochs_train_supernet += 5
             args.epochs_train_individual += 5
         time_stamp_gen = time.time()
 

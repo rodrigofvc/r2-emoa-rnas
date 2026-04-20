@@ -93,11 +93,11 @@ if __name__ == '__main__':
         from r2_emoa_one_shot import r2_emoa_oneshot_nas
         # The search space is continuous because we are optimizing the architecture parameters (alphas) of the supernet
         args.search_space = 'continuous'
-        save_params(args, args.save_path_final_architect)
-        supernet, archive, archive_accuracy, archive_losses, statistics = r2_emoa_oneshot_nas(
-            args=args
+        if args.reload_dir is None:
+            save_params(args, args.save_path_final_architect)
+        archive, archive_accuracy, archive_losses, statistics = r2_emoa_oneshot_nas(
+            args_=args
         )
-        save_model(supernet, args.save_path_final_model, f"super-net.pt")
         for i, individual in enumerate(archive):
             save_architecture(i, individual, args.save_path_final_architect)
         save_archive(archive, args.save_path_final_architect)

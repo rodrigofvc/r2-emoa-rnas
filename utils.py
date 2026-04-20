@@ -356,8 +356,12 @@ def load_execution(args_dir):
         time_search = int(population_data['time_search'])
         generation = int(generation)
         generation += 1
-    args.epochs_train_individual = args.epochs_train_individual + (generation // 10) * 5 if args.increase_epochs else args.epochs_train_individual
-    print(f"Updated epochs for training individuals: {args.epochs_train_individual}")
+    if 'epochs_train_individual' in args_dict:
+        args.epochs_train_individual = args.epochs_train_individual + (generation // 10) * 5 if args.increase_epochs else args.epochs_train_individual
+        print(f"Updated epochs for training individuals: {args.epochs_train_individual}")
+    if 'epochs_train_supernet' in args_dict:
+        args.epochs_train_supernet = args.epochs_train_supernet + (generation // 10) * 5 if args.increase_epochs else args.epochs_train_supernet
+        print(f"Updated epochs for training supernet: {args.epochs_train_supernet}")
     return args, statistics, generation, pop, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, time_search
 
 if __name__ == '__main__':
