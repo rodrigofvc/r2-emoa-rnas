@@ -27,7 +27,7 @@ def prepare_args_standard(args_):
         # the execution is a reload and we need to load all the variables from the previous execution
         args, statistics, initial_generation, pop, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, time_search = utils.load_execution(args_.reload_dir)
         architectures_evaluated = len(statistics['hyp_log']) * args.n_population
-        logging.info(f">>>> Reloading execution from {args_.reload_dir} at generation {initial_generation+1} with {architectures_evaluated} architectures already evaluated.")
+        logging.info(f">>>> Reloading execution from {args_.reload_dir} at generation {initial_generation} with {architectures_evaluated} architectures already evaluated.")
     else:
         # the execution is new and we need to initialize all the variables
         args = args_
@@ -85,15 +85,19 @@ def r2_emoa_rnas(args_):
     args, weights_r2, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, architectures_evaluated, initial_generation, pop, statistics, time_search = prepare_args_standard(args_)
     if initial_generation == 0:
         evaluate_population_multiprocessing(args.n_population, 0, pop, weights_r2, nadir_point, ideal_point, args)
+        architectures_evaluated += args.n_population
         update_ref_points(pop, nadir_point, ideal_point)
         archive = archive_update_pq(archive, pop)
         archive_losses = archive_update_pq(archive_losses, pop, k=2)
+        archive_accuracy = archive_update_pq_accuracy(archive_accuracy, pop)
         hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args,
                                                          weights_r2, statistics)
+        utils.store_population_data(0, pop, archive, archive_accuracy, archive_losses, statistics, nadir_point, ideal_point, time_search, args.save_path_final_architect)
         logging.info(f">>>> Gen 0 | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
+        initial_generation = 1
     for generation in range(initial_generation, args.generations):
         set_random_seed(args.seed + generation)  # Ensure reproducibility across generations
-        if args.increase_epochs and (generation + 1) % 10 == 0 and generation != 0:
+        if args.increase_epochs and generation % 10 == 0 and generation != initial_generation:
             args.epochs_train_supernet += 5
             args.epochs_train_individual += 5
         time_stamp_gen = time.time()
@@ -105,7 +109,7 @@ def r2_emoa_rnas(args_):
             offsprings = binary_crossover(parents, n_childs=args.n_population, eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
-        evaluate_population_multiprocessing(args.n_population, generation+1, mutation, weights_r2, nadir_point, ideal_point, args)
+        evaluate_population_multiprocessing(args.n_population, generation, mutation, weights_r2, nadir_point, ideal_point, args)
         architectures_evaluated += args.n_population
         update_ref_points(mutation, nadir_point, ideal_point)
 
@@ -121,9 +125,9 @@ def r2_emoa_rnas(args_):
         utils.plot_r2(statistics, args.save_path_final_architect)
         utils.store_statisctics(statistics, np.array([p.F for p in mutation if p.feasible]))
         utils.store_population_data(generation, pop, archive, archive_accuracy, archive_losses, statistics, nadir_point, ideal_point, time_search, args.save_path_final_architect)
-        logging.info(f">>>> Gen {generation + 1} | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
+        logging.info(f">>>> Gen {generation} | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
         logging.info(
-            f">>>> Gen {generation + 1} DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_gen))} (HH:MM:SS)")
+            f">>>> Gen {generation} DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_gen))} (HH:MM:SS)")
     logging.info(f">>>> Total architectures evaluated: {architectures_evaluated}")
     logging.info(
         f">>>> Total search time: ({(time.time() - time_search) // 86400:02.0f}:{time.strftime('%H:%M:%S)', time.gmtime(time.time() - time_search))} (DD:HH:MM:SS)")
