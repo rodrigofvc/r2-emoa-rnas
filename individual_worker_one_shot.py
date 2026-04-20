@@ -6,7 +6,7 @@ import os
 import logging
 
 from micro_space.model import NetworkCIFAR
-from r2_emoa_one_shot import unpack_alphas
+from supernet_worker import unpack_alphas
 
 logging.basicConfig(
         level=logging.INFO,
