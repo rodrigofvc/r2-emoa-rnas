@@ -2,7 +2,7 @@ import argparse
 import json
 import sys
 import os
-
+import gc
 import logging
 logging.basicConfig(
         level=logging.INFO,
@@ -10,6 +10,7 @@ logging.basicConfig(
         datefmt='%H:%M:%S'
 )
 
+os.environ["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 os.environ["TORCH_LOGS"] = "-all" 
 os.environ["PYTHONASYNCIODEBUG"] = "0"
 
@@ -168,4 +169,5 @@ if __name__ == '__main__':
     if torch.cuda.is_available():
         torch.cuda.synchronize()
         torch.cuda.empty_cache()
+    gc.collect()
     sys.exit(0)

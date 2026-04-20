@@ -5,6 +5,7 @@ import random
 import shutil
 import sys
 
+os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 from pymoo.core.termination import NoTermination
 
 from archivers import archive_update_pq
@@ -17,9 +18,9 @@ if os.path.exists('/Users/rodrigofvc/Documents/doctorado/r2-emoa-rnas/algorithms
     sys.path.insert(0, '/Users/rodrigofvc/Documents/doctorado/r2-emoa-rnas/algorithms/nsga-net')
 elif os.path.exists('/home/rvelazquez/r2-emoa-rnas/algorithms/nsga-net'):
     sys.path.insert(0, '/home/rvelazquez/r2-emoa-rnas/algorithms/nsga-net')
-elif os.path.exists("C:" + os.sep + "Users" + os.sep + "USER" + os.sep + "Documents" + os.sep + "r2-emoa-rnas" + os.sep + "algorithms" + os.sep + "nsga-net"):
-    sys.path.insert(0, "C:" + os.sep + "Users" + os.sep + "USER" + os.sep + "Documents" + os.sep + "r2-emoa-rnas" + os.sep + "algorithms" + os.sep + "nsga-net")
-else:  
+elif os.path.exists("C:" + os.sep + "Users" + os.sep + "rodri" + os.sep + "Documents" + os.sep + "r2-emoa-rnas" + os.sep + "algorithms" + os.sep + "nsga-net"):
+    sys.path.insert(0, "C:" + os.sep + "Users" + os.sep + "rodri" + os.sep + "Documents" + os.sep + "r2-emoa-rnas" + os.sep + "algorithms" + os.sep + "nsga-net")
+else:
     raise FileNotFoundError('Project path not found, please update the path in the script before running')
 
 import time
@@ -33,7 +34,9 @@ from search import macro_encoding
 from search import nsganet as engine
 from pymoo.core.problem import Problem
 
-
+"""
+python -X dev search/evolution_search.py --seed 18906049 --search_space micro --dataset cifar10 --n_classes 10 --init_channels 16 --layers 5 --n_gens 15 --epochs 10 --pop_size 40  --batch_size 192 --n_offspring 40 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --layers 5 --steps 4 --multiplier 4 --cutout_length 16 --drop_path_prob 0.3 --debug_cuda --timestamp 9  --reload_dir search-NSGA-Net-micro-20260419-070500
+"""
 
 """
 python3 search/evolution_search.py --seed 18906049 --search_space micro \
