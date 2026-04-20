@@ -113,9 +113,10 @@ if __name__ == '__main__':
         logging.info(f"Experiment completed and results saved in {results_dir}")
     elif args.algorithm == 'r2-emoa':
         from r2_emoa import r2_emoa_rnas
-        save_params(args, args.save_path_final_architect)
+        if args.reload_dir is None:
+            save_params(args, args.save_path_final_architect)
         archive, archive_accuracy, archive_losses, statistics = r2_emoa_rnas(
-            args=args
+            args
         )
         for i, individual in enumerate(archive):
             save_architecture(i, individual, args.save_path_final_architect)

@@ -22,14 +22,15 @@ from worker_process import evaluate_population_multiprocessing
  --attack FGSM --fgsm_eps 8/255 --cutout False --cutout_length 16 --drop_path_prob 0.3 \
  --grad_clip 0.5 --train_portion 0.5
 """
-def prepare_args_standard(args):
-    if args.reload_dir is not None:
+def prepare_args_standard(args_):
+    if args_.reload_dir is not None:
         # the execution is a reload and we need to load all the variables from the previous execution
-        args, statistics, initial_generation, pop, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, time_search = utils.load_execution(args.reload_dir)
+        args, statistics, initial_generation, pop, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, time_search = utils.load_execution(args_.reload_dir)
         architectures_evaluated = len(statistics['hyp_log']) * args.n_population
-        logging.info(f">>>> Reloading execution from {args.reload_dir} at generation {initial_generation+1} with {architectures_evaluated} architectures already evaluated.")
+        logging.info(f">>>> Reloading execution from {args_.reload_dir} at generation {initial_generation+1} with {architectures_evaluated} architectures already evaluated.")
     else:
         # the execution is new and we need to initialize all the variables
+        args = args_
         initial_generation = 0
         archive = []
         archive_accuracy = []
@@ -51,7 +52,7 @@ def prepare_args_standard(args):
 
     weights_r2 = utils.get_weights_r2(args.n_population)
 
-    return weights_r2, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, architectures_evaluated, initial_generation, pop, statistics, time_search
+    return args, weights_r2, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, architectures_evaluated, initial_generation, pop, statistics, time_search
 
 def set_random_seed(seed):
     np.random.seed(seed)
@@ -80,8 +81,8 @@ def initial_population(n_population, alphas_dim, k, args):
 
 
 # R2 version where each architecture has its own weights (no supernet training). This is a baseline to compare with the supernet version.
-def r2_emoa_rnas(args):
-    weights_r2, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, architectures_evaluated, initial_generation, pop, statistics, time_search = prepare_args_standard(args)
+def r2_emoa_rnas(args_):
+    args, weights_r2, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, architectures_evaluated, initial_generation, pop, statistics, time_search = prepare_args_standard(args_)
     if initial_generation == 0:
         evaluate_population_multiprocessing(args.n_population, 0, pop, weights_r2, nadir_point, ideal_point, args)
         update_ref_points(pop, nadir_point, ideal_point)
@@ -99,9 +100,9 @@ def r2_emoa_rnas(args):
 
         parents = tournament_selection(pop, n_select=args.n_population // 2, tournament_size=5)
         if args.search_space == 'discrete':
-            offsprings = point_crossover(parents, n_childs=args.n_population*2, prob_cross=args.prob_cross)
+            offsprings = point_crossover(parents, n_childs=args.n_population, prob_cross=args.prob_cross)
         else:
-            offsprings = binary_crossover(parents, n_childs=args.n_population*2, eta=args.eta_cross, prob_cross=args.prob_cross)
+            offsprings = binary_crossover(parents, n_childs=args.n_population, eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
         evaluate_population_multiprocessing(args.n_population, generation+1, mutation, weights_r2, nadir_point, ideal_point, args)
