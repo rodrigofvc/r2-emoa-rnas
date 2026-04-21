@@ -71,7 +71,7 @@ def r2_emoa_oneshot_nas(args_):
     if initial_generation == 0:
         if args.epochs_warmup > 0:
             logging.info(">>>> Warmup training of the supernet...")
-            train_supernet(pop, 0, args, nadir_point, ideal_point, warmup=False)
+            train_supernet(pop, 0, args, nadir_point, ideal_point, warmup=True)
             logging.info(">>>> Warmup training DONE.")
         statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'),
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': [],
