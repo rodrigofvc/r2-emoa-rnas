@@ -158,8 +158,6 @@ def train_supernet(pop, gen, args, nadir_point, ideal_point, warmup=False):
     else:
         raise ValueError(f"Unknown algorithm: {args.algorithm}")
 
-    individuals_X = [individual.X.copy() for individual in pop]
-
     process_args = [
         sys.executable, "-X", "dev", "-u", file,
         '--gen', str(gen),
@@ -186,9 +184,13 @@ def train_supernet(pop, gen, args, nadir_point, ideal_point, warmup=False):
         '--nadir_point', np.array2string(nadir_point, separator=',', max_line_width=np.inf),
         '--ideal_point', np.array2string(ideal_point, separator=',', max_line_width=np.inf),
     ]
-    for i, individual_X in enumerate(individuals_X):
-        process_args.append(f'--individual_x_{i}')
-        process_args.append(np.array2string(individual_X, separator=',', max_line_width=np.inf))
+
+    individuals_X_dict = {f'individual_{i}': np.array2string(individual.X, separator=',', max_line_width=np.inf) for i, individual in enumerate(pop)}
+    with open(args.save_path_final_model + os.sep + f"individuals_X_gen_{gen}.json", 'w') as f:
+        json.dump(individuals_X_dict, f)
+    process_args.append('--individuals_X_path')
+    process_args.append(str(args.save_path_final_model) + os.sep + f"individuals_X_gen_{gen}.json")
+
     if args.algorithm == 'r2-emoa-one-shot':
         # Pass the path to save the supernet model, so that the individual worker can load it for evaluating the individuals
         process_args.append('--supernet_path')
