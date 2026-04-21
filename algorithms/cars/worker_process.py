@@ -123,10 +123,7 @@ def train_supernet(pop, gen, args, warmup=False):
 
     log_file = "logs" + os.sep + f"supernet_{gen}_.log"
 
-
     file = 'supernet_worker.py'
-
-    individuals_X = [individual.X.copy() for individual in pop]
 
     process_args = [
         sys.executable, "-X", "dev", "-u", file,
@@ -151,9 +148,13 @@ def train_supernet(pop, gen, args, warmup=False):
         '--grad_clip', str(args.grad_clip),
         '--train_portion', str(args.train_portion),
     ]
-    for i, individual_X in enumerate(individuals_X):
-        process_args.append(f'--individual_x_{i}')
-        process_args.append(np.array2string(individual_X, separator=',', max_line_width=np.inf))
+
+    individuals_X_dict = {f'individual_{i}': np.array2string(individual.X, separator=',', max_line_width=np.inf) for i, individual in enumerate(pop)}
+    with open(args.save_path_final_model + os.sep + f"individuals_X_gen_{gen}.json", 'w') as f:
+        json.dump(individuals_X_dict, f)
+    process_args.append('--individuals_X_path')
+    process_args.append(str(args.save_path_final_model) + os.sep + f"individuals_X_gen_{gen}.json")
+
 
     # Pass the path to save the supernet model, so that the individual worker can load it for evaluating the individuals
     process_args.append('--supernet_path')
