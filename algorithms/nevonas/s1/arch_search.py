@@ -1,43 +1,48 @@
 import os
+import shutil
 import sys
 
-from adversarial import get_attack_function
+from pymoo.operators.sampling.rnd import FloatRandomSampling
+
 from archivers import archive_update_pq
+from micro_space.micro_encoding import PRIMITIVES
 from utils_search import save_archive, save_archive_2, plot_archive_losses, plot_hypervolume, plot_hypervolume2, \
-  plot_r2, save_statistics_to_csv, save_params, save_architecture, save_supernet, get_model_metrics, store_metrics, \
-  get_weights_r2
+  plot_r2, save_statistics_to_csv, save_params, save_architecture
 
 sys.path.insert(0, './s1')
 
 import argparse
 import logging
 import random
-import torch.nn as nn
 import numpy as np
-import torch.backends.cudnn as cudnn
-import torch.utils
 import time
 import ut as utils
 
-from get_datasets                          import get_dataloader
-from model import NetworkCIFAR
-from model_search                          import Network
-from pymoo.core.problem                    import ElementwiseProblem
+import utils_search
+import copy
+from pymoo.core.problem import Problem
 from pymoo.algorithms.moo.nsga2            import NSGA2
 from pymoo.core.termination import NoTermination
 from pymoo.operators.crossover.sbx         import SimulatedBinaryCrossover
 from pymoo.operators.mutation.pm           import PolynomialMutation
+from worker_process import train_supernet, worker_evaluate_individual
+
+"""
+python3 -X dev arch_search.py --seed 18906049 --dataset cifar10 --batch_size 32 --gpu 0 \
+--init_channels 16 --generations 4 --n_population 10 \
+--learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 \
+--mutate_rate 0.1 --report_freq 50 --layers 5 --steps 4 --multiplier 4 --reduction \
+--grad_clip 5 --train_portion 0.5 --epochs_warmup 2 --epochs_train_supernet 1 \
+--timestamp_supernet 45 --timestamp_individual 5 
+"""
 
 parser = argparse.ArgumentParser("S1")
-parser.add_argument('--autoaug',           default=False, action='store_true')
 parser.add_argument('--batch_size',        type=int, default = 96, help = 'batch size')
-parser.add_argument('--config_path',       type=str, help='The config path.')
-parser.add_argument('--config_root',       type=str, help='The root path of the config directory')
 parser.add_argument('--cutout',            action = 'store_true', default = False, help = 'use cutout')
 parser.add_argument('--cutout_length',     type = int, default = 16, help = 'cutout length')
-parser.add_argument('--data_dir',          type = str, default = '../../data', help = 'location of the data corpus')
+parser.add_argument('--data',          type = str, default = '../../../data', help = 'location of the data corpus')
 parser.add_argument('--dataset',           type = str, default = '', help = '["cifar10", "cifar100"]')
-parser.add_argument('--epochs',            type = int, default = 30, help = 'num of generations')
+parser.add_argument('--generations',            type = int, default = 30, help = 'num of generations')
 parser.add_argument('--gpu',               type = int, default = 0, help = 'gpu device id')
 parser.add_argument('--grad_clip',         type = float, default = 5, help = 'gradient clipping')
 parser.add_argument('--init_channels',     type = int, default = 16, help = 'num of init channels')
@@ -49,348 +54,222 @@ parser.add_argument('--steps',             type = int, default = 6, help = 'numb
 parser.add_argument('--multiplier',        type = int, default = 6, help = 'multiplier for number of channels')
 parser.add_argument('--learning_rate',     type = float, default = 0.025, help = 'init learning rate')
 parser.add_argument('--learning_rate_min', type = float, default = 0.001, help = 'min learning rate')
+parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
 parser.add_argument('--momentum',          type = float, default = 0.9, help = 'momentum')
 parser.add_argument('--mutate_rate',       type = float, default = 0.1, help = 'mutation rate')
-parser.add_argument('--output_dir',        type = str, default = None, help = 'location of trials')
-parser.add_argument('--pop_size',          type = int, default = 40, help = 'population size')
+parser.add_argument('--fgsm_eps', type=float, default=8 / 255, help='attack epsilon')
+#parser.add_argument('--output_dir',        type = str, default = None, help = 'location of trials')
+parser.add_argument('--n_population',          type = int, default = 40, help = 'population size')
 parser.add_argument('--report_freq',       type = float, default = 50, help = 'report frequency')
 parser.add_argument('--seed',              type = int, default = 18906049, help = 'random seed')
-parser.add_argument('--split_option',      type = int, default = 0.5, help = 'split option for CIFAR100')
-parser.add_argument('--train_discrete',    default=False, action='store_true')
-parser.add_argument('--train_epochs',      type = int, default = 10, help = 'num of training epochs')
-parser.add_argument('--valid_batch_size',  type = int, default = 64, help = 'validation batch size')
+parser.add_argument('--train_portion',      type = float, default = 0.5, help = 'split option for CIFAR100')
+#parser.add_argument('--train_discrete',    default=False, action='store_true')
+#parser.add_argument('--valid_batch_size',  type = int, default = 64, help = 'validation batch size')
 parser.add_argument('--weight_decay',      type = float, default = 3e-4, help = 'weight decay')
-parser.add_argument('--train_portion',     type = float, default = 0.5, help = 'portion of training data')
-parser.add_argument('--workers',           type=int, default=0, help='number of data loading workers (default: 2)')
+parser.add_argument('--epochs_warmup',     type = int, default = 0, help = 'number of epochs to warmup the supernet before starting the search process')
+parser.add_argument('--epochs_train_supernet', type=int, default=0, help='number of epochs to train supernet per generation')
+#parser.add_argument('--workers',           type=int, default=0, help='number of data loading workers (default: 2)')
+parser.add_argument('--pretrained_supernet', type=str, default=None, help='path to pretrained supernet to load before training')
+parser.add_argument('--save_path_final_model', type=str, default=None, help='path to save the final supernet model after search')
+parser.add_argument('--timestamp_supernet', type=int, default=45, help='timestamp in minutes for training the supernet')
+parser.add_argument('--timestamp_individual', type=int, default=5, help='timestamp in minutes for evaluating each architecture')
+parser.add_argument('--search_space', type=str, default="continuous", choices=['continuous', 'discrete'], help='search space to use')
+parser.add_argument('--reduction', action='store_true', default=False, help='use reduction cell or not')
+parser.add_argument('--debug_cuda', action='store_true', default=False,
+                    help='Enable CUDA_LAUNCH_BLOCKING for debugging')
+parser.add_argument('--increase_epochs', action='store_true', default=False,
+                    help='Increase the number of epochs to train the supernet and individuals as generations progress')
+parser.add_argument('--reload_dir', type=str, default=None,
+                    help='Directory to reload the experiment from if --reload is set')
+
 args = parser.parse_args()
 
-def train(model, train_queue, criterion, optimizer, gen, attack_f, device, pop=None):
-  model.train()
-  attack = attack_f(model)
-  if pop is None:
-    logging.info(f'In warm-up training')
-    std_correct = 0
-    adv_correct = 0
-    total_inputs = 0
-    for step, (inputs, targets) in enumerate(train_queue):
-      # Sample a random architecture
-      rnd = model.random_alphas(discrete=False)
-      assert model.check_alphas(rnd), "Given alphas has not been copied successfully to the model"
-      if args.train_discrete:
-        discrete_alphas = utils.discretize(alphas=rnd, arch_genotype=model.genotype())
-        model.update_alphas(discrete_alphas)
-        assert model.check_alphas(discrete_alphas), "Given alphas has not been copied successfully to the model"
 
-      inputs = inputs.to(device)
-      targets = targets.to(device)
-      optimizer.zero_grad()
+def initial_population(n_population, alphas_dim):
+  individuals = []
+  for i in range(n_population):
+    flattened = np.random.rand(alphas_dim[0] * alphas_dim[1] * 2)
+    individuals.append(flattened)
+  individuals = np.array(individuals)
+  return individuals
 
-      inputs.requires_grad = True
-      adv_input, std_logits, std_loss = attack(inputs, targets)
-      adv_input = adv_input.to(device)
-      adv_logits = model(adv_input)
-      adv_loss = criterion(adv_logits, targets)
-      total_loss = args.lambda_1 * std_loss + args.lambda_2 * adv_loss
-      total_loss.backward()
-      nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
-      optimizer.step()
-
-      std_predicts = std_logits.argmax(dim=1)
-      adv_predicts = adv_logits.argmax(dim=1)
-      std_correct += (std_predicts == targets).sum().item()
-      adv_correct += (adv_predicts == targets).sum().item()
-      total_inputs += targets.size(0)
-
-    logging.info(f"Training supernet gen {gen} with loss: {total_loss.item():.5f}, std_acc: {std_correct/total_inputs*100:.5f}%, adv_acc: {adv_correct/total_inputs*100:.5f}%")
-
+def prepare_args_supernet(args_):
+  if args_.reload_dir is not None:
+    # the execution is a reload and we need to load all the variables from the previous execution
+    args, statistics, initial_generation, n_evaluated, pop_obj, pop_X, archive, archive_losses, time_search = utils_search.load_execution(
+      args_.reload_dir)
+    architectures_evaluated = len(statistics['hyp_log']) * args.n_population
+    logging.info(
+      f">>>> Reloading execution from {args_.reload_dir} at generation {initial_generation} with {architectures_evaluated} architectures already evaluated.")
   else:
-    std_correct = 0
-    adv_correct = 0
-    total_inputs = 0
-    for step, (inputs, targets) in enumerate(train_queue):
-      #Copying and checking the discretized alphas
-      tx = torch.tensor(pop[step % len(pop)].X).type(torch.float).to(device)
-      tx = list(torch.chunk(tx, 2))
-      tx = [ttx.reshape(model.arch_parameters()[0].shape) for ttx in tx]    
-      model.update_alphas(tx)
-      assert model.check_alphas(tx), "Given alphas has not been copied successfully to the model"
-      # Discretizing the architecture
-      discrete_alphas = utils.discretize(alphas=tx, arch_genotype=model.genotype(), device=device)
-      model.update_alphas(discrete_alphas)
-      assert model.check_alphas(discrete_alphas)
-      #logging.info(f'step % len(pop): {step % len(pop)}')
+    # the execution is new and we need to initialize all the variables
+    args = args_
+    initial_generation = 0
+    archive = []
+    archive_losses = []
+    architectures_evaluated = 0
+    np.random.seed(args.seed)
+    random.seed(args.seed)
+    statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'),
+                  'min_f2': float('inf'),
+                  'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
+    time_search = time.time()
+    k = sum(2 + i for i in range(args.steps))
+    num_ops = len(PRIMITIVES)
+    alphas_dim = (k, num_ops)
+    pop_obj = initial_population(args.n_population, alphas_dim)
+    pop_X = np.full_like(pop_obj, 100)  # bad values, will be replaced after evaluation
+    logging.info(f">>>> Initial population of size {len(pop_obj)} created.")
+  print("Running with config:")
+  for key, value in vars(args).items():
+    print(f"{key}: {value}")
+  k = sum(2 + i for i in range(args.steps))
+  num_ops = len(PRIMITIVES)
+  alphas_dim = (k, num_ops)
+  n_var = alphas_dim[0] * alphas_dim[1] * 2
 
+  weights_r2 = utils_search.get_weights_r2(args.n_population)
 
-      inputs = inputs.to(device)
-      targets = targets.to(device)
-      optimizer.zero_grad()
+  if args.pretrained_supernet is not None and initial_generation == 0:
+    shutil.copy(args.pretrained_supernet, str(args.save_path_final_model) + os.sep + "super-net.pt")
+    logging.info(f">>>> Pretrained supernet loaded from {args.pretrained_supernet} and saved to {str(args.save_path_final_model) + os.sep + 'super-net.pt'} for future reference.")
+  return args, weights_r2, statistics, initial_generation, architectures_evaluated, pop_obj, pop_X, archive, archive_losses, n_var, time_search
 
-      inputs.requires_grad = True
-      adv_input, std_logits, std_loss = attack(inputs, targets)
-      adv_input = adv_input.to(device)
-      adv_logits = model(adv_input)
-      adv_loss = criterion(adv_logits, targets)
-      total_loss = args.lambda_1 * std_loss + args.lambda_2 * adv_loss
-      total_loss.backward()
-      nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
-      optimizer.step()
-
-      std_predicts = std_logits.argmax(dim=1)
-      adv_predicts = adv_logits.argmax(dim=1)
-      std_correct += (std_predicts == targets).sum().item()
-      adv_correct += (adv_predicts == targets).sum().item()
-      total_inputs += targets.size(0)
-
-    logging.info(f"Training supernet gen {gen} with loss: {total_loss.item():.5f}, std_acc: {std_correct/total_inputs*100:.5f}%, adv_acc: {adv_correct/total_inputs*100:.5f}%")
-
-class NAS(ElementwiseProblem):
-  def __init__(self, n_var, n_obj, xl, xu):
+class NAS(Problem):
+  def __init__(self, n_var, n_obj, xl, xu, args):
     super().__init__(n_var=n_var, n_obj=n_obj, n_constr=0, xl=xl, xu=xu)
     self.archive = []
     self.archive_2 = []
-    self.statistics = {'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
+    self.args_problem = args
+    self._n_evaluated = 0
+    self.generations = 0
 
-  def validation(self, ind, model, valid_queue, criterion, gen, ind_idx, pop_size, attack_f, device):
-    valid_start = time.time()
-    
-    tx = torch.tensor(ind.X).type(torch.float).to(device)
-    tx = list(torch.chunk(tx, 2))
-    tx = [ttx.reshape(model.arch_parameters()[0].shape) for ttx in tx]    
-    #Copying and checking the discretized alphas
-    model.update_alphas(tx)
-    assert model.check_alphas(tx), "Given alphas has not been copied successfully to the model"
-    g1 = model.genotype()
-    # Discretizing the architecture
-    discrete_alphas = utils.discretize(alphas=tx, arch_genotype=g1, device=device)
-    model.update_alphas(discrete_alphas)
-    assert model.check_alphas(discrete_alphas)
-    assert utils.compare_genotypes(arch1=model.genotype(), arch2=g1), 'Something wrong with discretization'
-    if not ('genotype' in ind.data): ind.set('genotype', g1)
-    
-    model.eval()
-    attack = attack_f(model)
+  def _evaluate(self, x, out, *args, **kwargs):
 
-    std_correct = 0
-    adv_correct = 0
-    std_loss_mean = 0
-    adv_loss_mean = 0
-    total_loss_mean = 0
-    total = 0
+    objs = np.full((x.shape[0], self.n_obj), np.nan)
 
-    for step, (inputs, targets) in enumerate(valid_queue):
-      inputs = inputs.to(device)
-      targets = targets.to(device)
+    arch_id = self._n_evaluated + 1
+    for i in range(x.shape[0]):
+      args_individual = copy.copy(self.args_problem)
+      args_individual.seed = args_individual.seed + arch_id
+      performance = worker_evaluate_individual(self.generations, i, x[i,:].copy(), args_individual)
+      objs[i, 0] = performance['std_loss']
+      objs[i, 1] = performance['adv_loss']
+      objs[i, 2] = performance['flops']
+      objs[i, 3] = performance['params']
+      self._n_evaluated += 1
+    out["F"] = objs
 
-      inputs.requires_grad = True
-      adv_input, std_logits, std_loss = attack(inputs, targets)
-      adv_input = adv_input.to(device)
+if args.seed is None or args.seed < 0:
+  args.seed = random.randint(1, 100000)
+if args.reload_dir is None:
+  DIR = "search-S1-{}-{}".format(time.strftime("%Y%m%d-%H%M%S"), args.dataset)
+  args.save_dir = DIR
+  utils.create_exp_dir(DIR)
+  save_params(args, DIR)
+else:
+  DIR = args.reload_dir
 
-      with torch.no_grad():
-        adv_logits = model(adv_input)
-        adv_loss = criterion(adv_logits, targets)
-        total_loss = args.lambda_1 * std_loss + args.lambda_2 * adv_loss
 
-      std_predicts = std_logits.argmax(dim=1)
-      adv_predicts = adv_logits.argmax(dim=1)
-      std_correct += (std_predicts == targets).sum().item()
-      adv_correct += (adv_predicts == targets).sum().item()
-      total += targets.size(0)
-      std_loss_mean += std_loss.item()
-      adv_loss_mean += adv_loss.item()
-      total_loss_mean += total_loss.item()
+if os.path.exists("logs"):
+  shutil.rmtree("logs")
+os.makedirs("logs", exist_ok=True)
 
-    std_accuracy = std_correct / total
-    adv_accuracy = adv_correct / total
-    std_loss_mean /= total
-    adv_loss_mean /= total
-    total_loss_mean /= total
-
-    logging.info(f"[{gen} Generation] {ind_idx}/{pop_size} finished with std_acc {std_accuracy * 100.0:.5f}, adv_acc {adv_accuracy * 100.0:.5f}, std_loss: {std_loss_mean:.5f}, adv_loss: {adv_loss_mean:.5f}")
-    logging.info(f"Validation finished in {time.time() - valid_start} seconds")
-    return std_loss_mean, adv_loss_mean, g1
-
-if args.seed is None or args.seed < 0: args.seed = random.randint(1, 100000)
-DIR = "search-S1-{}-{}".format(time.strftime("%Y%m%d-%H%M%S"), args.dataset)
-args.save_dir = DIR
-utils.create_exp_dir(DIR)
-#utils.create_exp_dir(os.path.join(DIR, "output_genotypes"))
 log_format = '%(asctime)s %(message)s'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=log_format, datefmt='%m/%d %I:%M:%S %p')
 
-torch.manual_seed(args.seed)
-torch.cuda.manual_seed(args.seed)
-torch.cuda.manual_seed_all(args.seed)
 np.random.seed(args.seed)
 random.seed(args.seed)
 
-if torch.cuda.is_available():
-  device = torch.device("cuda:{}".format(args.gpu))
-  torch.cuda.set_device(args.gpu)
-  cpu_device = torch.device("cpu")
-elif torch.backends.mps.is_available():
-  # test
-  device = torch.device("mps")
-else:
-  device = torch.device("cpu")
-
-cudnn.deterministic = True
-cudnn.enabled = True
-cudnn.benchmark = False
-
-#logging.info(f'python {" ".join([ar for ar in sys.argv])}')
-#logging.info(f'torch version: {torch.__version__}, torchvision version: {torch.__version__}')
-#logging.info("gpu device = {}".format(args.gpu))
-#logging.info("args =  %s", args)
-#logging.info("[INFO] First Train and then evolve and repeat the cycle")
-
-# Configuring dataset and dataloader
-train_transform, valid_transform, train_queue, valid_queue = get_dataloader(args)
-#logging.info(f'train_transform: {train_transform}, \nvalid_transform: {valid_transform}')
 if args.dataset == 'cifar10':    num_classes = 10
 elif args.dataset == 'cifar100': num_classes = 100
-#logging.info("#classes: {}".format(num_classes))
-#logging.info('search_loader: {}, valid_loader: {}'.format(len(train_queue)*args.batch_size, len(valid_queue)*args.valid_batch_size))
 
-# Model Initialization
-model = Network(args.init_channels, num_classes, args.layers, device, args.steps, args.multiplier)
-model = model.to(device)
+args, weights_r2, statistics, initial_generation, architectures_evaluated, pop_obj, pop_X, archive, archive_losses, n_var, elapsed_time = prepare_args_supernet(args)
 
-# Configuring the optimizer and the scheduler
-optimizer = torch.optim.SGD(model.parameters(),
-                            args.learning_rate,
-                            momentum=args.momentum,
-                            weight_decay=args.weight_decay)
-criterion = nn.CrossEntropyLoss()
-criterion.to(device)
-scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimizer, float(args.epochs), eta_min = args.learning_rate_min)
-#lr = scheduler.get_lr()[0]
-
-r2_weights = get_weights_r2(args.pop_size)
-
-# Initializing the problem
-n_params = model.arch_parameters()[0].view(-1).shape[0] * 2
-
-nas = NAS(n_var=n_params,
-          n_obj=4,
-          xl=np.zeros(n_params),
-          xu=np.ones(n_params)
-         )
+args.save_path_final_model = DIR
 
 # create the algorithm object
-algorithm = NSGA2(pop_size=args.pop_size,
+algorithm = NSGA2(pop_size=args.n_population,
                   crossover=SimulatedBinaryCrossover(eta=15, prob=0.7),
-                  mutation=PolynomialMutation(prob=args.mutate_rate, eta=20)
+                  mutation=PolynomialMutation(prob=args.mutate_rate, eta=20),
+                  sampling=FloatRandomSampling()
                   )
 
 # let the algorithm object never terminate and let the loop control it
 termination = NoTermination()
 
-# create an algorithm object that never terminates
-algorithm.setup(problem=nas, termination=termination, seed=args.seed, save_history=True)
+lb = np.zeros(n_var)
+ub = np.ones(n_var)
 
-attack_params = {
-  'name': 'FGSM',
-  'params': {
-    'eps': '8/255',
-  }
-}
+nas = NAS(n_var=n_var, n_obj=4, xl=lb, xu=ub, args=args)
+
+# create an algorithm object that never terminates
+algorithm.setup(problem=nas, termination=termination, seed=args.seed)
 
 execution_time = time.time()
 
-attack_f = get_attack_function(attack_params)
-
 # STAGE 1
-start = time.time()
-if args.train_epochs > 0: logging.info('[INFO] Training the Supernet (Warmup)')
-for train_epoch in range(args.train_epochs):
-  train_time = time.time()
-  logging.info("[INFO] Epoch {} with learning rate {}".format(train_epoch + 1, scheduler.get_lr()[0]))
-  train(model=model, train_queue=train_queue, criterion=criterion, optimizer=optimizer, gen=train_epoch+1, attack_f=attack_f, device=device)
-  logging.info("[INFO] Training finished in {} minutes".format((time.time() - train_time) / 60))
-  scheduler.step()
+if initial_generation == 0 and args.pretrained_supernet is None and args.epochs_warmup > 0:
+  logging.info(">>>> Starting warm-up phase for the supernet for {} epochs before starting the search process.".format(args.epochs_warmup))
+  start_warm_up = time.time()
+  train_supernet(pop_X, 0, args, warmup=True)
+  elapsed_time = time.time() - start_warm_up
 
-architectures_evaluated = 0
-for n_gen in range(args.epochs):
-  start_time = time.time()
+if initial_generation != 0:
+  pop_initialized = algorithm.ask()
+  pop_initialized.set("F", pop_obj)
+  pop_initialized.set("X", pop_X)
+  algorithm.tell(infills=pop_initialized)
+
+for n_gen in range(initial_generation, args.generations):
+  nas.generations = n_gen
+  start_time_gen = time.time()
+  np.random.seed(args.seed + n_gen)
+  random.seed(args.seed + n_gen)
   # ask the algorithm for the next solution to be evaluated
   pop = algorithm.ask()
 
-  ## Training using the whole population
-  #logging.info("[INFO] Generation {} training with learning rate {}".format(n_gen + 1, scheduler.get_lr()[0]))
-  #def train(model, train_queue, criterion, optimizer, gen, device, pop=None):
-  train(model=model, train_queue=train_queue, criterion=criterion, optimizer=optimizer, gen=n_gen+1, device=device, attack_f=attack_f, pop=pop)
-  logging.info("[INFO] Training finished in {} minutes".format((time.time() - start_time) / 60))
-  scheduler.step()
-  
-  # Evaluating the individuals in the population
-  logging.info("[INFO] Evaluating Generation {} ".format(n_gen + 1))
-  std_loss_pop, adv_loss_pop, flops_pop, params_pop = [], [], [], []
-  for ind_idx, ind in enumerate(pop):
-    std_loss, adv_loss, arch_genotype = nas.validation(ind=ind,
-                                                  model=model,
-                                                  valid_queue=valid_queue,
-                                                  criterion=criterion,
-                                                  gen=n_gen+1,
-                                                  ind_idx=ind_idx+1,
-                                                  pop_size=len(pop),
-                                                  attack_f=attack_f,
-                                                  device=device)
+  train_supernet(pop.get("X"), n_gen, args, warmup=False)
+  algorithm.evaluator.eval(nas, pop)
+  pop_obj = pop.get("F")
+  pop_X = pop.get("X")
 
-    model_flops, model_parameters = get_model_metrics(genotype=arch_genotype, model=model)
-    std_loss_pop.append(std_loss)
-    adv_loss_pop.append(adv_loss)
-    flops_pop.append(model_flops)
-    params_pop.append(model_parameters)
-    ind.set('genotype', arch_genotype)
-    ind.set('F_norm', np.zeros(4))
-
-  pop.set("F", np.column_stack([std_loss_pop, adv_loss_pop, flops_pop, params_pop]))
-  #pop.set("F_norm", np.zeros(4))
   architectures_evaluated += len(pop)
-  for ind in pop:
-    print(f'Ind Fitness: {ind.F}')
-  nas.archive = archive_update_pq(nas.archive, pop)
-  nas.archive_2 = archive_update_pq(nas.archive_2, pop, k=2)
-  hyp, hyp2, r2 = store_metrics(architectures_evaluated, nas.archive, nas.archive_2, args, r2_weights, nas.statistics)
-  print(f'>>>>>>> Generation {n_gen + 1}')
-  print(f'        hyp: {hyp}, hyp_2: {hyp2}, R2: {r2}')
 
-  # this line is necessary to set the CV and feasbility status - even for unconstrained
-  #set_cv(pop)
-  
-  # returned the evaluated individuals which have been evaluated or even modified
+  archive = archive_update_pq(archive, pop_obj)
+  archive_losses = archive_update_pq(archive_losses, pop_obj[:, :2], k=2)
+  hyp, hyp2, r2 = utils_search.store_metrics(architectures_evaluated, archive, archive_losses, args, weights_r2, statistics)
+  plot_hypervolume(statistics, args.save_path_final_model)
+  plot_hypervolume2(statistics, args.save_path_final_model)
+  plot_r2(statistics, args.save_path_final_model)
+
+  elapsed_time += time.time() - start_time_gen
+  utils_search.store_population_data(n_gen, architectures_evaluated, pop_obj, pop_X, archive,
+                        archive_losses,
+                        statistics, elapsed_time, args.save_path_final_model)
+
+  logging.info(f'>>>>>>> Generation {n_gen}')
+  logging.info(f'        hyp: {hyp}, hyp_2: {hyp2}, R2: {r2}')
+  logging.info(f'        Architectures evaluated so far: {architectures_evaluated}')
+  logging.info(f"        Time elapsed for generation {n_gen} (HH:MM:SS): {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time_gen))}")
+
   algorithm.tell(infills=pop)
-  logging.info(f'Algorithm generation #{algorithm.n_gen} completed')
-  # print evaluations so far
-  logging.info(f'Architectures evaluated so far: {architectures_evaluated}')
-  
-  # do same more things, printing, logging, storing or even modifying the algorithm object
-    
-  last = time.time() - start_time
-  logging.info("[INFO] {}/{} generation finished in {} minutes".format(n_gen + 1, args.epochs, last / 60))
 
-print('Total search time: {}'.format(time.strftime('%H:%M:%S', time.gmtime(time.time() - execution_time))))
+
+logging.info('Total search time: {}'.format(time.strftime('%H:%M:%S', time.gmtime(time.time() - execution_time))))
 
 # obtain the result objective from the algorithm
 res = algorithm.result()
 
-# save supernet
-save_supernet(model, DIR)
+for i, ind in enumerate(archive):
+    save_architecture(i, ind, args.save_path_final_model)
 
-for i, ind in enumerate(nas.archive):
-    logging.info(f'Archive individual fitness: {ind.F}')
-    # check architecture
-    model = NetworkCIFAR(args.init_channels,  num_classes, args.layers, auxiliary=False, genotype=ind.get('genotype'))
-    save_architecture(i, ind, DIR)
-
-save_archive(nas.archive, DIR)
-save_archive_2(nas.archive_2, DIR)
-plot_archive_losses(nas.archive_2, DIR)
-plot_hypervolume(nas.statistics, DIR)
-plot_hypervolume2(nas.statistics, DIR)
-plot_r2(nas.statistics, DIR)
-save_statistics_to_csv(nas.statistics, DIR)
-save_params(args, DIR)
-print('Results stored in {}'.format(DIR))
-
+save_archive(archive, args.save_path_final_model)
+save_archive_2(archive_losses, args.save_path_final_model)
+plot_archive_losses(archive_losses, args.save_path_final_model)
+plot_hypervolume(statistics, args.save_path_final_model)
+plot_hypervolume2(statistics, args.save_path_final_model)
+plot_r2(statistics, args.save_path_final_model)
+save_statistics_to_csv(statistics, args.save_path_final_model)
+print('Results stored in {}'.format(args.save_path_final_model))
 

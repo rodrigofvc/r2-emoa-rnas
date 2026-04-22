@@ -1,33 +1,36 @@
-from fractions import Fraction
 import torch
-import torchattacks
 import torch.nn.functional as F
 
-def fgsm_simple(model, x, y, eps):
-    assert x.requires_grad, "Input tensor must have requires_grad=True for fgsm_simple attack"
-    std_logits = model(x)
+# Set the model to training mode for all layers, including BatchNorm and Dropout
+def set_model_mode(model, training):
+    for m in model.modules():
+        m.__dict__['training'] = training
+
+# Set the model to attack mode: BatchNorm and Dropout layers are set to evaluation mode, while other layers are set to training mode
+def set_attack_mode(model, training):
+    for m in model.modules():
+        if 'BatchNorm' in m.__class__.__name__ or 'Dropout' in m.__class__.__name__:
+            m.__dict__['training'] = False
+        else:
+            m.__dict__['training'] = training
+
+
+def fgsm_simple(model, x, y, eps=8 / 255):
+    x_adv = x.detach().clone().requires_grad_(True)
+
+    std_logits = model(x_adv)
     std_loss = F.cross_entropy(std_logits, y)
-    grad = torch.autograd.grad(std_loss, x, retain_graph=True, create_graph=False)[0]
-    adv = (x + eps * grad.sign()).clamp(0.0, 1.0).detach()
-    return adv, std_logits, std_loss
 
-class FGSMAttack:
-    def __init__(self, eps=8/255):
-        self.eps = eps
+    grad = torch.autograd.grad(std_loss, x_adv, retain_graph=False, create_graph=False)[0]
+    adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach().clone()
+    return adv
 
-    def __call__(self, model, x, y):
-        return fgsm_simple(model, x, y, self.eps)
+def fgsm_simple_infer(model, x, y, eps=8 / 255):
+    x_adv = x.detach().clone().requires_grad_(True)
 
+    std_logits = model(x_adv)
+    std_loss = F.cross_entropy(std_logits, y)
 
-def get_attack_function(attack_params):
-    attack_params['params']['eps'] = float(Fraction(attack_params['params']['eps'])) if '/' in attack_params['params']['eps'] else float(attack_params['params']['eps'])
-    if 'alpha' in attack_params['params']:
-        attack_params['params']['alpha'] = float(Fraction(attack_params['params']['alpha'])) if '/' in attack_params['params']['alpha'] else float(attack_params['params']['alpha'])
-    if attack_params['name'] == 'FGSM':
-        atk = FGSMAttack(attack_params['params']['eps'])
-        return lambda model: lambda x, y: atk(model, x, y)
-    elif 'PGD' in attack_params['name']:
-        attack_function = lambda model: torchattacks.PGD(model, **attack_params['params'])
-    else:
-        raise ValueError(f"Attack {attack_params['name']} not defined")
-    return attack_function
+    grad = torch.autograd.grad(std_loss, x_adv, retain_graph=False, create_graph=False)[0]
+    adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach().clone()
+    return adv, std_logits.detach().clone()

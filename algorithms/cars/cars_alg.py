@@ -46,9 +46,10 @@ def prepare_args_supernet(args_):
 
     weights_r2 = utils.get_weights_r2(args.n_population)
 
-    if args.pretrained_supernet is not None:
+    if args.pretrained_supernet is not None and initial_generation == 0:
         shutil.copy(args.pretrained_supernet, str(args.save_path_final_model) + os.sep + "super-net.pt")
-
+        logging.info(
+            f">>>> Pretrained supernet loaded from {args.pretrained_supernet} and saved to {str(args.save_path_final_model) + os.sep + 'super-net.pt'} for future reference.")
     return args, weights_r2, archive, archive_accuracy, archive_losses, architectures_evaluated, initial_generation, pop, statistics, time_search
 
 def initial_population(n_population, alphas_dim, k, search_space):

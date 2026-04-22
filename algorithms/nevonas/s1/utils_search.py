@@ -1,3 +1,5 @@
+import argparse
+import copy
 import csv
 import json
 import lzma
@@ -12,15 +14,15 @@ import os
 import pickle
 
 from model import NetworkCIFAR
-from indicators import r2, get_dynamic_r2_reference
+from indicators import r2
 
 
 # Load R2 weights for the i-th population size
 def get_weights_r2(n):
-    file = 's1' + os.sep + 'r2_weights' + os.sep + 'weights_' + str(n) + '.pkl'
-    with open(file, 'rb') as f:
-        weights_r2 = pickle.load(f)
-    return weights_r2
+    file = 'r2_weights' + os.sep + 'weights_' + str(n) + '.json'
+    with open(file, 'r') as f:
+        json_data = json.load(f)
+    return {int(k): np.array(v) for k, v in json_data.items()}
 
 
 def save_archive_accuracy(archive, archive_path):
@@ -31,13 +33,13 @@ def save_archive_accuracy(archive, archive_path):
 
 def save_archive(archive, archive_path):
     archive_path += os.sep + 'archive'
-    np_archive = [p.F for p in archive]
+    np_archive = [p for p in archive]
     np_archive = np.array(np_archive)
     np.savez_compressed(archive_path, np_archive)
 
 def save_archive_2(archive, archive_path):
     archive_path += os.sep + 'archive_2'
-    np_archive = [[p.F[0], p.F[1]] for p in archive]
+    np_archive = [[p[0], p[1]] for p in archive]
     np_archive = np.array(np_archive)
     np.savez_compressed(archive_path, np_archive)
 
@@ -48,18 +50,18 @@ def store_metrics(architectures_evaluated, population, population_2, args, weigh
     max_f4 = 5 * 1.5
     # compute hypervolume
     ind = HV(ref_point=np.array([max_f1, max_f2, max_f3, max_f4]))
-    population_array = np.array([ind.F for ind in population])
+    population_array = np.array([ind for ind in population])
     hyp = ind(population_array)
     statistics['hyp_log'].append(hyp.item())
     # compute hypervolume 2 (std_loss, adv_loss)
     ind2 = HV(ref_point=np.array([max_f1, max_f2]))
-    population_array2 = np.array([[ind.F[0], ind.F[1]] for ind in population_2])
+    population_array2 = np.array([[ind[0], ind[1]] for ind in population_2])
     hyp2 = ind2(population_array2)
     statistics['hyp2_log'].append(hyp2.item())
     # compute r2
     z_ref = np.zeros(4)
     nadir_point = np.array([max_f1, max_f2, max_f3, max_f4])
-    r2_population = r2(population, weights_r2[args.pop_size], nadir_point, z_ref)
+    r2_population = r2(population, weights_r2[args.n_population], nadir_point, z_ref)
     statistics['r2_log'].append(r2_population.item())
     row_hyp = ['nevonas', args.dataset, 'FGSM', architectures_evaluated, 'hv', hyp, args.save_dir]
     row_r2 = ['nevonas', args.dataset, 'FGSM', architectures_evaluated, 'r2', r2_population, args.save_dir]
@@ -87,10 +89,8 @@ def load_model(model_path):
         state_dict.to('cuda')
     return state_dict
 
-def load_supernet(model_path, model):
-    model_path += 'super-net.pt'
-    state_dict = torch.load(model_path, map_location='cpu')
-    model.load_state_dict(state_dict)
+def load_supernet(model_path):
+    model = torch.load(model_path, map_location='cpu', weights_only=False)
     if torch.cuda.is_available():
         model.to('cuda')
     return model
@@ -113,8 +113,8 @@ def save_statistics_to_csv(statistics, csv_path):
 
 def plot_archive_losses(archive, archive_path):
     archive_path += os.sep + 'archive.pdf'
-    std_acc = [p.F[0] for p in archive]
-    adv_acc = [p.F[1] for p in archive]
+    std_acc = [p[0] for p in archive]
+    adv_acc = [p[1] for p in archive]
     plt.figure(figsize=(8, 6))
     plt.scatter(std_acc, adv_acc, c='blue', marker='o')
     plt.title('Non-dominated solutions')
@@ -156,6 +156,42 @@ def plot_r2(statistics, path):
     plt.grid(True)
     plt.savefig(path)
     plt.close()
+
+def store_population_data(generation, n_evaluated, pop_obj, pop_X, archive, archive_2, statistics, elapsed_time, save_dir):
+    population_data_dir = save_dir + os.sep + 'population_data.json'
+    population_data = {
+        'generation': generation,
+        'n_evaluated': n_evaluated,
+        'pop_obj': pop_obj.tolist(),
+        'pop_X': pop_X.tolist(),
+        'archive': [ind.tolist() for ind in archive],
+        'archive_2': [ind.tolist() for ind in archive_2],
+        'statistics': statistics,
+        'elapsed_time': elapsed_time
+    }
+    with open(population_data_dir, 'w') as f:
+        json.dump(population_data, f, indent=4)
+
+def load_execution(args_dir):
+    with open(args_dir + os.sep + 'params.json', 'r') as f:
+        args_dict = json.load(f)
+        args = argparse.Namespace(**args_dict)
+    with open(args_dir + os.sep + 'population_data.json', 'r') as f:
+        population_data = json.load(f)
+        generation = population_data['generation']
+        n_evaluated = population_data['n_evaluated']
+        pop_obj = np.array(population_data['pop_obj'])
+        pop_X = np.array(population_data['pop_X'])
+
+        archive = [np.array(ind) for ind in population_data['archive']]
+        archive_2 = [np.array(ind) for ind in population_data['archive_2']]
+        statistics = population_data['statistics']
+        elapsed_time = int(population_data['elapsed_time'])
+        generation = int(generation)
+        generation += 1 # We want to start from the next generation after the one we loaded
+    args.epochs_train_supernet = args.epochs_train_supernet + (generation // 10) * 5 if args.increase_epochs else args.epochs_train_supernet
+    print(f"Updated epochs for trainin supernet: {args.epochs_train_supernet}")
+    return args, statistics, generation, n_evaluated, pop_obj, pop_X, archive, archive_2, elapsed_time
 
 
 
@@ -201,13 +237,20 @@ def data_transforms_cifar10(args):
   return train_transform, valid_transform
 
 # Returns the flops and number of parameters of a model given its genotype
-def get_model_metrics(genotype, model):
-    discretized_model = NetworkCIFAR(model.C, model._num_classes, model._layers, auxiliary=False, genotype=genotype)
-    x = torch.randn(1, 3, 32, 32)
-    macs, params = profile(discretized_model, inputs=(x,), verbose=False)
-    flops = (2 * macs) / 1e6
-    params = params / 1e6
-    return round(flops, 4), round(params, 4)
+def get_model_metrics(model_):
+    import torch
+    from torch.utils.flop_counter import FlopCounterMode
+    model = copy.deepcopy(model_)
+    params_num = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    params = round(float(params_num) / 1e6, 4)
+
+    x = torch.randn(1, 3, 32, 32).to(next(model.parameters()).device)
+    with FlopCounterMode(display=False) as flop_counter:
+        model(x)
+
+    flops = round(float(flop_counter.get_total_flops()) / 1e6, 4)
+    del model
+    return flops, params
 
 def get_best_architecture_adversarial(archs_path):
     best_adv_acc = -1.0

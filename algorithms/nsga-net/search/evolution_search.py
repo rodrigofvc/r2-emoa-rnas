@@ -135,8 +135,6 @@ class NAS(Problem):
         self.archive = []
         self.archive_2 = []
         self.args_problem = args_problem
-        self.elapsed_time = 0
-        self.start_time = time.time()
 
     def _evaluate(self, x, out, *args, **kwargs):
 
@@ -223,20 +221,14 @@ def main():
     algorithm = engine.nsganet(pop_size=args.pop_size,
                             n_offsprings=args.n_offspring,
                             eliminate_duplicates=True)
-    """
-    res = minimize(problem,
-                   method,
-                   callback=do_every_generations,
-                   termination=('n_gen', args.n_gens))
-    """
+
     algorithm.setup(problem, seed=args.seed, termination=NoTermination(), verbose=False)
 
+    elapsed_time = 0
     init_generation = 0
     if args.reload_dir is not None:
         logging.info(">>>>>> loading checkpoint from {}".format(args.reload_dir))
         args_execution, statistics, init_generation, n_evaluated, pop_obj, pop_X, archive, archive_2, elapsed_time = load_execution(args.reload_dir)
-        algorithm.problem.start_time = time.time()
-        algorithm.problem.elapsed_time = elapsed_time
         algorithm.problem.statistics = statistics
         algorithm.problem._n_evaluated = n_evaluated
         algorithm.problem.archive = archive
@@ -249,6 +241,7 @@ def main():
         algorithm.tell(infills=pop_initialized)
 
     for gen in range(init_generation, args.n_gens):
+        start_time_gen = time.time()
         np.random.seed(args.seed + gen)
         random.seed(args.seed + gen)
 
@@ -266,7 +259,7 @@ def main():
         plot_hypervolume2(algorithm.problem.statistics, algorithm.problem.save_dir)
         plot_r2(algorithm.problem.statistics, algorithm.problem.save_dir)
 
-        elapsed_time = time.time() - algorithm.problem.start_time
+        elapsed_time += time.time() - start_time_gen
         algorithm.problem.elapsed_time = elapsed_time
         store_population_data(gen, algorithm.problem._n_evaluated, pop_obj, pop_X, algorithm.problem.archive, algorithm.problem.archive_2,
                                     algorithm.problem.statistics, elapsed_time, algorithm.problem.save_dir)
