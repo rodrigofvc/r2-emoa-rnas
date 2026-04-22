@@ -19,6 +19,9 @@ def prepare_args_supernet(args_):
     if args_.reload_dir is not None:
         # the execution is a reload and we need to load all the variables from the previous execution
         args, statistics, initial_generation, pop, archive, archive_accuracy, archive_losses, time_search = utils.load_execution(args_.reload_dir)
+        print("Running with config:")
+        for key, value in vars(args).items():
+            print(f"{key}: {value}")
         architectures_evaluated = len(statistics['hyp_log']) * args.n_population
         logging.info(f">>>> Reloading execution from {args_.reload_dir} at generation {initial_generation} with {architectures_evaluated} architectures already evaluated.")
     else:

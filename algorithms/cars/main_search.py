@@ -67,11 +67,11 @@ if __name__ == '__main__':
         shutil.rmtree("logs")
     os.makedirs("logs", exist_ok=True)
 
-    print("Running with config:")
-    for key, value in vars(args).items():
-        print(f"{key}: {value}")
 
     if args.reload_dir is None:
+        print("Running with config:")
+        for key, value in vars(args).items():
+            print(f"{key}: {value}")
         results_dir = utils.create_experiment_dir('cars', args.dataset, args.seed)
     else:
         results_dir = args.reload_dir
