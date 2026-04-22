@@ -69,7 +69,7 @@ def prepare_args_supernet(args):
             device=args.device,
         ).to(args.device)
 
-    optimizer = torch.optim.Adam(
+    optimizer = torch.optim.SGD(
       model.parameters(),
       args.learning_rate,
       weight_decay=args.weight_decay)
@@ -164,11 +164,10 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, gen
             model.update_arch_parameters(individual_architect)
             discrete = discretize(individual_architect, model.genotype(), args.device)
             model.update_arch_parameters(discrete)
-            time_stamp = time.time()
             std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, args)
             if n_batch % args.report_freq == 0:
                 logging.info(
-                    f'>>>> Gen {gen} | Epoch {epoch}/{epochs} | Batch {n_batch}/{len(train_queue)} | Loss {loss:.4f} | Std Acc {std_acc:.2f}% | Adv Acc {adv_acc:.2f}% | Time {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_stamp))} (HH:MM:SS)')
+                    f'>>>> Gen {gen} | Epoch {epoch}/{epochs} | Batch {n_batch}/{len(train_queue)} | Loss {loss:.4f} | Std Acc {std_acc:.2f}% | Adv Acc {adv_acc:.2f}% ')
         scheduler.step()
         torch.save(model, args.supernet_path)
 

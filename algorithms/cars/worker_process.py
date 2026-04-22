@@ -9,6 +9,20 @@ import numpy as np
 from micro_space.micro_encoding import Genotype
 
 
+def _remove_file_with_retries(file_path, retries=5, delay=0.2):
+    for attempt in range(retries):
+        try:
+            if os.path.exists(file_path):
+                os.remove(file_path)
+            return True
+        except PermissionError:
+            if attempt == retries - 1:
+                logging.warning(f"Could not remove log file '{file_path}' after {retries} attempts.")
+                return False
+            time.sleep(delay)
+    return False
+
+
 def worker_evaluate_individual(gen, i, individual_X, args, return_dict):
     log_file = "logs" + os.sep + f"worker_{gen}_{i}.log"
     result_file = "logs" + os.sep + f"result_gen{gen}_ind{i}.json"
@@ -60,6 +74,7 @@ def worker_evaluate_individual(gen, i, individual_X, args, return_dict):
                                    env=env_worker)
 
         try:
+            start_time = time.time()
             process.communicate(timeout=args.timestamp * 60)
 
             if process.returncode == 0 and os.path.exists(result_file):
@@ -69,7 +84,7 @@ def worker_evaluate_individual(gen, i, individual_X, args, return_dict):
                     return_dict[i] = res_dict
                 os.remove(result_file)
                 clean_file = True
-                logging.info(f"Gen {gen} Individual {i}: std_acc {return_dict[i]['std_acc']:.2f}, adv_acc {return_dict[i]['adv_acc']:.2f} std_loss {return_dict[i]['std_loss']:.3f}, adv_loss {return_dict[i]['adv_loss']:.3f}, flops {return_dict[i]['flops']:.2f}, params {return_dict[i]['params']:.2f}")
+                logging.info(f"Gen {gen} Individual {i}: std_acc {return_dict[i]['std_acc']:.2f}, adv_acc {return_dict[i]['adv_acc']:.2f} std_loss {return_dict[i]['std_loss']:.3f}, adv_loss {return_dict[i]['adv_loss']:.3f}, flops {return_dict[i]['flops']:.2f}, params {return_dict[i]['params']:.2f}, (HH:MM:SS) {time.strftime("%H:%M:%S", time.gmtime(time.time() - start_time))}")
             else:
                 logging.info(f"Gen {gen} Individual {i} failed with return code {process.returncode}")
 
@@ -88,7 +103,7 @@ def worker_evaluate_individual(gen, i, individual_X, args, return_dict):
             logging.info(f"Failed {i}: {e}")
         finally:
             # wait a bit to ensure the process has terminated and released resources before starting the next one
-            #time.sleep(5)
+            time.sleep(5)
             # set default values for failed individuals
             if i not in return_dict:
                 return_dict[i] = {
@@ -101,8 +116,8 @@ def worker_evaluate_individual(gen, i, individual_X, args, return_dict):
                     "genotype": None
                 }
     # Remove log file of successful evaluations, keep logs of failed evaluations for debugging
-    if clean_file and os.path.exists(log_file):
-        os.remove(log_file)
+    if clean_file:
+        _remove_file_with_retries(log_file)
 
 def evaluate_population_multiprocessing(gen, pop, args):
     return_dict = {}
@@ -176,6 +191,7 @@ def train_supernet(pop, gen, args, warmup=False):
     if args.debug_cuda:
         env_worker['CUDA_LAUNCH_BLOCKING'] = '1'
         env_worker['TORCH_USE_CUDA_DSA'] = '1'
+    training_succeeded = False
     with open(log_file, 'w') as f_log:
         process = subprocess.Popen(process_args,
                                     stdout=f_log,
@@ -193,6 +209,9 @@ def train_supernet(pop, gen, args, warmup=False):
                     # Process was killed by the system (segmentation fault, out of memory, etc.)
                     # Wait a bit to ensure the process has terminated and released resources before starting the next one
                     time.sleep(5)
+            else:
+                training_succeeded = True
+                logging.info(f"Gen {gen} training completed successfully in (HH:MM:SS) {time.strftime('%HH:%MM:%SS')}")
 
         except subprocess.TimeoutExpired:
             logging.info(f"Gen {gen} training exceed timestamp: {args.timestamp}, it will be skipped. If you want to increase the timestamp, please set --timestamp argument to a higher value (in minutes).")
@@ -212,7 +231,7 @@ def train_supernet(pop, gen, args, warmup=False):
             logging.info(f"Failed generation {gen}: {e}")
         finally:
             # wait a bit to ensure the process has terminated and released resources before starting the next one
-            time.sleep(5)
+            time.sleep(10)
         # Remove log file of successful training, keep logs of failed training for debugging
-        if os.path.exists(log_file) and process.returncode == 0:
-            os.remove(log_file)
+    if training_succeeded:
+        _remove_file_with_retries(log_file)

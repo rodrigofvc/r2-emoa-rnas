@@ -4,20 +4,11 @@ import sys
 import os
 
 import logging
-
-from adversarial import fgsm_simple
+from adversarial import fgsm_simple_infer
 from micro_space.model import NetworkCIFAR
 from supernet_worker import unpack_alphas
 
 logging.basicConfig(level=logging.ERROR)
-os.environ["TORCH_LOGS"] = "-all" 
-os.environ["PYTHONASYNCIODEBUG"] = "0"
-
-os.environ["OMP_NUM_THREADS"] = "1"
-os.environ["MKL_NUM_THREADS"] = "1"
-os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-os.environ["MKL_INTERFACE_LAYER"] = "LP64"
-os.environ["MKL_DYNAMIC"] = "FALSE"
 
 import time
 
@@ -87,6 +78,7 @@ def get_model_from_individual(individual_X, args):
 
     return model, flops, params, train_queue, valid_queue, criterion, alphas_dim
 
+
 def infer(valid_queue, model, criterion, args):
     std_correct = 0
     adv_correct = 0
@@ -98,13 +90,10 @@ def infer(valid_queue, model, criterion, args):
         inputs = inputs.to(args.device)
         target = target.to(args.device)
 
-        adv_input = fgsm_simple(model, inputs, target)
+        adv_input, std_logits = fgsm_simple_infer(model, inputs, target)
         adv_input = adv_input.to(args.device)
-
         with torch.no_grad():
             adv_logits = model(adv_input)
-            std_logits = model(inputs)
-
             adv_loss = criterion(adv_logits, target)
             std_loss = criterion(std_logits, target)
 

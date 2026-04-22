@@ -1,4 +1,6 @@
 import logging
+import os
+import shutil
 import time
 import random
 
@@ -40,6 +42,9 @@ def prepare_args_supernet(args_):
         logging.info(f">>>> Initial population of size {len(pop)} created.")
 
     weights_r2 = utils.get_weights_r2(args.n_population)
+
+    if args.pretrained_supernet is not None:
+        shutil.copy(args.pretrained_supernet, str(args.save_path_final_model) + os.sep + "super-net.pt")
 
     return args, weights_r2, archive, archive_accuracy, archive_losses, architectures_evaluated, initial_generation, pop, statistics, time_search
 
@@ -84,7 +89,7 @@ def cars_algorithm(args_):
             f">>>> Gen {generation} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_epoch))} (HH:MM:SS)")
 
         parents = tournament_selection(pop, n_select=args.n_population // 2, tournament_size=5)
-        offsprings = binary_crossover(parents, n_childs=args.n_population*2, eta=args.eta_cross, prob_cross=args.prob_cross)
+        offsprings = binary_crossover(parents, n_childs=args.n_population, eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
         # Evaluate offspring
