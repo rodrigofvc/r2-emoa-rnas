@@ -97,7 +97,7 @@ def cars_algorithm(args_):
 
         # Evaluate offspring
         evaluate_population_multiprocessing(generation, mutation, args)
-
+        architectures_evaluated += len(mutation)
         logging.info(
             f"Tiempo total de entrenamiento/validacion {args.generations}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} (HH:MM:SS)")
         archive = archive_update_pq(archive, pop + mutation)

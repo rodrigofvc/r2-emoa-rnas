@@ -75,7 +75,7 @@ def worker_evaluate_individual(gen, i, individual_X, args, return_dict):
 
         try:
             start_time = time.time()
-            process.communicate(timeout=args.timestamp * 60)
+            process.communicate(timeout=args.timestamp_individual * 60)
 
             if process.returncode == 0 and os.path.exists(result_file):
                 with open(result_file, 'r') as f:
@@ -84,7 +84,7 @@ def worker_evaluate_individual(gen, i, individual_X, args, return_dict):
                     return_dict[i] = res_dict
                 os.remove(result_file)
                 clean_file = True
-                logging.info(f"Gen {gen} Individual {i}: std_acc {return_dict[i]['std_acc']:.2f}, adv_acc {return_dict[i]['adv_acc']:.2f} std_loss {return_dict[i]['std_loss']:.3f}, adv_loss {return_dict[i]['adv_loss']:.3f}, flops {return_dict[i]['flops']:.2f}, params {return_dict[i]['params']:.2f}, (HH:MM:SS) {time.strftime("%H:%M:%S", time.gmtime(time.time() - start_time))}")
+                logging.info(f"Gen {gen} Individual {i}: std_acc {return_dict[i]['std_acc']:.2f}, adv_acc {return_dict[i]['adv_acc']:.2f} std_loss {return_dict[i]['std_loss']:.3f}, adv_loss {return_dict[i]['adv_loss']:.3f}, flops {return_dict[i]['flops']:.2f}, params {return_dict[i]['params']:.2f}, (HH:MM:SS) {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}")
             else:
                 logging.info(f"Gen {gen} Individual {i} failed with return code {process.returncode}")
 
@@ -201,7 +201,7 @@ def train_supernet(pop, gen, args, warmup=False):
 
         try:
             time_stamp_gen = time.time()
-            process.communicate(timeout=args.timestamp * 60)
+            process.communicate(timeout=args.timestamp_supernet * 60)
 
             if process.returncode != 0:
                 logging.info(f"Gen {gen} training failed with return code {process.returncode}")
