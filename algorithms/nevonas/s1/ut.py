@@ -11,18 +11,8 @@ import pickle
 import genotypes
 import torch.nn.functional as F
 import pandas as pd
-import yaml
-from thop import profile
-from model import NetworkCIFAR
 
 
-def get_model_metrics(genotype, model):
-  discretized_model = NetworkCIFAR(model.C, model.num_classes, model.layers, auxiliary=False, genotype=genotype)
-  x = torch.randn(1, 3, 32, 32)
-  macs, params = profile(discretized_model, inputs=(x,), verbose=False)
-  flops = (2 * macs) / 1e6
-  params = params / 1e6
-  return round(flops, 4), round(params, 4)
 
 
 class AverageMeter(object):     
@@ -277,86 +267,3 @@ def inherit_OSM_wts(big_OSM, small_OSM, verbose=False):
   assert count == len(dict(small_OSM.named_parameters())), "Number of parameters copied failed"
   if verbose: print(f'count: {count}')
 
-class NAS_config:
-  '''
-  Class for loading the configurations of the NAS algorithms
-  '''
-  def __init__(self, cfg_file, sectionName):
-    self.sectionName = sectionName
-    infile = open(cfg_file,'r')
-    ymlcfg = yaml.safe_load(infile)
-    infile.close()
-    self.NAS_cfg = ymlcfg.get(self.sectionName,None)
-
-def compare_s1genotype(g1, g2):
-  for index, node1 in enumerate(g1):
-    tmp_list = g2[int(index/2)*2: (int(index/2) + 1)*2]
-    if node1 not in tmp_list:
-      return False
-  return True
-
-def compare_genotypes(arch1, arch2):
-  normal1, reduce1 = arch1.normal, arch1.reduce
-  normal2, reduce2 = arch2.normal, arch2.reduce
-  index = 0
-  while index < len(normal1):
-    if not (normal1[index] in normal2[index:index+2]) or not (normal1[index+1] in normal2[index:index+2]): return False
-    if not (reduce1[index] in reduce2[index:index+2]) or not (reduce1[index+1] in reduce2[index:index+2]): return False
-    index += 2
-  return True
-
-def search_genotype_list(arch, arch_list):
-  # Return True if present arch present in arch_list otherwise False
-  for each_arch in arch_list:
-    if compare_genotypes(arch, each_arch): return True
-  return False
-
-def search_dataframe(df, g):
-  if (not df.empty):
-    for index, row in df.iterrows():
-      if compare_s1genotype(row['genotype'].normal, g.normal):
-        if compare_s1genotype(row['genotype'].reduce, g.reduce):
-          return row
-  return None
-
-def converged(genotype_list):
-  g1 = genotype_list[0]
-  for g2 in genotype_list:
-    if not compare_s1genotype(g1, g2): return False
-  return True
-
-def discretize(alphas, arch_genotype, device):
-  genotype = genotypes.PRIMITIVES
-  normal_cell = arch_genotype.normal
-  reduction_cell = arch_genotype.reduce
-  
-  # Discretizing the normal cell
-  index = 0
-  offset = 0
-  new_normal = torch.zeros_like(alphas[0]).to(device)
-  while index < len(normal_cell):
-    op, cell = normal_cell[index]
-    idx = genotypes.PRIMITIVES.index(op)
-    new_normal[int(offset + cell)][idx] = 1
-    index += 1
-    op, cell = normal_cell[index]
-    idx = genotypes.PRIMITIVES.index(op)
-    new_normal[int(offset + cell)][idx] = 1
-    offset += (index // 2) + 2
-    index += 1
-  
-  # Discretizing the reduction cell
-  index = 0
-  offset = 0
-  new_reduce = torch.zeros_like(alphas[1]).to(device)
-  while index < len(reduction_cell):
-    op, cell = reduction_cell[index]
-    idx = genotypes.PRIMITIVES.index(op)
-    new_reduce[int(offset + cell)][idx] = 1
-    index += 1
-    op, cell = reduction_cell[index]
-    idx = genotypes.PRIMITIVES.index(op)
-    new_reduce[int(offset + cell)][idx] = 1
-    offset += (index // 2) + 2
-    index += 1
-  return [new_normal, new_reduce]

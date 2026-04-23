@@ -5,7 +5,6 @@ import json
 import lzma
 import time
 import matplotlib.pyplot as plt
-from thop import profile
 import numpy as np
 import torch
 from pymoo.indicators.hv import HV
@@ -13,7 +12,6 @@ import torchvision.transforms as transforms
 import os
 import pickle
 
-from model import NetworkCIFAR
 from indicators import r2
 
 
@@ -52,17 +50,26 @@ def store_metrics(architectures_evaluated, population, population_2, args, weigh
     ind = HV(ref_point=np.array([max_f1, max_f2, max_f3, max_f4]))
     population_array = np.array([ind for ind in population])
     hyp = ind(population_array)
-    statistics['hyp_log'].append(hyp.item())
+    if type(hyp) == np.ndarray:
+        statistics['hyp_log'].append(hyp.item())
+    else:
+        statistics['hyp_log'].append(hyp)
     # compute hypervolume 2 (std_loss, adv_loss)
     ind2 = HV(ref_point=np.array([max_f1, max_f2]))
     population_array2 = np.array([[ind[0], ind[1]] for ind in population_2])
     hyp2 = ind2(population_array2)
-    statistics['hyp2_log'].append(hyp2.item())
+    if type(hyp2) == np.ndarray:
+        statistics['hyp2_log'].append(hyp2.item())
+    else:
+        statistics['hyp2_log'].append(hyp2)
     # compute r2
     z_ref = np.zeros(4)
     nadir_point = np.array([max_f1, max_f2, max_f3, max_f4])
     r2_population = r2(population, weights_r2[args.n_population], nadir_point, z_ref)
-    statistics['r2_log'].append(r2_population.item())
+    if type(r2_population) == np.ndarray:
+        statistics['r2_log'].append(r2_population.item())
+    else:
+        statistics['r2_log'].append(r2_population)
     row_hyp = ['nevonas', args.dataset, 'FGSM', architectures_evaluated, 'hv', hyp, args.save_dir]
     row_r2 = ['nevonas', args.dataset, 'FGSM', architectures_evaluated, 'r2', r2_population, args.save_dir]
     row_hyp2 = ['nevonas', args.dataset, 'FGSM', architectures_evaluated, 'hv_2obj', hyp2, args.save_dir]
