@@ -73,7 +73,8 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
                                    env=env_worker)
 
         try:
-            process.communicate(timeout=args.timestamp * 60)
+            time_stamp_individual = time.time()
+            process.communicate(timeout=args.timestamp_individual * 60)
 
             if process.returncode == 0 and os.path.exists(result_file):
                 with open(result_file, 'r') as f:
@@ -82,7 +83,7 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
                     return_dict[i] = res_dict
                 os.remove(result_file)
                 clean_file = True
-                logging.info(f"Gen {gen} Individual {i}: std_acc {return_dict[i]['std_acc']:.2f}, adv_acc {return_dict[i]['adv_acc']:.2f} std_loss {return_dict[i]['std_loss']:.3f}, adv_loss {return_dict[i]['adv_loss']:.3f}, flops {return_dict[i]['flops']:.2f}, params {return_dict[i]['params']:.2f}")
+                logging.info(f"Gen {gen} Individual {i}: std_acc {return_dict[i]['std_acc']:.2f}, adv_acc {return_dict[i]['adv_acc']:.2f} std_loss {return_dict[i]['std_loss']:.3f}, adv_loss {return_dict[i]['adv_loss']:.3f}, flops {return_dict[i]['flops']:.2f}, params {return_dict[i]['params']:.2f}, time {time.strftime('%H%M%S', time.gmtime(time.time() - time_stamp_individual))}")
             else:
                 logging.info(f"Gen {gen} Individual {i} failed with return code {process.returncode}")
                 if process.returncode < 0 or process.returncode > 128:
@@ -91,10 +92,10 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
                     time.sleep(10)
 
         except subprocess.TimeoutExpired:
-            logging.info(f"Individual {i} exceed timestamp: {args.timestamp}, it will be removed from the population. If you want to increase the timestamp, please set --timestamp argument to a higher value (in minutes).")
+            logging.info(f"Individual {i} exceed timestamp: {args.timestamp_individual}, it will be removed from the population. If you want to increase the timestamp, please set --timestamp_individual argument to a higher value (in minutes).")
             process.kill()
             try:
-                process.communicate(timeout=args.timestamp * 60)
+                process.communicate(timeout=10)
             except subprocess.TimeoutExpired:
                 logging.info(f"Failed to kill process for individual {i} after timeout.")
         except KeyboardInterrupt:
@@ -158,8 +159,6 @@ def train_supernet(pop, gen, args, nadir_point, ideal_point, warmup=False):
     else:
         raise ValueError(f"Unknown algorithm: {args.algorithm}")
 
-    individuals_X = [individual.X.copy() for individual in pop]
-
     process_args = [
         sys.executable, "-X", "dev", "-u", file,
         '--gen', str(gen),
@@ -186,9 +185,13 @@ def train_supernet(pop, gen, args, nadir_point, ideal_point, warmup=False):
         '--nadir_point', np.array2string(nadir_point, separator=',', max_line_width=np.inf),
         '--ideal_point', np.array2string(ideal_point, separator=',', max_line_width=np.inf),
     ]
-    for i, individual_X in enumerate(individuals_X):
-        process_args.append(f'--individual_x_{i}')
-        process_args.append(np.array2string(individual_X, separator=',', max_line_width=np.inf))
+
+    individuals_X_dict = {f'individual_{i}': np.array2string(individual.X, separator=',', max_line_width=np.inf) for i, individual in enumerate(pop)}
+    with open(args.save_path_final_model + os.sep + f"individuals_X_gen_{gen}.json", 'w') as f:
+        json.dump(individuals_X_dict, f)
+    process_args.append('--individuals_X_path')
+    process_args.append(str(args.save_path_final_model) + os.sep + f"individuals_X_gen_{gen}.json")
+
     if args.algorithm == 'r2-emoa-one-shot':
         # Pass the path to save the supernet model, so that the individual worker can load it for evaluating the individuals
         process_args.append('--supernet_path')
@@ -218,7 +221,7 @@ def train_supernet(pop, gen, args, nadir_point, ideal_point, warmup=False):
 
         try:
             time_stamp_gen = time.time()
-            process.communicate(timeout=args.timestamp * 60)
+            process.communicate(timeout=args.timestamp_supernet * 60)
 
             if process.returncode != 0:
                 logging.info(f"Gen {gen} training failed with return code {process.returncode}")
@@ -226,12 +229,14 @@ def train_supernet(pop, gen, args, nadir_point, ideal_point, warmup=False):
                     # Process was killed by the system (segmentation fault, out of memory, etc.)
                     # Wait a bit to ensure the process has terminated and released resources before starting the next one
                     time.sleep(5)
+            else:
+                logging.info(f"Gen {gen} training completed successfully in {time.gmtime(time.time() - time_stamp_gen)} minutes.")
 
         except subprocess.TimeoutExpired:
-            logging.info(f"Gen {gen} training exceed timestamp: {args.timestamp}, it will be skipped. If you want to increase the timestamp, please set --timestamp argument to a higher value (in minutes).")
+            logging.info(f"Gen {gen} training exceed timestamp: {args.timestamp_supernet}, it will be skipped. If you want to increase the timestamp, please set --timestamp_supernet argument to a higher value (in minutes).")
             process.kill()
             try:
-                process.communicate(timeout=args.timestamp * 60)
+                process.communicate(timeout=10)
             except subprocess.TimeoutExpired:
                 logging.info(f"Failed to kill process for generation {gen} after timeout.")
         except KeyboardInterrupt:

@@ -1,4 +1,5 @@
 import argparse
+import json
 import logging
 import os
 import random
@@ -187,21 +188,15 @@ if __name__ == '__main__':
     args.add_argument('--nadir_point', type=str, required=True, help='string representation of the nadir point')
     args.add_argument('--ideal_point', type=str, required=True, help='string representation of the ideal point')
     args.add_argument('--supernet_path', type=str, required=False, help='path to pretrained supernet to load before training the individual')
+    args.add_argument('--individuals_X_path', type=str, required=False, help='path to the file containing the individuals X values for the current generation')
     args.add_argument('--report_freq', type=float, required=False, default=45, help='report frequency during training')
     args, unknown_args = args.parse_known_args()
 
-    individual_args = {key: value for key, value in zip(unknown_args[::2], unknown_args[1::2]) if
-                       key.startswith('--individual_x_')}
-
-    individuals_X = []
-    for key in individual_args:
-        if key.startswith('--individual_x_'):
-            individual_X = np.fromstring(individual_args[key].replace('[', '').replace(']', ''), sep=',')
-            id = int(key.split('--individual_x_')[1])
-            individuals_X.append((id, individual_X))
-
-    individuals_X.sort(key=lambda x: x[0])
-    individuals_X = [x[1] for x in individuals_X]
+    with open(args.individuals_X_path, 'r') as f:
+        individuals_X = []
+        individuals_X_dict = json.load(f)
+        for ind in individuals_X_dict:
+            individuals_X.append(np.fromstring(individuals_X_dict[ind].replace('[', '').replace(']', ''), sep=',', dtype=np.float32))
 
     nadir_point = np.fromstring(args.nadir_point.replace('[', '').replace(']', ''), sep=',')
     ideal_point = np.fromstring(args.ideal_point.replace('[', '').replace(']', ''), sep=',')
@@ -220,3 +215,5 @@ if __name__ == '__main__':
     model, criterion, optimizer, scheduler, train_queue, valid_queue, weights_r2 = prepare_args_supernet(args)
 
     train_supernet(individuals_X, train_queue, model, criterion, optimizer, scheduler, args.gen, args, weights_r2, nadir_point, ideal_point, warmup=args.warmup)
+
+    os.remove(args.individuals_X_path)

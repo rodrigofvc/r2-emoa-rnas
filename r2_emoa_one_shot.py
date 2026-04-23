@@ -39,7 +39,9 @@ def prepare_args_supernet(args_):
         time_search = time.time()
         pop = initial_population(args.n_population, alphas_dim, args.objectives, args)
         logging.info(f">>>> Initial population of size {len(pop)} created.")
-
+    print("Running with config:")
+    for arg in vars(args):
+        print(f"{arg}: {getattr(args, arg)}")
     weights_r2 = utils.get_weights_r2(args.n_population)
 
     return args, weights_r2, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, architectures_evaluated, initial_generation, pop, statistics, time_search
