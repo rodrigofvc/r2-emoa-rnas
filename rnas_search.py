@@ -61,7 +61,8 @@ if __name__ == '__main__':
     parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
     parser.add_argument('--grad_clip', type=float, default=5.0, help='gradient clipping')
     parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
-    parser.add_argument('--timestamp', type=int, default=6, help='timestamp in minutes for training/eval each architecture')
+    parser.add_argument('--timestamp_supernet', type=int, default=45, help='timestamp in minutes for training supernet (including warmup) per generation in one-shot nas')
+    parser.add_argument('--timestamp_individual', type=int, default=7, help='timestamp in minutes for training/eval each architecture')
     parser.add_argument('--debug_cuda', action='store_true', default=False, help='Enable CUDA_LAUNCH_BLOCKING for debugging')
     parser.add_argument('--increase_epochs', action='store_true', default=False, help='Increase the number of epochs to train the supernet and individuals as generations progress')
     parser.add_argument('--reload_dir', type=str, default=None, help='Directory to reload the experiment from if --reload is set')
@@ -76,10 +77,6 @@ if __name__ == '__main__':
     if os.path.exists("logs"):
         shutil.rmtree("logs")
     os.makedirs("logs", exist_ok=True)
-
-    print("Running with config:")
-    for key, value in vars(args).items():
-        print(f"{key}: {value}")
 
     if args.reload_dir is None:
         results_dir = create_experiment_dir(args.algorithm, args.dataset, args.seed)
