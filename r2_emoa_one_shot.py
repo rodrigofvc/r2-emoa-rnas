@@ -46,7 +46,7 @@ def prepare_args_supernet(args_):
     for arg in vars(args):
         print(f"{arg}: {getattr(args, arg)}")
     weights_r2 = utils.get_weights_r2(args.n_population)
-    if args.supernet_path is not None and initial_generation == 0:
+    if args.pretrained_supernet is not None and initial_generation == 0:
         logging.info(f">>>> Loading supernet weights from {args.pretrained_supernet}...")
         shutil.copy(args.pretrained_supernet, args.save_path_final_model + os.sep + 'super-net.pt')
         logging.info(f">>>> Supernet weights loaded.")
