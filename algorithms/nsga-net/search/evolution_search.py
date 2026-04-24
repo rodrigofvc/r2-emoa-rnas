@@ -244,7 +244,8 @@ def main():
         start_time_gen = time.time()
         np.random.seed(args.seed + gen)
         random.seed(args.seed + gen)
-
+        if args.increase_epochs and gen % 10 == 0 and gen != 0:
+            algorithm.problem.args_problem.epochs += 5
         pop = algorithm.ask()
         algorithm.evaluator.eval(problem, pop)
         pop_obj = pop.get("F")
@@ -255,14 +256,15 @@ def main():
         hyp, hyp_2, r2 = store_metrics(algorithm.problem.dataset, algorithm.problem._n_evaluated,
                                        np.array(algorithm.problem.archive), np.array(algorithm.problem.archive_2),
                                        algorithm.problem.save_dir, algorithm.problem.statistics)
+        store_population_data(gen, algorithm.problem._n_evaluated, pop_obj, pop_X, algorithm.problem.archive, algorithm.problem.archive_2,
+                                    algorithm.problem.statistics, elapsed_time, algorithm.problem.save_dir)
         plot_hypervolume(algorithm.problem.statistics, algorithm.problem.save_dir)
         plot_hypervolume2(algorithm.problem.statistics, algorithm.problem.save_dir)
         plot_r2(algorithm.problem.statistics, algorithm.problem.save_dir)
-
+        save_archive_losses(np.array(problem.archive_2), args.save)
+        plot_archive_losses(np.array(problem.archive_2), args.save)
         elapsed_time += time.time() - start_time_gen
         algorithm.problem.elapsed_time = elapsed_time
-        store_population_data(gen, algorithm.problem._n_evaluated, pop_obj, pop_X, algorithm.problem.archive, algorithm.problem.archive_2,
-                                    algorithm.problem.statistics, elapsed_time, algorithm.problem.save_dir)
 
         # report generation info to files
         logging.info(">>>>>> generation = {}".format(gen))
