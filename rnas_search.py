@@ -2,6 +2,7 @@ import os
 import argparse
 import shutil
 import logging
+from pathlib import Path
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "" # Disable GPU usage for this script, as it may cause issues with multiprocessing on some platforms
 
@@ -80,6 +81,22 @@ if __name__ == '__main__':
 
     if args.reload_dir is None:
         results_dir = create_experiment_dir(args.algorithm, args.dataset, args.seed)
+    elif args.reload_dir == 'auto-last':
+        # reload the last experiment in the results directory for the given algorithm and dataset
+        base_dir = Path("results") / args.algorithm / args.dataset
+        # base_dir = Path(".")
+
+        if not base_dir.exists():
+            raise ValueError("No experiments found for the given algorithm and dataset")
+
+        dirs = [d for d in base_dir.iterdir() if d.is_dir()]
+
+        if not dirs:
+            raise ValueError("No experiments found for the given algorithm and dataset")
+
+        latest_dir = max(dirs, key=lambda d: d.stat().st_mtime)
+
+        results_dir = str(latest_dir)
     else:
         results_dir = args.reload_dir
     print(f'Results dir: {results_dir}' )

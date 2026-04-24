@@ -1,4 +1,7 @@
+import os
 import random
+import shutil
+
 import numpy as np
 import time
 import logging
@@ -43,6 +46,11 @@ def prepare_args_supernet(args_):
     for arg in vars(args):
         print(f"{arg}: {getattr(args, arg)}")
     weights_r2 = utils.get_weights_r2(args.n_population)
+    if args.supernet_path is not None and initial_generation == 0:
+        logging.info(f">>>> Loading supernet weights from {args.pretrained_supernet}...")
+        shutil.copy(args.pretrained_supernet, args.save_path_final_model + os.sep + 'super-net.pt')
+        logging.info(f">>>> Supernet weights loaded.")
+
 
     return args, weights_r2, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, architectures_evaluated, initial_generation, pop, statistics, time_search
 
@@ -99,7 +107,7 @@ def r2_emoa_oneshot_nas(args_):
             f">>>> Gen {generation} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_epoch))} (HH:MM:SS)")
 
         parents = tournament_selection(pop, n_select=args.n_population // 2, tournament_size=5)
-        offsprings = binary_crossover(parents, n_childs=args.n_population*2, eta=args.eta_cross, prob_cross=args.prob_cross)
+        offsprings = binary_crossover(parents, n_childs=args.n_population, eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
         # Evaluate offspring
