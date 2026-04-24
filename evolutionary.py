@@ -1,4 +1,4 @@
-import random
+import random as rd
 import numpy as np
 from individual import Individual
 from indicators import contribution_r2
@@ -8,7 +8,8 @@ def tournament_selection(pop_, n_select, tournament_size=5):
     winners = []
     pop = [ind for ind in pop_ if ind.feasible]
     while len(winners) < n_select:
-        P = random.sample(pop, k=tournament_size)
+        print (f'len(winners) = {len(winners)}, len(pop) = {len(pop)}')
+        P = rd.sample(pop, k=tournament_size)
         winner = min(P, key=lambda ind: ind.c_r2)
         if winner not in winners:
             winners.append(winner)
@@ -17,10 +18,10 @@ def tournament_selection(pop_, n_select, tournament_size=5):
 def point_crossover(parents, n_childs, prob_cross):
     offsprings = []
     while len(offsprings) < n_childs:
-        parent1 = random.choice(parents)
-        parent2 = random.choice(parents)
+        parent1 = rd.choice(parents)
+        parent2 = rd.choice(parents)
         if np.random.rand() < prob_cross and not np.array_equal(parent1.X, parent2.X):
-            point = random.randint(1, parent1.X.shape[0] - 1)
+            point = rd.randint(1, parent1.X.shape[0] - 1)
             child1_X = np.concatenate((parent1.X[:point], parent2.X[point:]))
             child2_X = np.concatenate((parent2.X[:point], parent1.X[point:]))
             offsprings.append(Individual(X=child1_X.copy(), k=parent1.k, search_space='discrete'))
@@ -32,8 +33,8 @@ def binary_crossover(pop, n_childs, eta, prob_cross):
     offsprings = []
     n_var = pop[0].X.shape[0]
     while len(offsprings) < n_childs:
-        parent1 = random.choice(pop)
-        parent2 = random.choice(pop)
+        parent1 = rd.choice(pop)
+        parent2 = rd.choice(pop)
         if np.random.rand() < prob_cross and not np.array_equal(parent1.X, parent2.X):
             child1_X = np.empty(n_var, dtype=np.float32)
             child2_X = np.empty(n_var, dtype=np.float32)
