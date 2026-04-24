@@ -78,7 +78,7 @@ def r2_emoa_oneshot_nas(args_):
         statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'),
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': [],
                   'lr_log': []}
-        evaluate_population_multiprocessing(args.n_population,0, pop, weights_r2, nadir_point, ideal_point, args)
+        evaluate_population_multiprocessing(0, pop, weights_r2, nadir_point, ideal_point, args)
         update_ref_points(pop, nadir_point, ideal_point)
         archive = archive_update_pq(archive, pop)
         archive_losses = archive_update_pq(archive_losses, pop, k=2)
@@ -103,7 +103,7 @@ def r2_emoa_oneshot_nas(args_):
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
         # Evaluate offspring
-        evaluate_population_multiprocessing(args.n_population, generation, mutation, weights_r2, nadir_point, ideal_point, args)
+        evaluate_population_multiprocessing(generation, mutation, weights_r2, nadir_point, ideal_point, args)
         update_ref_points(mutation, nadir_point, ideal_point)
         logging.info(
             f"Tiempo total de entrenamiento/validacion {args.generations}: {time.strftime('%H:%M:%S', time.gmtime(time.time() - start))} (HH:MM:SS)")
@@ -122,5 +122,5 @@ def r2_emoa_oneshot_nas(args_):
         utils.store_population_data(generation, pop, archive, archive_accuracy, archive_losses, statistics, nadir_point, ideal_point, time_search, args.save_path_final_architect)
         logging.info(f">>>> Gen {generation} | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
     logging.info(
-        f">>>> Total search time: ({(time.time() - time_search) // 86400:02.0f}:{time.strftime('%H:%M:%S)', time.gmtime(time.time() - time_search))} (DD:HH:MM:SS)")
+        f">>>> Total search time: ({(time.time() - time_search) // 86400:02.0f}:{time.strftime('%H:%M:%S', time.gmtime(time.time() - time_search))} (DD:HH:MM:SS)")
     return archive, archive_accuracy, archive_losses, statistics

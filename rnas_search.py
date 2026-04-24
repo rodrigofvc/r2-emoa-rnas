@@ -127,3 +127,24 @@ if __name__ == '__main__':
         plot_r2(statistics, args.save_path_final_architect)
         save_statistics_to_csv(statistics, args.save_path_final_architect)
         logging.info(f"Experiment completed and results saved in {results_dir}")
+    elif args.algorithm == 'random-search':
+        from random_search import random_search_rnas
+        if args.reload_dir is None:
+            save_params(args, args.save_path_final_architect)
+        archive, archive_accuracy, archive_losses, statistics = random_search_rnas(
+            args_=args
+        )
+        for i, individual in enumerate(archive):
+            save_architecture(i, individual, args.save_path_final_architect)
+        save_archive(archive, args.save_path_final_architect)
+        save_archive_accuracy(archive_accuracy, args.save_path_final_architect)
+        save_archive_losses(archive_losses, args.save_path_final_architect)
+        plot_archive_losses(archive_losses, args.save_path_final_architect)
+        plot_archive_accuracy(archive_accuracy, args.save_path_final_architect)
+        plot_hypervolume(statistics, args.save_path_final_architect)
+        plot_hypervolume2(statistics, args.save_path_final_architect)
+        plot_r2(statistics, args.save_path_final_architect)
+        save_statistics_to_csv(statistics, args.save_path_final_architect)
+        logging.info(f"Experiment completed and results saved in {results_dir}")
+    else:
+        raise ValueError(f"Unknown algorithm: {args.algorithm}")
