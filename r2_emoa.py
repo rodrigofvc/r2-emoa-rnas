@@ -86,7 +86,7 @@ def initial_population(n_population, alphas_dim, k, args):
 def r2_emoa_rnas(args_):
     args, weights_r2, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, architectures_evaluated, initial_generation, pop, statistics, time_search = prepare_args_standard(args_)
     if initial_generation == 0:
-        evaluate_population_multiprocessing(args.n_population, 0, pop, weights_r2, nadir_point, ideal_point, args)
+        evaluate_population_multiprocessing(0, pop, weights_r2, nadir_point, ideal_point, args)
         architectures_evaluated += args.n_population
         update_ref_points(pop, nadir_point, ideal_point)
         archive = archive_update_pq(archive, pop)
@@ -110,7 +110,7 @@ def r2_emoa_rnas(args_):
             offsprings = binary_crossover(parents, n_childs=args.n_population, eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
 
-        evaluate_population_multiprocessing(args.n_population, generation, mutation, weights_r2, nadir_point, ideal_point, args)
+        evaluate_population_multiprocessing(generation, mutation, weights_r2, nadir_point, ideal_point, args)
         architectures_evaluated += args.n_population
         update_ref_points(mutation, nadir_point, ideal_point)
 
