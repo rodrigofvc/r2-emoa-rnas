@@ -4,6 +4,7 @@ import os
 import random
 import shutil
 import sys
+from pathlib import Path
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 from pymoo.core.termination import NoTermination
@@ -96,6 +97,22 @@ if args.reload_dir is not None:
         args_dict = json.load(f)
         args_dict['reload_dir'] = args.reload_dir
         args = argparse.Namespace(**args_dict)
+elif args.reload_dir == 'auto-last':
+    # reload the last experiment in the results directory for the given algorithm and dataset
+    base_dir = Path(".")
+
+    if not base_dir.exists():
+        raise ValueError("No experiments found for the given algorithm and dataset")
+
+    dirs = [d for d in base_dir.iterdir() if d.is_dir() and d.name.startswith("search-")]
+
+    if not dirs:
+        raise ValueError("No experiments found for the given algorithm and dataset")
+
+    latest_dir = max(dirs, key=lambda d: d.stat().st_mtime)
+
+    args.save = str(latest_dir)
+    args.reload_dir = args.save
 else:
     args.save = 'search-{}-{}-{}'.format(args.save, args.search_space, time.strftime("%Y%m%d-%H%M%S"))
     utils.create_exp_dir(args.save)

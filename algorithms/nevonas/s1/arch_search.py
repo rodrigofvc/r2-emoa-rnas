@@ -1,6 +1,7 @@
 import os
 import shutil
 import sys
+from pathlib import Path
 
 from pymoo.operators.sampling.rnd import FloatRandomSampling
 
@@ -167,6 +168,24 @@ if args.reload_dir is None:
   args.save_dir = DIR
   utils.create_exp_dir(DIR)
   save_params(args, DIR)
+elif args.reload_dir == 'auto-last':
+  # reload the last experiment in the results directory for the given algorithm and dataset
+  base_dir = Path(".")
+
+  if not base_dir.exists():
+    raise ValueError("No experiments found for the given algorithm and dataset")
+
+  dirs = [d for d in base_dir.iterdir() if d.is_dir() and d.name.startswith("search-")]
+
+  if not dirs:
+    raise ValueError("No experiments found for the given algorithm and dataset")
+
+  latest_dir = max(dirs, key=lambda d: d.stat().st_mtime)
+
+  DIR = str(latest_dir)
+  args.reload_dir = DIR
+  args.save_dir = DIR
+
 else:
   DIR = args.reload_dir
 
