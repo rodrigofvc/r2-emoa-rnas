@@ -170,6 +170,7 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, gen
                     f'>>>> Gen {gen} | Epoch {epoch}/{epochs} | Batch {n_batch}/{len(train_queue)} | Loss {loss:.4f} | Std Acc {std_acc:.2f}% | Adv Acc {adv_acc:.2f}% ')
         scheduler.step()
         torch.save(model, args.supernet_path)
+        torch.save(model, args.supernet_path.replace('.pt', '-backup.pt'))
 
 if __name__ == '__main__':
     args = argparse.ArgumentParser()

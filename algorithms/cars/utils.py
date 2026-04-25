@@ -2,7 +2,9 @@ import argparse
 import csv
 import gc
 import json
+import logging
 import lzma
+import shutil
 import time
 
 import numpy as np
@@ -129,7 +131,15 @@ def save_log_train(arch_path, log):
 
 # Load the supernet model from the specified path
 def load_supernet(model_path):
-    model = torch.load(model_path, weights_only=False)
+    import torch
+    try:
+        model = torch.load(model_path, weights_only=False)
+    except Exception as e:
+        logging.error(f"Error loading supernet model from {model_path}: {e}")
+        model_path_backup = model_path.replace('.pt', '-backup.pt')
+        logging.info(f"Trying to load backup supernet model from {model_path_backup}...")
+        model = torch.load(model_path_backup, weights_only=False)
+        shutil.copy(model_path_backup, model_path)
     return model
 
 def save_architecture(i, individual, architect_path):
@@ -283,46 +293,6 @@ def data_transforms_cifar10(args):
         ])
     return train_transform, valid_transform
 
-def get_model_metrics_dep(genotype, model, discrete=False):
-    if not discrete:
-        # create a discretized version of the model using the provided genotype and model
-        discretized_model = NetworkCIFAR(model.C, model.num_classes, model.layers, auxiliary=False, genotype=genotype)
-    else:
-        discretized_model = model
-
-    params_num = sum(p.numel() for p in discretized_model.parameters() if p.requires_grad)
-    params = round(float(params_num) / 1e6, 4)
-
-    def get_flops():
-        current_res = 32
-        macs = 0
-
-        for m in discretized_model.modules():
-            if isinstance(m, nn.Conv2d):
-                k = m.kernel_size[0]
-                s = m.stride[0]
-                p = m.padding[0]
-                d = m.dilation[0]
-
-                out_res = ((current_res + 2 * p - d * (k - 1) - 1) // s) + 1
-
-                # MACs = (k_h * k_w * in_c * out_c / groups) * out_h * out_w
-                layer_macs = (k * k * m.in_channels * m.out_channels // m.groups) * (out_res * out_res)
-                macs += layer_macs
-
-                if s > 1:
-                    current_res = out_res
-
-            elif isinstance(m, nn.Linear):
-                macs += m.in_features * m.out_features
-
-        return macs
-
-    total_macs = get_flops()
-    flops = round(float(total_macs) / 1e6, 4)
-
-    return flops, params
-
 def get_model_metrics(model_):
     model = copy.deepcopy(model_)
     params_num = sum(p.numel() for p in model.parameters() if p.requires_grad)
@@ -373,7 +343,10 @@ def store_population_data(generation, pop, archive, archive_accuracy, archive_lo
     }
     with open(population_data_dir, 'w') as f:
         json.dump(population_data, f, indent=4)
-
+    population_data_dir_backup = save_path_final_architect + os.sep + 'population_data_backup.json'
+    # store a backup
+    with open(population_data_dir_backup, 'w') as f:
+        json.dump(population_data, f, indent=4)
 
 
 # read the json file with the parameters used for training the architecture and return it as a dictionary
@@ -381,8 +354,18 @@ def load_execution(args_dir):
     with open(args_dir + os.sep + 'params.json', 'r') as f:
         args_dict = json.load(f)
         args = argparse.Namespace(**args_dict)
-    with open(args_dir + os.sep + 'population_data.json', 'r') as f:
-        population_data = json.load(f)
+    try:
+        with open(args_dir + os.sep + 'population_data.json', 'r') as f:
+            population_data = json.load(f)
+    except Exception as e:
+        # if there is an error loading the main population data file, try to load the backup
+        logging.info(
+            f">>>> Error loading population data from {args_dir + os.sep + 'population_data.json'}: {e}. Trying to load backup...")
+        with open(args_dir + os.sep + 'population_data_backup.json', 'r') as f:
+            population_data = json.load(f)
+        # after loading the backup, copy it to the main file to ensure we have a valid population data file for the next reloads
+        shutil.copy(args_dir + os.sep + 'population_data_backup.json', args_dir + os.sep + 'population_data.json')
+    finally:
         generation = population_data['generation']
         pop = [create_from_json(ind_json, args.search_space) for ind_json in population_data['population']]
         archive = [create_from_json(ind_json, args.search_space) for ind_json in population_data['archive']]

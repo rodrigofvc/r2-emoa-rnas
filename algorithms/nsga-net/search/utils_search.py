@@ -1,7 +1,9 @@
 import argparse
 import csv
 import json
+import logging
 import lzma
+import shutil
 import time
 
 import numpy as np
@@ -328,13 +330,28 @@ def store_population_data(generation, n_evaluated, pop_obj, pop_X, archive, arch
     }
     with open(population_data_dir, 'w') as f:
         json.dump(population_data, f, indent=4)
+    # store a backup
+    population_data_dir_backup = save_dir + os.sep + 'population_data_backup.json'
+    with open(population_data_dir_backup, 'w') as f:
+        json.dump(population_data, f, indent=4)
+
 
 def load_execution(args_dir):
     with open(args_dir + os.sep + 'params.json', 'r') as f:
         args_dict = json.load(f)
         args = argparse.Namespace(**args_dict)
-    with open(args_dir + os.sep + 'population_data.json', 'r') as f:
-        population_data = json.load(f)
+    try:
+        with open(args_dir + os.sep + 'population_data.json', 'r') as f:
+            population_data = json.load(f)
+    except Exception as e:
+        # if there is an error loading the main population data file, try to load the backup
+        logging.info(
+            f">>>> Error loading population data from {args_dir + os.sep + 'population_data.json'}: {e}. Trying to load backup...")
+        with open(args_dir + os.sep + 'population_data_backup.json', 'r') as f:
+            population_data = json.load(f)
+        # after loading the backup, copy it to the main file to ensure we have a valid population data file for the next reloads
+        shutil.copy(args_dir + os.sep + 'population_data_backup.json', args_dir + os.sep + 'population_data.json')
+    finally:
         generation = population_data['generation']
         n_evaluated = population_data['n_evaluated']
         pop_obj = np.array(population_data['pop_obj'])

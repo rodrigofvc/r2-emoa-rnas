@@ -2,7 +2,9 @@ import argparse
 import copy
 import csv
 import json
+import logging
 import lzma
+import shutil
 import time
 import matplotlib.pyplot as plt
 import numpy as np
@@ -90,16 +92,15 @@ def save_supernet(model, model_path):
         model.to('cuda')
 
 
-def load_model(model_path):
-    state_dict = torch.load(model_path, weights_only=False)
-    if torch.cuda.is_available():
-        state_dict.to('cuda')
-    return state_dict
-
 def load_supernet(model_path):
-    model = torch.load(model_path, map_location='cpu', weights_only=False)
-    if torch.cuda.is_available():
-        model.to('cuda')
+    try:
+        model = torch.load(model_path, map_location='cpu', weights_only=False)
+    except Exception as e:
+        logging.error(f"Error loading supernet model from {model_path}: {e}")
+        model_path_backup = model_path.replace('.pt', '-backup.pt')
+        logging.info(f"Trying to load backup supernet model from {model_path_backup}...")
+        model = torch.load(model_path_backup, weights_only=False)
+        shutil.copy(model_path_backup, model_path)
     return model
 
 def save_architecture(i, individual, architect_path):
@@ -178,13 +179,26 @@ def store_population_data(generation, n_evaluated, pop_obj, pop_X, archive, arch
     }
     with open(population_data_dir, 'w') as f:
         json.dump(population_data, f, indent=4)
+    # store a backup
+    population_data_dir_backup = save_dir + os.sep + 'population_data_backup.json'
+    with open(population_data_dir_backup, 'w') as f:
+        json.dump(population_data, f, indent=4)
 
 def load_execution(args_dir):
     with open(args_dir + os.sep + 'params.json', 'r') as f:
         args_dict = json.load(f)
         args = argparse.Namespace(**args_dict)
-    with open(args_dir + os.sep + 'population_data.json', 'r') as f:
-        population_data = json.load(f)
+    try:
+        with open(args_dir + os.sep + 'population_data.json', 'r') as f:
+            population_data = json.load(f)
+    except Exception as e:
+        # if there is an error loading the main population data file, try to load the backup
+        logging.info(f">>>> Error loading population data from {args_dir + os.sep + 'population_data.json'}: {e}. Trying to load backup...")
+        with open(args_dir + os.sep + 'population_data_backup.json', 'r') as f:
+            population_data = json.load(f)
+        # after loading the backup, copy it to the main file to ensure we have a valid population data file for the next reloads
+        shutil.copy(args_dir + os.sep + 'population_data_backup.json', args_dir + os.sep + 'population_data.json')
+    finally:
         generation = population_data['generation']
         n_evaluated = population_data['n_evaluated']
         pop_obj = np.array(population_data['pop_obj'])
@@ -197,7 +211,7 @@ def load_execution(args_dir):
         generation = int(generation)
         generation += 1 # We want to start from the next generation after the one we loaded
     args.epochs_train_supernet = args.epochs_train_supernet + (generation // 10) * 5 if args.increase_epochs else args.epochs_train_supernet
-    print(f"Updated epochs for trainin supernet: {args.epochs_train_supernet}")
+    print(f"Updated epochs for training supernet: {args.epochs_train_supernet}")
     return args, statistics, generation, n_evaluated, pop_obj, pop_X, archive, archive_2, elapsed_time
 
 
