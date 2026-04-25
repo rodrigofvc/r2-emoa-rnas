@@ -1,7 +1,9 @@
 import argparse
 import csv
 import json
+import logging
 import lzma
+import shutil
 import time
 
 import numpy as np
@@ -126,7 +128,14 @@ def save_log_train(arch_path, log):
 # Load the supernet model from the specified path
 def load_supernet(model_path):
     import torch
-    model = torch.load(model_path, weights_only=False)
+    try:
+        model = torch.load(model_path, weights_only=False)
+    except Exception as e:
+        logging.error(f"Error loading supernet model from {model_path}: {e}")
+        model_path_backup = model_path.replace('.pt', '-backup.pt')
+        logging.info(f"Trying to load backup supernet model from {model_path_backup}...")
+        model = torch.load(model_path_backup, weights_only=False)
+        shutil.copy(model_path_backup, model_path)
     return model
 
 def save_architecture(i, individual, architect_path):
@@ -335,6 +344,10 @@ def store_population_data(generation, pop, archive, archive_accuracy, archive_lo
     }
     with open(population_data_dir, 'w') as f:
         json.dump(population_data, f, indent=4)
+    # store a backup
+    population_data_dir_backup = save_path_final_architect + os.sep + 'population_data_backup.json'
+    with open(population_data_dir_backup, 'w') as f:
+        json.dump(population_data, f, indent=4)
 
 
 
@@ -343,8 +356,17 @@ def load_execution(args_dir):
     with open(args_dir + os.sep + 'params.json', 'r') as f:
         args_dict = json.load(f)
         args = argparse.Namespace(**args_dict)
-    with open(args_dir + os.sep + 'population_data.json', 'r') as f:
-        population_data = json.load(f)
+    try:
+        with open(args_dir + os.sep + 'population_data.json', 'r') as f:
+            population_data = json.load(f)
+    except Exception as e:
+        # if there is an error loading the main population data file, try to load the backup
+        logging.info(f">>>> Error loading population data from {args_dir + os.sep + 'population_data.json'}: {e}. Trying to load backup...")
+        with open(args_dir + os.sep + 'population_data_backup.json', 'r') as f:
+            population_data = json.load(f)
+        # after loading the backup, copy it to the main file to ensure we have a valid population data file for the next reloads
+        shutil.copy(args_dir + os.sep + 'population_data_backup.json', args_dir + os.sep + 'population_data.json')
+    finally:
         generation = population_data['generation']
         pop = [create_from_json(ind_json, args.search_space) for ind_json in population_data['population']]
         archive = [create_from_json(ind_json, args.search_space) for ind_json in population_data['archive']]

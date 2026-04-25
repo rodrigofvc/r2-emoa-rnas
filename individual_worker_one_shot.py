@@ -46,7 +46,8 @@ def get_model_from_individual(individual_X, args):
     k = sum(2 + i for i in range(args.steps))
     alphas_dim = (k, len(PRIMITIVES))
 
-    model = torch.load(args.supernet_path, map_location=args.device, weights_only=False)
+    model = utils.load_supernet(args.supernet_path)
+    model = model.to(args.device)
 
     individual_architect = unpack_alphas(individual_X, alphas_dim, args)
     model.update_arch_parameters(individual_architect)
