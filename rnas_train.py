@@ -44,7 +44,7 @@ def prepare_args(args_, genotype):
         while j < len(sorted_files):
             most_recent = sorted_files[j]
             try:
-                model = torch.load(args_.reload_dir + os.sep + most_recent[1], map_location='cpu')
+                model = torch.load(args_.reload_dir + os.sep + most_recent[1], map_location='cpu', weights_only=False)
             except Exception as e:
                 logging.warning(f"Failed to load model from {most_recent[1]}: {e}, loading previous model if available.")
                 j += 1
