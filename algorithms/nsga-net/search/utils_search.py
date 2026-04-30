@@ -325,15 +325,15 @@ def store_population_data(generation, n_evaluated, pop_obj, pop_X, archive, arch
     for ind in archive:
         genome = convert(ind)
         genotype = decode(genome, args.steps, args.multiplier)
-        archive_genotype.append(genotype)
-        archive_obj.append(ind)
+        archive_genotype.append(genotype._asdict())
+        archive_obj.append(ind.tolist())
     archive_genotype_2 = []
     archive_2_obj = []
     for ind in archive_2:
         genome = convert(ind)
         genotype = decode(genome, args.steps, args.multiplier)
-        archive_genotype_2.append(genotype)
-        archive_2_obj.append(ind)
+        archive_genotype_2.append(genotype._asdict())
+        archive_2_obj.append(ind.tolist())
     population_data = {
         'generation': generation,
         'n_evaluated': n_evaluated,
