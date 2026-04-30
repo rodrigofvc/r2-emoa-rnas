@@ -23,9 +23,8 @@ os.environ["MKL_DYNAMIC"] = "FALSE"
 import time
 
 import utils_search
-from micro_encoding import PRIMITIVES, convert, decode
+from micro_encoding import convert, decode
 from model import NetworkCIFAR
-from model_search import alphas_to_genotype
 
 import numpy as np
 import torch

@@ -35,6 +35,7 @@ from search import macro_encoding
 from search import nsganet as engine
 from pymoo.core.problem import Problem
 
+
 """
 python -X dev search/evolution_search.py --seed 18906049 --search_space micro --dataset cifar10 --n_classes 10 --init_channels 16 --layers 5 --n_gens 15 --epochs 10 --pop_size 40  --batch_size 192 --n_offspring 40 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --layers 5 --steps 4 --multiplier 4 --cutout_length 16 --drop_path_prob 0.3 --debug_cuda --timestamp 9  --reload_dir search-NSGA-Net-micro-20260419-070500
 """
@@ -177,32 +178,6 @@ class NAS(Problem):
         # if your NAS problem has constraints, use the following line to set constraints
         # out["G"] = np.column_stack([g1, g2, g3, g4, g5, g6]) in case 6 constraints
 
-# ---------------------------------------------------------------------------------------------------------
-# Define what statistics to print or save for each generation
-# ---------------------------------------------------------------------------------------------------------
-def do_every_generations(algorithm):
-    # this function will be call every generation
-    # it has access to the whole algorithm class
-    gen = algorithm.n_gen
-    pop_obj = algorithm.pop.get("F")
-    #store_non_dominated_solutions
-    algorithm.problem.archive = archive_update_pq(algorithm.problem.archive, pop_obj)
-    algorithm.problem.archive_2 = archive_update_pq(algorithm.problem.archive_2, pop_obj[:, :2])
-    hyp, hyp_2, r2 = store_metrics(algorithm.problem.dataset, algorithm.evaluator.n_eval, np.array(algorithm.problem.archive), np.array(algorithm.problem.archive_2), algorithm.problem.save_dir, algorithm.problem.statistics)
-
-    plot_hypervolume(algorithm.problem.statistics, algorithm.problem.save_dir)
-    plot_hypervolume2(algorithm.problem.statistics, algorithm.problem.save_dir)
-    plot_r2(algorithm.problem.statistics, algorithm.problem.save_dir)
-
-    elapsed_time = time.time() - algorithm.problem.start_time
-    algorithm.problem.elapsed_time = elapsed_time
-    utils.store_population_data(gen, pop_obj, algorithm.problem.archive, algorithm.problem.archive_2, algorithm.problem.statistics, elapsed_time, algorithm.problem.save_dir)
-
-    # report generation info to files
-    logging.info(">>>>>> generation = {}".format(gen))
-    logging.info("       hyp_4 = {}, hyp_2 = {} r2 = {}".format(hyp, hyp_2, r2))
-    logging.info('       evaluated so far {} architectures'.format(algorithm.evaluator.n_eval))
-
 def main():
     np.random.seed(args.seed)
 
@@ -274,7 +249,7 @@ def main():
                                        np.array(algorithm.problem.archive), np.array(algorithm.problem.archive_2),
                                        algorithm.problem.save_dir, algorithm.problem.statistics)
         store_population_data(gen, algorithm.problem._n_evaluated, pop_obj, pop_X, algorithm.problem.archive, algorithm.problem.archive_2,
-                                    algorithm.problem.statistics, elapsed_time, algorithm.problem.save_dir)
+                                    algorithm.problem.statistics, elapsed_time, algorithm.problem.save_dir, args)
         plot_hypervolume(algorithm.problem.statistics, algorithm.problem.save_dir)
         plot_hypervolume2(algorithm.problem.statistics, algorithm.problem.save_dir)
         plot_r2(algorithm.problem.statistics, algorithm.problem.save_dir)

@@ -134,7 +134,7 @@ def prepare_args_supernet(args_):
   if args.pretrained_supernet is not None and initial_generation == 0:
     shutil.copy(args.pretrained_supernet, str(args.save_path_final_model) + os.sep + "super-net.pt")
     logging.info(f">>>> Pretrained supernet loaded from {args.pretrained_supernet} and saved to {str(args.save_path_final_model) + os.sep + 'super-net.pt'} for future reference.")
-  return args, weights_r2, statistics, initial_generation, architectures_evaluated, pop_obj, pop_X, archive, archive_losses, n_var, time_search
+  return args, weights_r2, statistics, initial_generation, architectures_evaluated, pop_obj, pop_X, archive, archive_losses, n_var, time_search, alphas_dim
 
 class NAS(Problem):
   def __init__(self, n_var, n_obj, xl, xu, args):
@@ -203,7 +203,7 @@ random.seed(args.seed)
 if args.dataset == 'cifar10':    num_classes = 10
 elif args.dataset == 'cifar100': num_classes = 100
 
-args, weights_r2, statistics, initial_generation, architectures_evaluated, pop_obj, pop_X, archive, archive_losses, n_var, elapsed_time = prepare_args_supernet(args)
+args, weights_r2, statistics, initial_generation, architectures_evaluated, pop_obj, pop_X, archive, archive_losses, n_var, elapsed_time, alphas_dim = prepare_args_supernet(args)
 
 args.save_path_final_model = DIR
 
@@ -265,7 +265,7 @@ for n_gen in range(initial_generation, args.generations):
   elapsed_time += time.time() - start_time_gen
   utils_search.store_population_data(n_gen, architectures_evaluated, pop_obj, pop_X, archive,
                         archive_losses,
-                        statistics, elapsed_time, args.save_path_final_model)
+                        statistics, elapsed_time, args.save_path_final_model, alphas_dim, args)
 
   logging.info(f'>>>>>>> Generation {n_gen}')
   logging.info(f'        hyp: {hyp}, hyp_2: {hyp2}, R2: {r2}')
