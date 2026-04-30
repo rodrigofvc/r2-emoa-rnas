@@ -1,7 +1,11 @@
 import argparse
 import json
+import logging
+import os
 import ssl
 import time
+from pathlib import Path
+import re
 
 import torch
 from torch import nn
@@ -13,15 +17,78 @@ import utils_train
 from micro_space.model import NetworkCIFAR
 from adversarial import fgsm_simple
 
-def prepare_args(args):
+def prepare_args(args_, genotype):
+    initial_epoch = 0
+    model = None
+    if args_.reload_dir is not None:
+        # the execution is a reload and we need to load all the variables from the previous execution as well as the most recent model
+        with open(args_.reload_dir + os.sep + 'params.json', 'r') as f:
+            saved_params = json.load(f)
+            args = argparse.Namespace(**saved_params)
+        logging.info(f">>>> Reloading training from {args_.reload_dir} with parameters:")
+
+        pattern = r"epoch_(\d+)_model.pt"
+
+        files = os.listdir(args_.reload_dir)
+
+        matched_files = []
+        for file in files:
+            match = re.match(pattern, file)
+            if match:
+                epoch = int(match.group(1))
+                matched_files.append((epoch, file))
+
+        sorted_files = sorted(matched_files, key=lambda x: x[0], reverse=True)
+        j = 0
+        # try to load the recent model, if it fails, try the previous one
+        while j < len(sorted_files):
+            most_recent = sorted_files[j]
+            try:
+                model = torch.load(args_.reload_dir + os.sep + most_recent[1], map_location='cpu')
+            except Exception as e:
+                logging.warning(f"Failed to load model from {most_recent[1]}: {e}, loading previous model if available.")
+                j += 1
+                continue
+            else:
+                logging.info(f"Successfully loaded model from epoch {most_recent[1]}.")
+                initial_epoch = most_recent[0] + 1
+                break
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            args.learning_rate,
+            momentum=args.momentum,
+            weight_decay=args.weight_decay)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, args.epochs - initial_epoch, eta_min=args.learning_rate_min)
+    else:
+        # the execution is new and we need to initialize all the variables
+        args = args_
+        n_classes = 10 if args.dataset == 'cifar10' else 100
+        model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype)
+
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            args.learning_rate,
+            momentum=args.momentum,
+            weight_decay=args.weight_decay)
+
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
+            optimizer, args.epochs, eta_min=args.learning_rate_min)
+
+
     if torch.cuda.is_available():
-        device = torch.device("cuda")
+        device = torch.device(f'cuda:{args.gpu}')
     elif torch.backends.mps.is_available():
         device = torch.device("mps")
     else:
         device = torch.device("cpu")
+
     print("Using device:", device)
     args.device = device
+
+    for arg in vars(args):
+        print(f"{arg}: {getattr(args, arg)}")
+
 
     ssl._create_default_https_context = ssl._create_unverified_context
     train_transform, valid_transform = utils.data_transforms_cifar10(args)
@@ -42,72 +109,39 @@ def prepare_args(args):
         num_workers=0, pin_memory=False)
 
     criterion = torch.nn.CrossEntropyLoss().to(args.device)
-    attack_f = get_attack_function(args.attack)
 
-    return train_queue, criterion, attack_f
+    return args, train_queue, criterion, model, initial_epoch, optimizer, scheduler
 
-def prepare_arch_genotype(architecture, algorithm):
-    if algorithm == 'r2-emoa' or algorithm == 'nevonas':
-        genotype = architecture.genotype
-    elif algorithm == 'nsganet':
-        genotype = architecture
-    else:
-        raise ValueError(f"Unknown algorithm: {algorithm}")
-    model = NetworkCIFAR(args.init_channels, args.n_classes, args.layers, args.auxiliary, genotype).to(args.device)
-
-    optimizer = torch.optim.SGD(
-        model.parameters(),
-        args.learning_rate,
-        momentum=args.momentum,
-        weight_decay=args.weight_decay)
-
-    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-        optimizer, args.epochs, eta_min=args.learning_rate_min)
-    return optimizer, scheduler, model
-
-def train(train_queue, model, criterion, scheduler, optimizer, attack_f, args):
-    std_correct = 0
+def train(train_queue, model, criterion, scheduler, optimizer, args):
     adv_correct = 0
-    total_loss_mean = 0
     total = 0
+    model.to(args.device)
     model.train()
-    attack = attack_f(model)
-    for n_batch, (input, target) in enumerate(train_queue):
+    for n_batch, (inputs, target) in enumerate(train_queue):
         times_stamp = time.time()
-        input = input.to(args.device)
+        inputs = inputs.to(args.device)
         target = target.to(args.device)
 
         optimizer.zero_grad()
 
+        adv_inputs = fgsm_simple(model, inputs, target)
 
-        adv_X = attack(input, target)
-        logits = model(input)
-
-        logits_adv = model(adv_X)
+        logits_adv = model(adv_inputs)
         adv_loss = criterion(logits_adv, target)
+        adv_loss.backward()
 
-        natural_loss = criterion(logits, target)
-
-        total_loss = args.lambda_1 * natural_loss + args.lambda_2 * adv_loss
-
-        total_loss.backward()
         nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
         optimizer.step()
 
-        std_predicts = logits.argmax(dim=1)
         adv_predicts = logits_adv.argmax(dim=1)
-        std_correct += (std_predicts == target).sum().item()
         adv_correct += (adv_predicts == target).sum().item()
-        total_loss_mean += total_loss.item()
         total += target.size(0)
         if n_batch % args.report_freq == 0:
-            print(
-                f">>>> batch {n_batch + 1}/{len(train_queue)} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - times_stamp))}) (HH:MM:SS): std_acc {std_correct / total * 100:.2f}%, adv_acc {adv_correct / total * 100:.2f}%, loss {total_loss_mean:.4f}")
+            logging.info(
+                f">>>> batch {n_batch + 1}/{len(train_queue)} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - times_stamp))}) (HH:MM:SS): adv_acc {adv_correct / total * 100:.2f}%")
     scheduler.step()
-    std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
-    total_loss_mean /= total
-    return std_accuracy * 100.0, adv_accuracy * 100.0, total_loss_mean
+    return adv_accuracy * 100.0
 
 def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, weights, z_ref_stch, nadir_point, ideal_point):
     loss_type = std_loss.dtype
@@ -204,53 +238,93 @@ def infer(valid_queue, model, criterion, args):
 # and trains each architecture from scratch, saving results in a new directory.
 if __name__ == '__main__':
 
+    """
+    python3 rnas_train.py --seed 12 --algorithm r2-emoa --search_space discrete --dataset cifar10 \
+    --batch_size 32 --epochs 100 --data ./data --learning_rate 0.025 --learning_rate_min 0.001\
+    --momentum 0.9 --weight_decay 3e-4 --grad_clip 5.0 --report_freq 50 --freq_save 10 --gpu 0\
+    --init_channels 16 --layers 8 --steps 4 --multiplier 4 --train_portion 0.5\
+    --archive_path results/r2-emoa/cifar10/2026-04-20_11-37-00_18906049/search/population_data.json
+    
+    python3 rnas_train.py --seed 12 --algorithm r2-emoa --search_space discrete --dataset cifar10 --reload_dir auto-last
+    """
     parser = argparse.ArgumentParser(description="Training architectures found by RNAS")
     parser.add_argument('--seed', type=int, default=18906049, help='random seed')
     parser.add_argument('--algorithm', type=str, default='[r2-emoa, nevonas, nsganet]', help='which algorithm was used to search')
+    parser.add_argument('--search_space', type=str, default='discrete', help='which search space was used to search')
     parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset for training')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs to train')
-    parser.add_argument('--arch_path', type=str, required=True, help="Path to the saved architecture")
-    parser.add_argument('--supernet_path', type=str, help="Path to the saved supernet model")
-    parser.add_argument('--trained_arch_path', type=str, required=True, help='Path to store the trained architecture')
-    parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary tower')
-    parser.add_argument('--params_dir', type=str, required=True, help="params json dir")
+    parser.add_argument('--data', type=str, default='./data', help='location of the data corpus')
+    parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
+    parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
+    parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
+    parser.add_argument('--weight_decay', type=float, default=3e-4, help='weight decay')
+    parser.add_argument('--grad_clip', type=float, default=5.0, help='gradient clipping')
+    parser.add_argument('--report_freq', type=float, default=50, help='report frequency')
+    parser.add_argument('--freq_save', type=int, default=10, help='frequency of saving the model')
+    parser.add_argument('--gpu', type=int, default=0, help='gpu device id')
+    parser.add_argument('--init_channels', type=int, default=16, help='num of init channels')
+    parser.add_argument('--layers', type=int, default=8, help='total number of layers')
+    parser.add_argument('--steps', type=int, default=4, help='number of steps in one cell')
+    parser.add_argument('--multiplier', type=int, default=4, help='number of multiplier for channels')
+    parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
+    parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
+    parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
+    parser.add_argument('--debug_cuda', action='store_true', default=False, help='debug cuda')
+    parser.add_argument('--reload_dir', type=str, default=None, help='reload from this directory')
+    parser.add_argument('--archive_path', type=str, default=None, help='path to the archive of architectures')
     args = parser.parse_args()
-    # python3 rnas_train.py --seed 18906049 --algorithm nevonas --dataset cifar10 --batch_size 32 --epochs 10 --arch_path ./results/nevonas/cifar10/search-S1-20260109-190243-cifar10/architectures --trained_arch_path /results/nevonas/cifar10/search-S1-20260109-190243-cifar10/train --params_dir params/train/params-cifar-10-r2-emoa-20.json
-    with open(args.params_dir, 'r') as f:
-        config = json.load(f)
 
-    for key, value in vars(args).items():
-        if value is not None:
-            config[key] = value
-    args = argparse.Namespace(**config)
+    logging.basicConfig(
+        level=logging.INFO,
+        format='[%(asctime)s] %(levelname)s: %(message)s',
+        datefmt='%H:%M:%S'
+    )
 
-    print('Running training with config:')
-    for key, value in vars(args).items():
-        print(f"{key}: {value}")
+    if args.reload_dir is None:
+        base_dir = args.archive_path.split(os.sep)
+        base_dir = base_dir[:base_dir.index('search')]
+        results_dir = os.sep.join(base_dir) + os.sep + 'train' + os.sep
+        args.save_path_final_model = results_dir
+        utils.save_params(args, results_dir)
+    elif args.reload_dir == 'auto-last':
+        # reload the last training in the results directory for training
+        base_dir = Path('results') / args.algorithm / args.dataset
+        if not base_dir.exists():
+            raise ValueError(f"No results found for algorithm {args.algorithm} and dataset {args.dataset}")
+        pre_dirs = [pre_d for pre_d in base_dir.iterdir() if pre_d.is_dir()]
+        dirs = [d for d in base_dir.iterdir() if d.is_dir() and 'results' + os.sep + args.algorithm + os.sep + args.dataset + os.sep + d.name + os.sep + "train" in [str(f) for f in d.iterdir()]]
+
+        if not dirs:
+            raise ValueError("No experiments found for the given algorithm and dataset")
+
+        latest_dir = max(dirs, key=lambda d: d.stat().st_mtime)
+
+        results_dir = str(latest_dir) + os.sep + "train"
+        args.reload_dir = results_dir
+    else:
+        results_dir = args.reload_dir
+    print(f'Results dir: {results_dir}')
+
+    args.save_path_final_model = results_dir
 
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
         torch.cuda.manual_seed(args.seed)
 
-    best_ind, best_path = utils_train.get_best_architecture_adversarial(args.arch_path, args.algorithm)
+    best_genotype = None
+    if args.reload_dir is None:
+        best_genotype = utils_train.get_best_genotype_adversarial(args.archive_path, args)
 
-    individual = utils_train.load_architecture(best_path)
-    #supernet = utils.load_model(args.supernet_path)
-    logs_architectures = []
+    args, train_queue, criterion, model, initial_epoch, optimizer, scheduler = prepare_args(args, best_genotype)
 
-
-    train_queue, criterion, attack_f = prepare_args(args)
-
-    optimizer, scheduler, model = prepare_arch_genotype(individual, args.algorithm)
     time_stamp_train = time.time()
-    for epoch in range(args.epochs):
-        print(f"Epoch {epoch+1}/{args.epochs}")
+    for epoch in range(initial_epoch, args.epochs):
+        logging.info(f"Epoch {epoch}/{args.epochs}")
         time_stamp = time.time()
-        std_acc, adv_acc, loss_ws = train(train_queue, model, criterion, scheduler, optimizer, attack_f, args)
-        print(f">>>> Epoch {epoch + 1} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))} (HH:MM:SS) std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, loss {loss_ws:.4f}")
-        if (epoch + 1) % args.freq_save == 0:
-            utils.save_model(model, args.trained_arch_path, f"model_epoch_{epoch}.pt")
-    utils.save_params(args, args.trained_arch_path)
-    print(f"Total training time: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_train))} (HH:MM:SS)")
+        adv_acc = train(train_queue, model, criterion, scheduler, optimizer, args)
+        logging.info(f">>>> Epoch {epoch} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))} (HH:MM:SS) adv_acc {adv_acc:.2f}% ")
+        if epoch % args.freq_save == 0:
+            utils.save_model(model, args.save_path_final_model, f"epoch_{epoch}_model.pt")
+    logging.info(f"Total training time: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_train))} (HH:MM:SS)")

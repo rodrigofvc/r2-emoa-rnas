@@ -6,7 +6,7 @@ from pathlib import Path
 
 os.environ["CUDA_VISIBLE_DEVICES"] = "" # Disable GPU usage for this script, as it may cause issues with multiprocessing on some platforms
 
-from utils import (create_experiment_dir, save_model,
+from utils import (create_experiment_dir,
                    save_architecture, save_archive, save_archive_accuracy,
                    save_archive_losses, plot_archive_losses,
                    plot_archive_accuracy, plot_lr_scheduler,
