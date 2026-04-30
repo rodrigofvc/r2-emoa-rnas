@@ -131,7 +131,7 @@ def train(train_queue, model, criterion, scheduler, optimizer, args):
         adv_loss = criterion(logits_adv, target)
         adv_loss.backward()
 
-        nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+        nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip, foreach=False)
         optimizer.step()
 
         adv_predicts = logits_adv.argmax(dim=1)
@@ -281,6 +281,8 @@ if __name__ == '__main__':
         format='[%(asctime)s] %(levelname)s: %(message)s',
         datefmt='%H:%M:%S'
     )
+    if args.debug_cuda:
+        os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
     if args.reload_dir is None:
         base_dir = args.archive_path.split(os.sep)
