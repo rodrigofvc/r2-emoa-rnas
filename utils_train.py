@@ -34,5 +34,35 @@ def get_best_genotype_adversarial(archs_path, args):
                             reduce=genotype_dict[2],
                             reduce_concat=genotype_dict[3])
         return genotype
+    elif args.algorithm == 'nsganet' or args.algorithm == 'nevonas':
+        with open(archs_path, 'r') as f:
+            population_data = json.load(f)
+        if 'archive_genotype' in population_data.keys():
+            genotypes = population_data['archive_genotype']
+            archive_obj = population_data['archive_objectives']
+            for (genotype_dict, obj) in zip(genotypes, archive_obj):
+                if obj[1] < best_adv_loss:
+                    best_adv_loss = obj[1]
+                    best_individual = genotype_dict
+            genotype = Genotype(normal=best_individual[0],
+                                normal_concat=best_individual[1],
+                                reduce=best_individual[2],
+                                reduce_concat=best_individual[3])
+            return genotype
+        else:
+            pop_X = population_data['pop_X']
+            pop_F = population_data['pop_obj']
+            for (genome, obj) in zip(pop_X, pop_F):
+                if obj[1] < best_adv_loss:
+                    best_adv_loss = obj[1]
+                    best_individual = genome
+            if args.algorithm == 'nsganet':
+                genome = convert(best_individual)
+                genotype = decode(genome, args.steps, args.multiplier)
+            else:
+                k = sum(2 + i for i in range(args.steps))
+                alphas_dim = (k, len(PRIMITIVES))
+                genotype = alphas_to_genotype(best_individual, alphas_dim, args)
+            return genotype
     else:
         raise NotImplementedError(f"Algorithm {args.algorithm} not implemented for loading best architecture.")
