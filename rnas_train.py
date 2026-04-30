@@ -70,7 +70,9 @@ def prepare_args(args_, genotype):
             model.parameters(),
             args.learning_rate,
             momentum=args.momentum,
-            weight_decay=args.weight_decay)
+            weight_decay=args.weight_decay,
+            foreach=False
+        )
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer, args.epochs, eta_min=args.learning_rate_min)
@@ -118,7 +120,6 @@ def train(train_queue, model, criterion, scheduler, optimizer, args):
     model.to(args.device)
     model.train()
     for n_batch, (inputs, target) in enumerate(train_queue):
-        times_stamp = time.time()
         inputs = inputs.to(args.device)
         target = target.to(args.device)
 
@@ -138,7 +139,7 @@ def train(train_queue, model, criterion, scheduler, optimizer, args):
         total += target.size(0)
         if n_batch % args.report_freq == 0:
             logging.info(
-                f">>>> batch {n_batch + 1}/{len(train_queue)} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - times_stamp))}) (HH:MM:SS): adv_acc {adv_correct / total * 100:.2f}%")
+                f">>>> batch {n_batch + 1}/{len(train_queue)} : adv_acc {adv_correct / total * 100:.2f}%")
     scheduler.step()
     adv_accuracy = adv_correct / total
     return adv_accuracy * 100.0
@@ -327,4 +328,5 @@ if __name__ == '__main__':
         logging.info(f">>>> Epoch {epoch} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))} (HH:MM:SS) adv_acc {adv_acc:.2f}% ")
         if epoch % args.freq_save == 0:
             utils.save_model(model, args.save_path_final_model, f"epoch_{epoch}_model.pt")
+    utils.save_model(model, args.save_path_final_model, f"full_trained_model.pt")
     logging.info(f"Total training time: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_train))} (HH:MM:SS)")
