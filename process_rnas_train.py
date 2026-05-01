@@ -113,7 +113,7 @@ if __name__ == '__main__':
                     process.communicate(timeout=10)
                 sys.exit('Search interrupted by user.')
         if clean_file:
-            os.remove("logs" + os.sep + f"training_{n_executions}.log")
+            os.remove(log_file)
             sys.exit("Training process finished")
         # increment execution count and update log file name
         n_executions += 1
