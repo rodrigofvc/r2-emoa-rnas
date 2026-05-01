@@ -1,5 +1,6 @@
-# script that executes rnas_train.py as subprocess continuously
+
 import logging
+import shutil
 import subprocess
 import argparse
 import sys
@@ -19,7 +20,7 @@ if __name__ == '__main__':
     """
     parser = argparse.ArgumentParser(description="Training architectures found by RNAS")
     parser.add_argument('--seed', type=int, default=18906049, help='random seed')
-    parser.add_argument('--algorithm', type=str, default='[r2-emoa, nevonas, nsganet]',
+    parser.add_argument('--algorithm', type=str, choices=['r2-emoa', 'nevonas', 'nsganet', 'cars', 'r2-emoa-one-shot'],
                         help='which algorithm was used to search')
     parser.add_argument('--search_space', type=str, default='discrete', help='which search space was used to search')
     parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset for training')
@@ -46,9 +47,13 @@ if __name__ == '__main__':
     parser.add_argument('--archive_path', type=str, default=None, help='path to the archive of architectures')
     args = parser.parse_args()
 
+    if os.path.exists("logs"):
+        shutil.rmtree("logs")
+    os.makedirs("logs", exist_ok=True)
+
     file = 'rnas_train.py'
     process_args = [
-        sys.executable, 'rnas_train.py',"-X", "dev", "-u", file,
+        sys.executable, "-X", "dev", "-u", file,
         "--seed", str(args.seed),
         "--algorithm", args.algorithm,
         "--search_space", args.search_space,
@@ -69,16 +74,21 @@ if __name__ == '__main__':
         "--steps", str(args.steps),
         "--multiplier", str(args.multiplier),
         "--train_portion", str(args.train_portion),
-        "--debug_cuda", str(args.debug_cuda),
-        "--reload_dir", args.reload_dir,
-        "--archive_path", args.archive_path
     ]
+
+    if args.reload_dir is not None:
+        process_args.extend(["--reload_dir", args.reload_dir])
+    if args.archive_path is not None:
+        process_args.extend(["--archive_path", args.archive_path])
+    if args.debug_cuda:
+        process_args.extend(["--debug_cuda"])
     n_executions = 0
     log_file = 'logs' + os.sep + f'training_{n_executions}.log'
     last_execution_code = -1
 
     while last_execution_code != 0:
-        with open(log_file, 'wb') as f_log:
+        clean_file = False
+        with open(log_file, 'w') as f_log:
             process = subprocess.Popen(process_args, stdout=f_log, stderr=f_log, text=True)
             try:
                 process.communicate(timeout=120*60)
@@ -86,8 +96,8 @@ if __name__ == '__main__':
                     last_execution_code = process.returncode
                     logging.info(f"Process exited with code {process.returncode}")
                 elif process.returncode == 0:
-                    os.remove(log_file)
-                    sys.exit('Training completed successfully.')
+                    last_execution_code = 0
+                    clean_file = True
             except subprocess.TimeoutExpired:
                 logging.info(f"Process timed out. Killing process.")
                 process.kill()
@@ -102,23 +112,17 @@ if __name__ == '__main__':
                     process.kill()
                     process.communicate(timeout=10)
                 sys.exit('Search interrupted by user.')
+        if clean_file:
+            os.remove("logs" + os.sep + f"training_{n_executions}.log")
+            sys.exit("Training process finished")
         # increment execution count and update log file name
         n_executions += 1
         log_file = 'logs' + os.sep + f'training_{n_executions}.log'
         # update processs_args to reload from the last execution
         process_args = [
-            sys.executable, 'rnas_train.py', "-X", "dev", "-u", file,
+            sys.executable, "-X", "dev", "-u", file,
             "--seed", str(args.seed),
-            "--algorithm", args.algorithm,
-            "--dataset", args.dataset,
-            "--reload_dir", "auto-last"
+            "--algorithm", str(args.algorithm),
+            "--dataset", str(args.dataset),
+            "--reload_dir", "auto-last",
         ]
-
-
-
-
-
-
-
-
-

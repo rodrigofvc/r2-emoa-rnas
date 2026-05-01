@@ -250,7 +250,7 @@ if __name__ == '__main__':
     """
     parser = argparse.ArgumentParser(description="Training architectures found by RNAS")
     parser.add_argument('--seed', type=int, default=18906049, help='random seed')
-    parser.add_argument('--algorithm', type=str, default='[r2-emoa, nevonas, nsganet]', help='which algorithm was used to search')
+    parser.add_argument('--algorithm', type=str, choices=['r2-emoa', 'nevonas', 'nsganet', 'cars', 'r2-emoa-one-shot'], help='which algorithm was used to search')
     parser.add_argument('--search_space', type=str, default='discrete', help='which search space was used to search')
     parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset for training')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
