@@ -8,7 +8,6 @@ def tournament_selection(pop_, n_select, tournament_size=5):
     winners = []
     pop = [ind for ind in pop_ if ind.feasible]
     while len(winners) < n_select:
-        print (f'len(winners) = {len(winners)}, len(pop) = {len(pop)}')
         P = rd.sample(pop, k=tournament_size)
         winner = min(P, key=lambda ind: ind.c_r2)
         if winner not in winners:

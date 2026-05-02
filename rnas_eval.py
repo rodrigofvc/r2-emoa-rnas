@@ -1,14 +1,16 @@
 import argparse
-import json
+import csv
+import logging
+import os
 import ssl
 import time
 
 import numpy as np
 import torch
 import torchvision
+import torchattacks
 
 import utils
-from adversarial import get_attack_function
 
 
 def prepare_args(args, model):
@@ -33,79 +35,86 @@ def prepare_args(args, model):
     if torch.backends.mps.is_available():
         # testing
         split = 32
-    print(f"Evaluation samples: {split}")
+    print(f"Test samples: {split}")
 
     test_queue = torch.utils.data.DataLoader(
       test_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-        num_workers=2, pin_memory=True)
+        num_workers=0, pin_memory=False)
 
     criterion = torch.nn.CrossEntropyLoss().to(args.device)
-    attack_f_list = []
-    attack_names = []
-    for attack in args.attacks:
-        attack_f_list.append(get_attack_function(attack))
-        attack_names.append(attack['name'])
 
-    return test_queue, criterion, attack_f_list, attack_names
+    return test_queue, criterion
 
-def eval(test_queue, model, criterion, attack_f, attack_name, args):
+def eval(test_queue, model, attack_name, args):
     std_correct = 0
     adv_correct = 0
-    std_loss_mean = 0
-    adv_loss_mean = 0
-    total_loss_mean = 0
     total = 0
-    assert model.training is False
-    attack = attack_f(model)
-    for step, (input, target) in enumerate(test_queue):
-        input = input.to(args.device, non_blocking=True)
-        target = target.to(args.device, non_blocking=True)
-        if attack_name == 'FGSM':
-            adv_input, std_logits = attack(input, target)
-        else:
-            std_logits = model(input)
-            adv_input = attack(input, target)
-        adv_input = adv_input.to(args.device, non_blocking=True)
+    model.eval()
+    if attack_name == 'FGSM':
+        attack = torchattacks.FGSM(model, eps=8/255)
+    elif attack_name == 'PGD_7':
+        attack = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=7)
+    elif attack_name == 'PGD_10':
+        attack = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=10)
+    elif attack_name == 'PGD_20':
+        attack = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=20)
+    elif attack_name == 'CW_0.01':
+        attack = torchattacks.CW(model, c=0.01)
+    elif attack_name == 'CW_0.001':
+        attack = torchattacks.CW(model, c=0.001)
+    else:
+        raise ValueError(f"Unknown attack name: {attack_name}")
+    for step, (inputs, target) in enumerate(test_queue):
+        inputs = inputs.to(args.device)
+        target = target.to(args.device)
+        adv_input = attack(inputs, target)
+        adv_input = adv_input.to(args.device)
 
         with torch.no_grad():
-            std_loss = criterion(std_logits, target)
+            std_logits = model(inputs)
             adv_logits = model(adv_input)
-            adv_loss = criterion(adv_logits, target)
-            total_loss = args.lambda_1 * std_loss + args.lambda_2 * adv_loss
 
         std_predicts = std_logits.argmax(dim=1)
         adv_predicts = adv_logits.argmax(dim=1)
         std_correct += (std_predicts == target).sum().item()
         adv_correct += (adv_predicts == target).sum().item()
         total += target.size(0)
-        std_loss_mean += std_loss.item()
-        adv_loss_mean += adv_loss.item()
-        total_loss_mean += total_loss.item()
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
-    std_loss_mean /= total
-    adv_loss_mean /= total
-    total_loss_mean /= total
-    return std_accuracy * 100.0, adv_accuracy * 100.0, std_loss_mean, adv_loss_mean, total_loss_mean
+    return std_accuracy * 100.0, adv_accuracy * 100.0
 
 
 if __name__ == '__main__':
 
+    """
+    python3 -X dev rnas_eval.py --seed 12 --algorithm r2-emoa --dataset cifar10 \
+    --batch_size 32 --model_path results/r2-emoa/cifar10/2026-04-20_11-37-00_18906049/train/epoch_90_model.pt 
+    """
     parser = argparse.ArgumentParser(description="Evaluating architectures found by RNAS")
     parser.add_argument('--seed', type=int, default=0, help='random seed')
-    parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset for training')
+    parser.add_argument('--algorithm', type=str, choices=['nsganet', 'nevonas', 'cars', 'r2-emoa', 'r2-emoa-one-shot'])
+    parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'], help='dataset for training')
+    parser.add_argument('--data', type=str, default='./data', help='location of the data corpus')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--model_path', type=str, required=True, help="Path to the saved model")
-    parser.add_argument('--auxiliary', action='store_true', default=False, help='use auxiliary tower')
-    parser.add_argument('--params_dir', type=str, required=True, help="params json dir")
+    parser.add_argument('--test_portion', type=float, default=1, help='portion of test data to evaluate')
+    parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
+    parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
+    parser.add_argument('--debug_cuda', action='store_true', default=False, help='debug cuda')
+
     args = parser.parse_args()
-    with open(args.params_dir, 'r') as f:
-        config = json.load(f)
+
+    logging.basicConfig(
+        level=logging.INFO,
+        format='[%(asctime)s] %(levelname)s: %(message)s',
+        datefmt='%H:%M:%S'
+    )
+
+    logging.info('Running evaluation with the following config:')
     for key, value in vars(args).items():
-        if value is not None:
-            config[key] = value
-    args = argparse.Namespace(**config)
+        print(f"{key}: {value}")
+
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
     if torch.cuda.is_available():
@@ -113,12 +122,19 @@ if __name__ == '__main__':
 
     model = torch.load(args.model_path, weights_only=False)
 
-    test_queue, criterion, attack_f_list, attack_names = prepare_args(args, model)
+    attack_f_list = ['PGD_7', 'PGD_10', 'PGD_20', 'FGSM', 'CW_0.01', 'CW_0.001']
+
+    test_queue, criterion = prepare_args(args, model)
     for i, attack_f in enumerate(attack_f_list):
-        print(f"Starting evaluation with attack: {attack_names[i]}")
         time_stamp = time.time()
-        model.eval()
-        std_accuracy, adv_accuracy, _, _, _ = eval(test_queue, model, criterion, attack_f, attack_names[i], args)
-        utils.save_params(args, args.model_path.replace('.pt', '_eval_params.json').replace('train', 'eval'))
-        print('Evaluation DONE in', time.strftime('%HH:%MM:%SS', time.gmtime(time.time() - time_stamp)))
-        print(f'Final Test Accuracy {attack_names[i]} : STD {std_accuracy:.3f} ADV {adv_accuracy:.3f}')
+        std_accuracy, adv_accuracy = eval(test_queue, model, attack_f, args)
+        logging.info(f"Attack {attack_f}: STD accuracy {std_accuracy:.3f} ADV accuracy {adv_accuracy:.3f}, time ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))})")
+        with open('test-evaluations.csv', mode='a', newline='') as csvfile:
+            fieldnames = ['algorithm', 'dataset', 'model', 'attack', 'std_accuracy', 'adv_accuracy']
+            writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
+            writer.writerow({'algorithm': args.algorithm,
+                             'dataset': args.dataset,
+                             'model': args.model_path.replace(os.sep, '/'),
+                             'attack': attack_f,
+                             'std_accuracy': std_accuracy,
+                             'adv_accuracy': adv_accuracy})

@@ -131,7 +131,7 @@ def train(train_queue, model, criterion, scheduler, optimizer, args):
         adv_loss = criterion(logits_adv, target)
         adv_loss.backward()
 
-        nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+        nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip, foreach=False)
         optimizer.step()
 
         adv_predicts = logits_adv.argmax(dim=1)
@@ -250,7 +250,7 @@ if __name__ == '__main__':
     """
     parser = argparse.ArgumentParser(description="Training architectures found by RNAS")
     parser.add_argument('--seed', type=int, default=18906049, help='random seed')
-    parser.add_argument('--algorithm', type=str, default='[r2-emoa, nevonas, nsganet]', help='which algorithm was used to search')
+    parser.add_argument('--algorithm', type=str, choices=['r2-emoa', 'nevonas', 'nsganet', 'cars', 'r2-emoa-one-shot'], help='which algorithm was used to search')
     parser.add_argument('--search_space', type=str, default='discrete', help='which search space was used to search')
     parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset for training')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
@@ -281,6 +281,8 @@ if __name__ == '__main__':
         format='[%(asctime)s] %(levelname)s: %(message)s',
         datefmt='%H:%M:%S'
     )
+    if args.debug_cuda:
+        os.environ['CUDA_LAUNCH_BLOCKING'] = '1'
 
     if args.reload_dir is None:
         base_dir = args.archive_path.split(os.sep)

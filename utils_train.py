@@ -1,9 +1,7 @@
 import json
-import lzma
 import os
-import pickle
 import torch
-
+import numpy as np
 from individual import create_from_json
 from micro_space.micro_encoding import PRIMITIVES, convert, decode, Genotype
 from micro_space.model_search import alphas_to_genotype
@@ -62,6 +60,7 @@ def get_best_genotype_adversarial(archs_path, args):
             else:
                 k = sum(2 + i for i in range(args.steps))
                 alphas_dim = (k, len(PRIMITIVES))
+                best_individual = np.array(best_individual, dtype=np.float32)
                 genotype = alphas_to_genotype(best_individual, alphas_dim, args)
             return genotype
     else:
