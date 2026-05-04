@@ -25,13 +25,13 @@ def get_weights_r2(n):
 
 
 def save_archive_accuracy(archive, archive_path):
-    archive_path += 'archive_accuracy'
+    archive_path += os.sep + 'archive_accuracy'
     np_archive = [[p.std_acc, p.adv_acc] for p in archive]
     np_archive = np.array(np_archive)
     np.savez_compressed(archive_path, np_archive)
 
 def save_archive_losses(archive, archive_path):
-    archive_path += 'archive_losses'
+    archive_path += os.sep + 'archive_losses'
     np_archive = [[p.F[0], p.F[1]] for p in archive]
     np_archive = np.array(np_archive)
     np.savez_compressed(archive_path, np_archive)
@@ -171,7 +171,7 @@ def read_architectures(architect_path):
 
 def plot_archive_losses(archive_losses, archive_path):
     import matplotlib.pyplot as plt
-    archive_path += 'archive_losses.pdf'
+    archive_path += os.sep + 'archive_losses.pdf'
     std_loss = [p.F[0] for p in archive_losses]
     adv_loss = [p.F[1] for p in archive_losses]
     plt.figure(figsize=(8, 6))
@@ -185,7 +185,7 @@ def plot_archive_losses(archive_losses, archive_path):
 
 def plot_archive_accuracy(archive_accuracy, archive_path):
     import matplotlib.pyplot as plt
-    archive_path += 'archive_accuracy.pdf'
+    archive_path += os.sep + 'archive_accuracy.pdf'
     std_acc = [p.std_acc for p in archive_accuracy]
     adv_acc = [p.adv_acc for p in archive_accuracy]
     plt.figure(figsize=(8, 6))
@@ -199,7 +199,7 @@ def plot_archive_accuracy(archive_accuracy, archive_path):
 
 def plot_lr_scheduler(statistics, path):
     import matplotlib.pyplot as plt
-    path += 'lr_scheduler.pdf'
+    path += os.sep + 'lr_scheduler.pdf'
     plt.figure(figsize=(8, 6))
     plt.plot(statistics['lr_log'], marker='o', color='blue')
     plt.title('Learning Rate Scheduler')
