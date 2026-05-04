@@ -190,9 +190,9 @@ else:
   DIR = args.reload_dir
 
 
-if os.path.exists("logs"):
-  shutil.rmtree("logs")
-os.makedirs("logs", exist_ok=True)
+#if os.path.exists("logs"):
+#  shutil.rmtree("logs")
+#os.makedirs("logs", exist_ok=True)
 
 log_format = '%(asctime)s %(message)s'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=log_format, datefmt='%m/%d %I:%M:%S %p')

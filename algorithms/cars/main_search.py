@@ -67,9 +67,9 @@ if __name__ == '__main__':
         datefmt='%H:%M:%S'
     )
 
-    if os.path.exists("logs"):
-        shutil.rmtree("logs")
-    os.makedirs("logs", exist_ok=True)
+    #if os.path.exists("logs"):
+    #    shutil.rmtree("logs")
+    #os.makedirs("logs", exist_ok=True)
 
 
     if args.reload_dir is None:

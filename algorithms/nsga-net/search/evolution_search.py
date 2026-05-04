@@ -56,7 +56,7 @@ parser.add_argument('--seed', type=int, default=0, help='random seed')
 parser.add_argument('--search_space', type=str, default='micro', help='macro or micro search space')
 # arguments for micro search space
 parser.add_argument('--n_blocks', type=int, default=6, help='number of blocks in a cell')
-parser.add_argument('--n_ops', type=int, default=9, help='number of operations considered')
+parser.add_argument('--n_ops', type=int, default=10, help='number of operations considered')
 parser.add_argument('--n_cells', type=int, default=2, help='number of cells to search')
 # arguments for macro search space
 parser.add_argument('--n_nodes', type=int, default=6, help='number of nodes per phases')
@@ -93,12 +93,8 @@ parser.add_argument('--reload_dir', type=str, default=None,
                     help='Directory to reload the experiment from if --reload is set')
 args = parser.parse_args()
 
-if args.reload_dir is not None:
-    with open(args.reload_dir + os.sep + 'params.json', 'r') as f:
-        args_dict = json.load(f)
-        args_dict['reload_dir'] = args.reload_dir
-        args = argparse.Namespace(**args_dict)
-elif args.reload_dir == 'auto-last':
+
+if args.reload_dir == 'auto-last':
     # reload the last experiment in the results directory for the given algorithm and dataset
     base_dir = Path(".")
 
@@ -114,15 +110,26 @@ elif args.reload_dir == 'auto-last':
 
     args.save = str(latest_dir)
     args.reload_dir = args.save
+
+    with open(args.reload_dir + os.sep + 'params.json', 'r') as f:
+        args_dict = json.load(f)
+        args_dict['reload_dir'] = args.reload_dir
+        args = argparse.Namespace(**args_dict)
+
+elif args.reload_dir is not None:
+    with open(args.reload_dir + os.sep + 'params.json', 'r') as f:
+        args_dict = json.load(f)
+        args_dict['reload_dir'] = args.reload_dir
+        args = argparse.Namespace(**args_dict)
 else:
     args.save = 'search-{}-{}-{}'.format(args.save, args.search_space, time.strftime("%Y%m%d-%H%M%S"))
     utils.create_exp_dir(args.save)
     save_params(args, args.save)
 
 
-if os.path.exists("logs"):
-    shutil.rmtree("logs")
-os.makedirs("logs", exist_ok=True)
+#if os.path.exists("logs"):
+#    shutil.rmtree("logs")
+#os.makedirs("logs", exist_ok=True)
 
 log_format = '%(asctime)s %(message)s'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO,
@@ -160,7 +167,6 @@ class NAS(Problem):
 
         for i in range(x.shape[0]):
             arch_id = self._n_evaluated + 1
-
             args_individual = copy.copy(self.args_problem)
             args_individual.seed = args_individual.seed + arch_id
             args_individual.epochs_train_individual = self.args_problem.epochs
@@ -228,6 +234,7 @@ def main():
         algorithm.problem.args_problem = args_execution
         # initialize the population with the loaded one
         pop_initialized = algorithm.ask()
+        print(pop_obj.shape, len(pop_initialized))
         pop_initialized.set("F", pop_obj)
         pop_initialized.set("X", pop_X)
         algorithm.tell(infills=pop_initialized)

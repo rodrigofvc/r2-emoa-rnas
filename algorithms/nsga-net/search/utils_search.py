@@ -12,7 +12,7 @@ import os
 import pickle
 from indicators import r2
 import copy
-from micro_encoding import convert, decode
+from micro_encoding import convert, decode, PRIMITIVES
 
 
 # Load R2 weights for the i-th population size
@@ -320,29 +320,25 @@ def save_params(args, trained_arch_path):
 
 def store_population_data(generation, n_evaluated, pop_obj, pop_X, archive, archive_2, statistics, elapsed_time, save_dir, args):
     population_data_dir = save_dir + os.sep + 'population_data.json'
-    archive_genotype = []
+    pop_genotype = []
+    for ind in pop_X:
+        genome = convert(ind)
+        genotype = decode(genome, args.steps, args.multiplier)
+        pop_genotype.append(genotype._asdict())
     archive_obj = []
     for ind in archive:
-        genome = convert(ind)
-        genotype = decode(genome, args.steps, args.multiplier)
-        archive_genotype.append(genotype._asdict())
         archive_obj.append(ind.tolist())
-    archive_genotype_2 = []
     archive_2_obj = []
     for ind in archive_2:
-        genome = convert(ind)
-        genotype = decode(genome, args.steps, args.multiplier)
-        archive_genotype_2.append(genotype._asdict())
         archive_2_obj.append(ind.tolist())
     population_data = {
         'generation': generation,
         'n_evaluated': n_evaluated,
         'pop_obj': pop_obj.tolist(),
         'pop_X': pop_X.tolist(),
+        'pop_genotype': pop_genotype,
         'archive': archive_obj,
-        'archive_genotype': archive_genotype,
         'archive_2': archive_2_obj,
-        'archive_2_genotype': archive_genotype_2,
         'statistics': statistics,
         'elapsed_time': elapsed_time
     }

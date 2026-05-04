@@ -129,11 +129,11 @@ def decode(genome, steps=6, multiplier=6):
 
     for block in normal_cell:
         for unit in block:
-            normal.append((PRIMITIVES[unit[0]], unit[1]))
+            normal.append((PRIMITIVES[int(unit[0])], int(unit[1])))
 
     for block in reduce_cell:
         for unit in block:
-            reduce.append((PRIMITIVES[unit[0]], unit[1]))
+            reduce.append((PRIMITIVES[int(unit[0])], int(unit[1])))
 
     return Genotype(
         normal=normal, normal_concat=normal_concat,

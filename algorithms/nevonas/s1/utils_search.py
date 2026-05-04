@@ -15,6 +15,7 @@ import os
 import pickle
 
 from indicators import r2
+from micro_space.micro_encoding import convert, decode
 from micro_space.model_search import alphas_to_genotype
 
 
@@ -168,17 +169,17 @@ def plot_r2(statistics, path):
 
 def store_population_data(generation, n_evaluated, pop_obj, pop_X, archive, archive_2, statistics, elapsed_time, save_dir, alphas_dim, args):
     population_data_dir = save_dir + os.sep + 'population_data.json'
-    archive_genotype = []
+    pop_genotype = []
+    for ind in pop_X:
+        genome = convert(ind)
+        genotype = decode(genome, args.steps, args.multiplier)
+        pop_genotype.append(genotype._asdict())
+
     archive_obj = []
     for ind in archive:
-        genotype_ind = alphas_to_genotype(ind, alphas_dim, args)
-        archive_genotype.append(genotype_ind._asdict())
         archive_obj.append(ind.tolist())
-    archive_2_genotype = []
     archive_2_obj = []
     for ind in archive_2:
-        genotype_ind = alphas_to_genotype(ind, alphas_dim, args)
-        archive_2_genotype.append(genotype_ind._asdict())
         archive_2_obj.append(ind.tolist())
     population_data = {
         'generation': generation,
@@ -186,9 +187,8 @@ def store_population_data(generation, n_evaluated, pop_obj, pop_X, archive, arch
         'pop_obj': pop_obj.tolist(),
         'pop_X': pop_X.tolist(),
         'archive': archive_obj,
-        'archive_genotype': archive_genotype,
         'archive_2': archive_2_obj,
-        'archive_2_genotype': archive_2_genotype,
+        'pop_genotype': pop_genotype,
         'statistics': statistics,
         'elapsed_time': elapsed_time
     }
