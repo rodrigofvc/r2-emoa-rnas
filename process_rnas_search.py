@@ -78,7 +78,6 @@ if __name__ == '__main__':
             "--n_population", str(args.n_population),
             "--generations", str(args.generations),
             "--epochs_warmup", str(args.epochs_warmup),
-            "--pretrained_supernet", str(args.pretrained_supernet),
             "--epochs_train_supernet", str(args.epochs_train_supernet),
             "--epochs_train_individual", str(args.epochs_train_individual),
             "--objectives", str(args.objectives),
@@ -99,7 +98,6 @@ if __name__ == '__main__':
             "--report_freq", str(args.report_freq),
             "--gpu", str(args.gpu),
             "--init_channels", str(args.init_channels),
-            "--reduction" if args.reduction else "",
             "--layers", str(args.layers),
             "--steps", str(args.steps),
             "--multiplier", str(args.multiplier),
@@ -121,6 +119,10 @@ if __name__ == '__main__':
             process_args.extend(["--reload_dir", str(args.reload_dir)])
         if args.cutout:
             process_args.append("--cutout")
+        if args.reduction:
+            process_args.append("--reduction")
+        if args.pretrained_supernet is not None:
+            process_args.extend(["--pretrained_supernet", str(args.pretrained_supernet)])
     else:
         # start from the last execution directory
         process_args = [
