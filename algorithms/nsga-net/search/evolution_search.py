@@ -55,9 +55,9 @@ parser.add_argument('--n_classes', type=int, choices=[10, 100], help='number of 
 parser.add_argument('--seed', type=int, default=0, help='random seed')
 parser.add_argument('--search_space', type=str, default='micro', help='macro or micro search space')
 # arguments for micro search space
-parser.add_argument('--n_blocks', type=int, default=6, help='number of blocks in a cell')
+parser.add_argument('--n_blocks', type=int, default=4, help='number of blocks in a cell')
 parser.add_argument('--n_ops', type=int, default=10, help='number of operations considered')
-parser.add_argument('--n_cells', type=int, default=2, help='number of cells to search')
+parser.add_argument('--n_cells', type=int, default=5, help='number of cells to search')
 # arguments for macro search space
 parser.add_argument('--n_nodes', type=int, default=6, help='number of nodes per phases')
 # hyper-parameters for algorithm

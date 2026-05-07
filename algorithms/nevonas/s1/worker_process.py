@@ -200,10 +200,10 @@ def train_supernet(pop, gen, args, warmup=False):
                 logging.info(f"Gen {gen} training completed successfully in (HH:MM:SS) {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_gen))}")
 
         except subprocess.TimeoutExpired:
-            logging.info(f"Gen {gen} training exceed timestamp: {args.timestamp}, it will be skipped. If you want to increase the timestamp, please set --timestamp argument to a higher value (in minutes).")
+            logging.info(f"Gen {gen} training exceed timestamp: {args.timestamp_supernet}, it will be skipped. If you want to increase the timestamp, please set --timestamp_supernet argument to a higher value (in minutes).")
             process.kill()
             try:
-                process.communicate(timeout=args.timestamp * 60)
+                process.communicate(timeout=args.timestamp_supernet * 60)
             except subprocess.TimeoutExpired:
                 logging.info(f"Failed to kill process for generation {gen} after timeout.")
         except KeyboardInterrupt:

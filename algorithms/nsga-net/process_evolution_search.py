@@ -5,7 +5,9 @@ import shutil
 import subprocess
 import sys
 
+# python -X dev process_evolution_search.py --seed 18906049 --search_space micro --dataset cifar100 --n_classes 100 --init_channels 16 --layers 5 --n_gens 15 --epochs 10 --pop_size 40 --batch_size 192 --n_offspring 40 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --layers 5 --steps 4 --multiplier 4 --cutout_length 16 --drop_path_prob 0.3 --timestamp 9 --increase_epochs --reduction
 # python3 process_evolution_search.py --seed 1 --dataset cifar100 --reload_dir auto-last
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser("Multi-objetive Genetic Algorithm for NAS")
     parser.add_argument('--save', type=str, default='NSGA-Net', help='experiment name')

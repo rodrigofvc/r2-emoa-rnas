@@ -5,7 +5,6 @@ import shutil
 import subprocess
 import sys
 
-
 """
 python3 -X dev process_arch_search.py --seed 18906049 --dataset cifar10 --batch_size 32 --gpu 0 --init_channels 16 --generations 4 --n_population 10 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --mutate_rate 0.1 --report_freq 50 --layers 5 --steps 4 --multiplier 4 --reduction --grad_clip 5 --train_portion 0.5 --epochs_warmup 2 --epochs_train_supernet 1 --timestamp_supernet 45 --timestamp_individual 5 
 """
@@ -51,9 +50,6 @@ if __name__ == '__main__':
     parser.add_argument('--reload_dir', type=str, default=None, help='Directory to reload the experiment from if --reload is set')
 
     args = parser.parse_args()
-
-    logging.info('arguments::---------')
-    logging.info(args)
 
     logging.basicConfig(
         level=logging.INFO,
@@ -126,13 +122,13 @@ if __name__ == '__main__':
     n_executions = 0
     log_file = 'logs' + os.sep + f'searching_{n_executions}.log'
     last_execution_code = -1
-
-    while last_execution_code != 0:
+    tries = 10
+    while last_execution_code != 0 and n_executions < tries:
         clean_file = False
         with open(log_file, 'wb') as f_log:
             process = subprocess.Popen(process_args, stdout=f_log, stderr=f_log, text=True)
             try:
-                process.communicate(timeout=4320*60)
+                process.communicate(timeout=5000*60)
                 if process.returncode != 0:
                     last_execution_code = process.returncode
                     logging.info(f"Process {n_executions} exited with code {process.returncode}")
@@ -166,3 +162,4 @@ if __name__ == '__main__':
             "--dataset", str(args.dataset),
             "--reload_dir", "auto-last",
         ]
+    logging.info('Search process failed after multiple attempts. Please check the log files for more details.')

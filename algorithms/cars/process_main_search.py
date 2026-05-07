@@ -127,13 +127,13 @@ if __name__ == '__main__':
     n_executions = 0
     log_file = 'logs' + os.sep + f'searching_{n_executions}.log'
     last_execution_code = -1
-
-    while last_execution_code != 0:
+    tries = 10
+    while last_execution_code != 0 and n_executions < tries:
         clean_file = False
         with open(log_file, 'wb') as f_log:
             process = subprocess.Popen(process_args, stdout=f_log, stderr=f_log, text=True)
             try:
-                process.communicate(timeout=4320*60)
+                process.communicate(timeout=5000*60)
                 if process.returncode != 0:
                     last_execution_code = process.returncode
                     logging.info(f"Process {n_executions} exited with code {process.returncode}")
@@ -167,3 +167,4 @@ if __name__ == '__main__':
             "--dataset", str(args.dataset),
             "--reload_dir", "auto-last",
         ]
+    logging.info(f"Search failed after {tries} attempts. Please check the log files for more details.")
