@@ -87,6 +87,7 @@ def r2_emoa_oneshot_nas(args_):
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': [],
                   'lr_log': []}
         evaluate_population_multiprocessing(0, pop, weights_r2, nadir_point, ideal_point, args)
+        architectures_evaluated += len(pop)
         update_ref_points(pop, nadir_point, ideal_point)
         archive = archive_update_pq(archive, pop)
         archive_losses = archive_update_pq(archive_losses, pop, k=2)
@@ -109,7 +110,7 @@ def r2_emoa_oneshot_nas(args_):
         parents = tournament_selection(pop, n_select=args.n_population // 2, tournament_size=5)
         offsprings = binary_crossover(parents, n_childs=args.n_population, eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
-
+        architectures_evaluated += len(mutation)
         # Evaluate offspring
         evaluate_population_multiprocessing(generation, mutation, weights_r2, nadir_point, ideal_point, args)
         update_ref_points(mutation, nadir_point, ideal_point)
