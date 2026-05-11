@@ -252,7 +252,7 @@ if __name__ == '__main__':
     parser.add_argument('--seed', type=int, default=18906049, help='random seed')
     parser.add_argument('--algorithm', type=str, choices=['r2-emoa', 'nevonas', 'nsganet', 'cars', 'r2-emoa-one-shot'], help='which algorithm was used to search')
     parser.add_argument('--search_space', type=str, default='discrete', help='which search space was used to search')
-    parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset for training')
+    parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'], help='dataset for training')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs to train')
     parser.add_argument('--data', type=str, default='./data', help='location of the data corpus')
@@ -286,6 +286,9 @@ if __name__ == '__main__':
 
     if args.reload_dir is None:
         base_dir = args.archive_path.split(os.sep)
+        if len(base_dir) == 1:
+            base_dir = args.archive_path.split('/')
+        print(f'base_dir: {base_dir}')
         base_dir = base_dir[:base_dir.index('search')]
         results_dir = os.sep.join(base_dir) + os.sep + 'train' + os.sep
         args.save_path_final_model = results_dir

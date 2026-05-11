@@ -91,6 +91,7 @@ if __name__ == '__main__':
     python3 -X dev rnas_eval.py --seed 12 --algorithm r2-emoa --dataset cifar10 \
     --batch_size 32 --model_path results/r2-emoa/cifar10/2026-04-20_11-37-00_18906049/train/epoch_90_model.pt 
     """
+    # python rnas_eval.py --seed 12 --algorithm r2-emoa --dataset cifar100 --batch_size 256 --model_path results/r2-emoa/cifar100/2026-05-08_10-04-43_18906049/train/full_trained_model.pt
     parser = argparse.ArgumentParser(description="Evaluating architectures found by RNAS")
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument('--algorithm', type=str, choices=['nsganet', 'nevonas', 'cars', 'r2-emoa', 'r2-emoa-one-shot'])
