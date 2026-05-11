@@ -136,8 +136,8 @@ if __name__ == '__main__':
     n_executions = 0
     log_file = 'logs' + os.sep + f'searching_{n_executions}.log'
     last_execution_code = -1
-
-    while last_execution_code != 0:
+    tries = 10
+    while last_execution_code != 0 and n_executions < tries:
         clean_file = False
         with open(log_file, 'wb') as f_log:
             process = subprocess.Popen(process_args, stdout=f_log, stderr=f_log, text=True)
@@ -177,4 +177,4 @@ if __name__ == '__main__':
             "--dataset", str(args.dataset),
             "--reload_dir", "auto-last",
         ]
-
+    logging.info('Search did not complete successfully after multiple attempts. Please check the log files for details.')

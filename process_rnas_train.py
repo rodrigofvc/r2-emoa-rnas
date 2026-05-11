@@ -16,6 +16,7 @@ if __name__ == '__main__':
     --init_channels 16 --layers 8 --steps 4 --multiplier 4 --train_portion 0.5\
     --archive_path results/r2-emoa/cifar10/2026-04-20_11-37-00_18906049/search/population_data.json
 
+    python process_rnas_train.py --seed 12 --algorithm r2-emoa --search_space discrete --dataset cifar10 --batch_size 256 --epochs 500 --data ./data --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --grad_clip 5.0 --report_freq 50 --freq_save 50 --gpu 0 --init_channels 32 --layers 20 --steps 4 --multiplier 4 --train_portion 1 --archive_path results/r2-emoa/cifar100/2026-05-08_10-04-43_18906049/search/population_data.json
     python3 rnas_train.py --seed 12 --algorithm r2-emoa --search_space discrete --dataset cifar10 --reload_dir auto-last
     """
     parser = argparse.ArgumentParser(description="Training architectures found by RNAS")
@@ -23,7 +24,7 @@ if __name__ == '__main__':
     parser.add_argument('--algorithm', type=str, choices=['r2-emoa', 'nevonas', 'nsganet', 'cars', 'r2-emoa-one-shot'],
                         help='which algorithm was used to search')
     parser.add_argument('--search_space', type=str, default='discrete', help='which search space was used to search')
-    parser.add_argument('--dataset', type=str, choices=['cifar10'], help='dataset for training')
+    parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'], help='dataset for training')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs to train')
     parser.add_argument('--data', type=str, default='./data', help='location of the data corpus')
