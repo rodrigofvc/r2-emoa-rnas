@@ -165,10 +165,42 @@ def train_individual(model, flops, params, train_queue, criterion, optimizer, ar
     ideal_point = torch.tensor(ideal_point, device=args.device, dtype=torch.float32)
     model.train()
     for epoch in range(args.epochs_train_individual):
-        for n_batch, (inputs, target) in enumerate(train_queue):
-            run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
+        if args.loss_type == 'tchebycheff':
+            for n_batch, (inputs, target) in enumerate(train_queue):
+                run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
+        elif args.loss_type == 'ws':
+            for n_batch, (inputs, target) in enumerate(train_queue):
+                run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args)
         scheduler.step()
 
+
+def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
+    inputs = inputs.to(args.device)
+    target = target.to(args.device)
+
+    optimizer.zero_grad()
+
+    adv_input = fgsm_simple(model, inputs, target)
+    adv_input = adv_input.to(args.device)
+
+    std_logits = model(inputs)
+    adv_logits = model(adv_input)
+
+    adv_loss = criterion(adv_logits, target)
+    std_loss = criterion(std_logits, target)
+
+    total_loss = std_loss * args.lambda_1 + adv_loss * args.lambda_2
+
+    total_loss.backward()
+
+    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip, foreach=False)
+    optimizer.step()
+
+    std_predicts = std_logits.argmax(dim=1)
+    adv_predicts = adv_logits.argmax(dim=1)
+    std_correct = (std_predicts == target).sum().item()
+    adv_correct = (adv_predicts == target).sum().item()
+    return std_correct, adv_correct, total_loss.item()
 
 def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
 
