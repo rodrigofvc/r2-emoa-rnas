@@ -14,7 +14,7 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
     log_file = "logs" + os.sep + f"worker_{gen}_{i}.log"
     result_file = "logs" + os.sep + f"result_gen{gen}_ind{i}.json"
 
-    if args.algorithm == 'r2-emoa':
+    if args.algorithm == 'r2-emoa' or args.algorithm == 'random-search':
         file = 'individual_worker.py'
     elif args.algorithm == 'r2-emoa-one-shot':
         file = 'individual_worker_one_shot.py'
@@ -33,7 +33,10 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
         '--batch_size', str(args.batch_size),
         '--epochs_train_individual', str(args.epochs_train_individual),
         '--data', str(args.data),
+        '--loss_type', str(args.loss_type),
         '--mu', str(args.mu),
+        '--lambda_1', str(args.lambda_1),
+        '--lambda_2', str(args.lambda_2),
         '--learning_rate', str(args.learning_rate),
         '--learning_rate_min', str(args.learning_rate_min),
         '--momentum', str(args.momentum),
