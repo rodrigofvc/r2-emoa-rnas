@@ -2,6 +2,8 @@ import json
 import os
 import torch
 import numpy as np
+
+from archivers import archive_update_pq
 from individual import create_from_json
 from micro_space.micro_encoding import PRIMITIVES, convert, decode, Genotype
 from micro_space.model_search import alphas_to_genotype
@@ -13,6 +15,48 @@ def save_model(model, model_path, name):
     model_path += os.sep + name
     torch.save(model, model_path)
 
+def get_genotypes_from_archive(archs_path, args):
+    with open(archs_path, 'r') as f:
+        population_data = json.load(f)
+    genotypes = []
+    if args.algorithm == 'r2-emoa' or args.algorithm == 'r2-emoa-one-shot' or args.algorithm == 'cars':
+        pop = [create_from_json(ind_json, args.search_space) for ind_json in population_data['population']]
+        pop = archive_update_pq([], pop, k=4)
+        for p in pop:
+            genotype_dict = p.genotype
+            genotype = Genotype(normal=genotype_dict[0],
+                                normal_concat=genotype_dict[1],
+                                reduce=genotype_dict[2],
+                                reduce_concat=genotype_dict[3])
+            genotypes.append(genotype)
+    elif args.algorithm == 'nsganet' or args.algorithm == 'nevonas':
+        if 'archive_genotype' in population_data.keys():
+            genotypes_data = population_data['archive_genotype']
+            for genotype_dict in genotypes_data:
+                genotype = Genotype(normal=genotype_dict[0],
+                                    normal_concat=genotype_dict[1],
+                                    reduce=genotype_dict[2],
+                                    reduce_concat=genotype_dict[3])
+                genotypes.append(genotype)
+        else:
+            pop_X = population_data['pop_X']
+            pop_F = population_data['pop_obj']
+            pop = [create_from_json({'X': genome, 'F': obj, 'k': 4, 'feasible': True, 'c_r2': 0,  'std_acc': 0, 'adv_acc': 0, 'genotype': genome}, args.search_space) for genome, obj in zip(pop_X, pop_F)]
+            pop = archive_update_pq([], pop, k=4)
+            for ind in pop:
+                genome = ind.X
+                if args.algorithm == 'nsganet':
+                    genome = convert(genome)
+                    genotype = decode(genome, args.steps, args.multiplier)
+                else:
+                    k = sum(2 + i for i in range(args.steps))
+                    alphas_dim = (k, len(PRIMITIVES))
+                    genome = np.array(genome, dtype=np.float32)
+                    genotype = alphas_to_genotype(genome, alphas_dim, args)
+                genotypes.append(genotype)
+    else:
+        raise NotImplementedError(f"Algorithm {args.algorithm} not implemented for loading architectures.")
+    return genotypes
 
 def get_best_genotype_adversarial(archs_path, args):
     best_adv_loss = 100
