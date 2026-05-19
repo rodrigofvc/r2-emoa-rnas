@@ -53,6 +53,8 @@ def prepare_args(args, model):
 def eval(test_queue, model, attack_name, args):
     std_correct = 0
     adv_correct = 0
+    total_std_loss = 0.0
+    total_adv_loss = 0.0
     total = 0
     model.eval()
     if attack_name == 'FGSM':
@@ -69,6 +71,7 @@ def eval(test_queue, model, attack_name, args):
         attack = torchattacks.CW(model, c=0.001)
     else:
         raise ValueError(f"Unknown attack name: {attack_name}")
+    criterion = torch.nn.CrossEntropyLoss().to(args.device)
     for step, (inputs, target) in enumerate(test_queue):
         inputs = inputs.to(args.device)
         target = target.to(args.device)
@@ -78,15 +81,22 @@ def eval(test_queue, model, attack_name, args):
         with torch.no_grad():
             std_logits = model(inputs)
             adv_logits = model(adv_input)
+            std_loss = criterion(std_logits, target).item()
+            adv_loss = criterion(adv_logits, target).item()
 
         std_predicts = std_logits.argmax(dim=1)
         adv_predicts = adv_logits.argmax(dim=1)
         std_correct += (std_predicts == target).sum().item()
         adv_correct += (adv_predicts == target).sum().item()
+        total_std_loss += std_loss * target.size(0)
+        total_adv_loss += adv_loss * target.size(0)
         total += target.size(0)
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
-    return std_accuracy * 100.0, adv_accuracy * 100.0
+    total_std_loss = total_std_loss / total
+    total_adv_loss = total_adv_loss / total
+    flops, params = utils.get_model_metrics(model)
+    return std_accuracy * 100.0, adv_accuracy * 100.0, total_std_loss, total_adv_loss, flops, params
 
 
 if __name__ == '__main__':
@@ -136,7 +146,7 @@ if __name__ == '__main__':
         test_queue, criterion = prepare_args(args, model)
         for i, attack_f in enumerate(attack_f_list):
             time_stamp = time.time()
-            std_accuracy, adv_accuracy = eval(test_queue, model, attack_f, args)
+            std_accuracy, adv_accuracy, std_loss, adv_loss, flops, params = eval(test_queue, model, attack_f, args)
             logging.info(f"Attack {attack_f}: STD accuracy {std_accuracy:.3f} ADV accuracy {adv_accuracy:.3f}, time ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))})")
             with open('test-evaluations.csv', mode='a', newline='') as csvfile:
                 fieldnames = ['algorithm', 'dataset', 'model', 'attack', 'std_accuracy', 'adv_accuracy']
@@ -157,14 +167,18 @@ if __name__ == '__main__':
             test_queue, criterion = prepare_args(args, model)
             for i, attack_f in enumerate(attack_f_list):
                 time_stamp = time.time()
-                std_accuracy, adv_accuracy = eval(test_queue, model, attack_f, args)
+                std_accuracy, adv_accuracy, std_loss, adv_loss, flops, params = eval(test_queue, model, attack_f, args)
                 logging.info(f"Model {model_file} Attack {attack_f}: STD accuracy {std_accuracy:.3f} ADV accuracy {adv_accuracy:.3f}, time ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))})")
                 with open('test-evaluations.csv', mode='a', newline='') as csvfile:
-                    fieldnames = ['algorithm', 'dataset', 'model', 'attack', 'std_accuracy', 'adv_accuracy']
+                    fieldnames = ['algorithm', 'dataset', 'model', 'flops', 'params', 'attack', 'std_accuracy', 'adv_accuracy', 'std_loss', 'adv_loss']
                     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                     writer.writerow({'algorithm': args.algorithm,
                                      'dataset': args.dataset,
                                      'model': model_path.replace(os.sep, '/'),
+                                     'flops': flops,
+                                     'params': params,
                                      'attack': attack_f,
                                      'std_accuracy': std_accuracy,
-                                     'adv_accuracy': adv_accuracy})
+                                     'adv_accuracy': adv_accuracy,
+                                     'std_loss': std_loss,
+                                     'adv_loss': adv_loss})
