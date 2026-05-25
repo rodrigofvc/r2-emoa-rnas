@@ -1,1 +1,1 @@
-algorithm,dataset,model,attack,std_accuracy,adv_accuracy
+algorithm,dataset,model,flops,params,attack,std_accuracy,adv_accuracy,std_loss,adv_loss

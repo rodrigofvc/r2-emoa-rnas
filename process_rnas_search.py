@@ -9,7 +9,7 @@ import sys
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Running R2-EMOA for RNAS")
     parser.add_argument('--seed', type=int, default=0, help='random seed')
-    parser.add_argument('--algorithm', type=str, choices=['r2-emoa', 'r2-emoa-one-shot'], help='algorithm to run')
+    parser.add_argument('--algorithm', type=str, choices=['r2-emoa', 'r2-emoa-one-shot', 'random-search'], help='algorithm to run')
     parser.add_argument('--search_space', type=str, default="continuous", choices=['continuous', 'discrete'], help='search space to use')
     parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'], help='dataset to use')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
@@ -29,7 +29,10 @@ if __name__ == '__main__':
     parser.add_argument('--prob_mut', type=float, default=0.1, help='mutation probability')
     parser.add_argument('--eta_cross', type=int, default=15, help='crossover eta')
     parser.add_argument('--eta_mut', type=int, default=20, help='mutation eta')
+    parser.add_argument('--loss_type', type=str, default='tchebycheff', choices=['tchebycheff', 'ws'], help='type of loss function to use for backpropagation')
     parser.add_argument('--mu', type=float, default=0.1, help='mu for thchebycheff function')
+    parser.add_argument('--lambda_1', type=float, default=0.5, help='weight for standard loss in ws scalarization')
+    parser.add_argument('--lambda_2', type=float, default=0.5, help='weight for adversarial loss in ws scalarization')
     parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
     parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
@@ -90,7 +93,10 @@ if __name__ == '__main__':
             "--prob_mut", str(args.prob_mut),
             "--eta_cross", str(args.eta_cross),
             "--eta_mut", str(args.eta_mut),
+            "--loss_type", args.loss_type,
             "--mu", str(args.mu),
+            "--lambda_1", str(args.lambda_1),
+            "--lambda_2", str(args.lambda_2),
             "--learning_rate", str(args.learning_rate),
             "--learning_rate_min", str(args.learning_rate_min),
             "--momentum", str(args.momentum),

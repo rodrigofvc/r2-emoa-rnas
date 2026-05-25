@@ -9,6 +9,7 @@ import re
 
 import torch
 from torch import nn
+from torch.cuda.amp import autocast, GradScaler
 import numpy as np
 import torchvision
 
@@ -94,7 +95,10 @@ def prepare_args(args_, genotype):
 
     ssl._create_default_https_context = ssl._create_unverified_context
     train_transform, valid_transform = utils.data_transforms_cifar10(args)
-    train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
+    if args.dataset == 'cifar10':
+        train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
+    elif args.dataset == 'cifar100':
+        train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
 
     num_train = len(train_data)
     indices = list(range(num_train))
@@ -144,6 +148,53 @@ def train(train_queue, model, criterion, scheduler, optimizer, args):
     adv_accuracy = adv_correct / total
     return adv_accuracy * 100.0
 
+
+def train_amp(train_queue, model, criterion, scheduler, optimizer, args):
+    adv_correct = 0
+    total = 0
+
+    model.to(args.device)
+    model.train()
+
+    scaler = GradScaler(enabled=getattr(args, "amp", True))
+
+    for n_batch, (inputs, target) in enumerate(train_queue):
+        inputs = inputs.to(args.device, non_blocking=False)
+        target = target.to(args.device, non_blocking=False)
+
+        optimizer.zero_grad(set_to_none=True)
+
+        adv_inputs = fgsm_simple(model, inputs, target)
+
+        with autocast(enabled=getattr(args, "amp", True)):
+            logits_adv = model(adv_inputs)
+            adv_loss = criterion(logits_adv, target)
+
+        scaler.scale(adv_loss).backward()
+
+        scaler.unscale_(optimizer)
+
+        nn.utils.clip_grad_norm_(
+            model.parameters(),
+            args.grad_clip,
+            foreach=False
+        )
+
+        scaler.step(optimizer)
+        scaler.update()
+
+        adv_predicts = logits_adv.argmax(dim=1)
+        adv_correct += (adv_predicts == target).sum().item()
+        total += target.size(0)
+
+        if n_batch % args.report_freq == 0:
+            logging.info(f">>>> batch {n_batch + 1}/{len(train_queue)} : adv_acc {adv_correct / total * 100:.2f}%")
+
+    scheduler.step()
+
+    adv_accuracy = adv_correct / total
+    return adv_accuracy * 100.0
+
 def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, weights, z_ref_stch, nadir_point, ideal_point):
     loss_type = std_loss.dtype
     losses_grad = torch.stack([std_loss, adv_loss])
@@ -165,10 +216,42 @@ def train_individual(model, flops, params, train_queue, criterion, optimizer, ar
     ideal_point = torch.tensor(ideal_point, device=args.device, dtype=torch.float32)
     model.train()
     for epoch in range(args.epochs_train_individual):
-        for n_batch, (inputs, target) in enumerate(train_queue):
-            run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
+        if args.loss_type == 'tchebycheff':
+            for n_batch, (inputs, target) in enumerate(train_queue):
+                run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
+        elif args.loss_type == 'ws':
+            for n_batch, (inputs, target) in enumerate(train_queue):
+                run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args)
         scheduler.step()
 
+
+def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
+    inputs = inputs.to(args.device)
+    target = target.to(args.device)
+
+    optimizer.zero_grad()
+
+    adv_input = fgsm_simple(model, inputs, target)
+    adv_input = adv_input.to(args.device)
+
+    std_logits = model(inputs)
+    adv_logits = model(adv_input)
+
+    adv_loss = criterion(adv_logits, target)
+    std_loss = criterion(std_logits, target)
+
+    total_loss = std_loss * args.lambda_1 + adv_loss * args.lambda_2
+
+    total_loss.backward()
+
+    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip, foreach=False)
+    optimizer.step()
+
+    std_predicts = std_logits.argmax(dim=1)
+    adv_predicts = adv_logits.argmax(dim=1)
+    std_correct = (std_predicts == target).sum().item()
+    adv_correct = (adv_predicts == target).sum().item()
+    return std_correct, adv_correct, total_loss.item()
 
 def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
 
@@ -244,7 +327,8 @@ if __name__ == '__main__':
     --batch_size 32 --epochs 100 --data ./data --learning_rate 0.025 --learning_rate_min 0.001\
     --momentum 0.9 --weight_decay 3e-4 --grad_clip 5.0 --report_freq 50 --freq_save 10 --gpu 0\
     --init_channels 16 --layers 8 --steps 4 --multiplier 4 --train_portion 0.5\
-    --archive_path results/r2-emoa/cifar10/2026-04-20_11-37-00_18906049/search/population_data.json
+    --archive_path results/r2-emoa/cifar10/2026-04-20_11-37-00_18906049/search/population_data.json\
+    --amp --train_archive
     
     python3 rnas_train.py --seed 12 --algorithm r2-emoa --search_space discrete --dataset cifar10 --reload_dir auto-last
     """
@@ -273,6 +357,8 @@ if __name__ == '__main__':
     parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
     parser.add_argument('--debug_cuda', action='store_true', default=False, help='debug cuda')
     parser.add_argument('--reload_dir', type=str, default=None, help='reload from this directory')
+    parser.add_argument('--amp', action='store_true', default=False, help='use automatic mixed precision')
+    parser.add_argument('--train_archive', action='store_true', default=False, help='train the whole archive of architectures and store the evaluation results')
     parser.add_argument('--archive_path', type=str, default=None, help='path to the archive of architectures')
     args = parser.parse_args()
 
@@ -319,19 +405,40 @@ if __name__ == '__main__':
     if torch.cuda.is_available():
         torch.cuda.manual_seed(args.seed)
 
-    best_genotype = None
-    if args.reload_dir is None:
-        best_genotype = utils_train.get_best_genotype_adversarial(args.archive_path, args)
+    if not args.train_archive:
+        # train only the best architecture found by RNAS
+        best_genotype = None
+        if args.reload_dir is None:
+            best_genotype = utils_train.get_best_genotype_adversarial(args.archive_path, args)
 
-    args, train_queue, criterion, model, initial_epoch, optimizer, scheduler = prepare_args(args, best_genotype)
+        args, train_queue, criterion, model, initial_epoch, optimizer, scheduler = prepare_args(args, best_genotype)
 
-    time_stamp_train = time.time()
-    for epoch in range(initial_epoch, args.epochs):
-        logging.info(f"Epoch {epoch}/{args.epochs}")
-        time_stamp = time.time()
-        adv_acc = train(train_queue, model, criterion, scheduler, optimizer, args)
-        logging.info(f">>>> Epoch {epoch} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))} (HH:MM:SS) adv_acc {adv_acc:.2f}% ")
-        if epoch % args.freq_save == 0:
-            utils.save_model(model, args.save_path_final_model, f"epoch_{epoch}_model.pt")
-    utils.save_model(model, args.save_path_final_model, f"full_trained_model.pt")
-    logging.info(f"Total training time: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_train))} (HH:MM:SS)")
+        time_stamp_train = time.time()
+        for epoch in range(initial_epoch, args.epochs):
+            logging.info(f"Epoch {epoch}/{args.epochs}")
+            time_stamp = time.time()
+            if args.amp:
+                adv_acc = train_amp(train_queue, model, criterion, scheduler, optimizer, args)
+            else:
+                adv_acc = train(train_queue, model, criterion, scheduler, optimizer, args)
+            logging.info(f">>>> Epoch {epoch} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))} (HH:MM:SS) adv_acc {adv_acc:.2f}% ")
+            if epoch % args.freq_save == 0:
+                utils.save_model(model, args.save_path_final_model, f"epoch_{epoch}_model.pt")
+        utils.save_model(model, args.save_path_final_model, f"full_trained_model.pt")
+        logging.info(f"Total training time: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_train))} (HH:MM:SS)")
+    else:
+        # train the whole archive of architectures and store the trained models in the same directory
+        archive_genotypes = utils_train.get_genotypes_from_archive(args.archive_path, args)
+        for i, genotype in enumerate(archive_genotypes):
+            args, train_queue, criterion, model, initial_epoch, optimizer, scheduler = prepare_args(args, genotype)
+            logging.info(f">>>> Training individual {i}/{len(archive_genotypes)-1}")
+            for epoch in range(initial_epoch, args.epochs):
+                logging.info(f"Individual {i}/{len(archive_genotypes)-1} Epoch {epoch}/{args.epochs}")
+                time_stamp = time.time()
+                if args.amp:
+                    adv_acc = train_amp(train_queue, model, criterion, scheduler, optimizer, args)
+                else:
+                    adv_acc = train(train_queue, model, criterion, scheduler, optimizer, args)
+                logging.info(
+                    f">>>> Individual {i}/{len(archive_genotypes)-1} Epoch {epoch} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))} (HH:MM:SS) adv_acc {adv_acc:.2f}% ")
+            utils.save_model(model, args.save_path_final_model + "archive" + os.sep, f"individual_{i}_model.pt")
