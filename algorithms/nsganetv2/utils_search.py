@@ -12,10 +12,10 @@ from indicators import normalize_objectives, get_dynamic_r2_reference, r2
 
 
 def get_weights_r2(n):
-    file = 'r2_weights' + os.sep + 'weights_' + str(n) + '.pkl'
-    with open(file, 'rb') as f:
-        weights_r2 = pickle.load(f)
-    return weights_r2
+    file = 'r2_weights' + os.sep + 'weights_' + str(n) + '.json'
+    with open(file, 'r') as f:
+        json_data = json.load(f)
+    return {int(k): np.array(v) for k, v in json_data.items()}
 
 def save_archive_losses(archive, archive_path):
     archive_path += 'archive_losses'

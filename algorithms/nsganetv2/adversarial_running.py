@@ -1,7 +1,5 @@
-#from ofa.imagenet_codebase.run_manager import RunManager
 import copy
 
-import thop
 import torchvision
 from ofa.imagenet_classification.run_manager import RunManager
 import os
@@ -15,7 +13,7 @@ import torch.nn.parallel
 import torch.backends.cudnn as cudnn
 import torch.optim
 from tqdm import tqdm
-
+from torch.utils.flop_counter import FlopCounterMode
 from ofa.utils import (
     get_net_info,
     cross_entropy_loss_with_soft_target,
@@ -33,6 +31,9 @@ from ofa.utils import MyRandomResizedCrop
 
 __all__ = ["RunManager"]
 
+from adversarial import fgsm_simple
+
+
 class AdvRunManager(RunManager):
 
     def __init__(self, path, net, run_config, init=True, measure_latency=None, no_gpu=False):
@@ -46,8 +47,7 @@ class AdvRunManager(RunManager):
         net=None,
         data_loader=None,
         no_logs=False,
-        train_mode=False,
-        attack_f=None,
+        train_mode=False
     ):
         if net is None:
             net = self.net
@@ -66,7 +66,6 @@ class AdvRunManager(RunManager):
 
         losses = AverageMeter()
         metric_dict = self.get_metric_dict()
-        attack = attack_f(net)
 
         total = 0
         std_loss_mean = 0
@@ -81,7 +80,9 @@ class AdvRunManager(RunManager):
             for i, (images, labels) in enumerate(data_loader):
                 images, labels = images.to(self.device), labels.to(self.device)
                 images.requires_grad = True
-                adv_images, std_logits, std_loss = attack(images, labels)
+                adv_images = fgsm_simple(net, images, labels)
+                std_logits = net(images)
+                std_loss = self.test_criterion(std_logits, labels)
                 adv_logits = net(adv_images)
                 adv_loss = self.test_criterion(adv_logits, labels)
                 loss = std_loss * 0.5 + adv_loss * 0.5
@@ -114,15 +115,18 @@ class AdvRunManager(RunManager):
         else:
             device = 'cpu'
 
-        model = copy.deepcopy(model).to(device)
-        x = torch.rand((1, 3, batch[0].shape[-2], batch[0].shape[-1])).to(self.device)
-        macs, params = thop.profile(model, inputs=(x,), verbose=False)
-        flops = round((2 * macs) / 1e6, 4)
-        params = round(params / 1e6, 4)
+        #model = copy.deepcopy(model).to(device)
+
+        params_num = sum(p.numel() for p in model.parameters() if p.requires_grad)
+        params = round(float(params_num) / 1e6, 4)
+        x = torch.randn(1, 3, 32, 32).to(next(model.parameters()).device)
+        with FlopCounterMode(display=False) as flop_counter:
+            model(x)
+        flops = round(float(flop_counter.get_total_flops()) / 1e6, 4)
 
         return total_loss_mean, std_loss_mean, adv_loss_mean, flops, params, self.get_metric_vals(metric_dict)
 
-    def validate_all_resolution_adv(self, epoch=0, is_test=False, net=None, attack_f=None):
+    def validate_all_resolution_adv(self, epoch=0, is_test=False, net=None):
         if net is None:
             net = self.network
         if isinstance(self.run_config.data_provider.image_size, list):
@@ -131,13 +135,13 @@ class AdvRunManager(RunManager):
                 img_size_list.append(img_size)
                 self.run_config.data_provider.assign_active_img_size(img_size)
                 self.reset_running_statistics(net=net)
-                total_loss_mean, std_loss_mean, adv_loss_mean, flops, params, (top1, top5) = self.validate_adv(epoch, is_test, net=net, attack_f=attack_f)
+                total_loss_mean, std_loss_mean, adv_loss_mean, flops, params, (top1, top5) = self.validate_adv(epoch, is_test, net=net)
                 loss_list.append(total_loss_mean)
                 top1_list.append(top1)
                 top5_list.append(top5)
             return img_size_list, loss_list, top1_list, top5_list
         else:
-            total_loss_mean, std_loss_mean, adv_loss_mean, flops, params, (top1, top5) = self.validate_adv(epoch, is_test, net=net, attack_f=attack_f)
+            total_loss_mean, std_loss_mean, adv_loss_mean, flops, params, (top1, top5) = self.validate_adv(epoch, is_test, net=net)
             return (
                 [self.run_config.data_provider.active_img_size],
                 [total_loss_mean],
@@ -145,7 +149,7 @@ class AdvRunManager(RunManager):
                 [top5],
             )
 
-    def train_one_epoch_adv(self, args, epoch, warmup_epochs=0, warmup_lr=0, attack_f=None):
+    def train_one_epoch_adv(self, args, epoch, warmup_epochs=0, warmup_lr=0):
         # switch to train mode
         self.net.train()
         MyRandomResizedCrop.EPOCH = epoch  # required by elastic resolution
@@ -155,7 +159,6 @@ class AdvRunManager(RunManager):
         losses = AverageMeter()
         metric_dict = self.get_metric_dict()
         data_time = AverageMeter()
-        attack = attack_f(self.net)
         with tqdm(
             total=nBatch,
             desc="{} Train Epoch #{}".format(self.run_config.dataset, epoch + 1),
@@ -200,7 +203,9 @@ class AdvRunManager(RunManager):
                         soft_logits = args.teacher_model(images).detach()
                         soft_label = F.softmax(soft_logits, dim=1)
                 images.requires_grad = True
-                adv_images, std_logits, std_loss = attack(images, target)
+                adv_images = fgsm_simple(self.net, images, target)
+                std_logits = self.net(images)
+                std_loss = self.train_criterion(std_logits, labels)
                 # compute output
                 adv_output = self.net(adv_images)
                 adv_loss = self.train_criterion(adv_output, labels)
@@ -241,15 +246,15 @@ class AdvRunManager(RunManager):
                 end = time.time()
         return losses.avg, self.get_metric_vals(metric_dict)
 
-    def train_adv(self, args, attack_f, warmup_epoch=0, warmup_lr=0):
+    def train_adv(self, args, warmup_epoch=0, warmup_lr=0):
         for epoch in range(self.start_epoch, self.run_config.n_epochs + warmup_epoch):
             train_loss, (train_top1, train_top5) = self.train_one_epoch_adv(
-                args, epoch, warmup_epoch, warmup_lr, attack_f
+                args, epoch, warmup_epoch, warmup_lr
             )
 
             if (epoch + 1) % self.run_config.validation_frequency == 0:
                 img_size, val_loss, val_acc, val_acc5 = self.validate_all_resolution_adv(
-                    epoch=epoch, is_test=False, attack_f=attack_f
+                    epoch=epoch, is_test=False
                 )
 
                 is_best = np.mean(val_acc) > self.best_acc

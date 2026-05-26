@@ -4,10 +4,8 @@ import json
 
 import torch
 import argparse
-from thop import profile
+from torch.utils.flop_counter import FlopCounterMode
 
-
-from adversarial import get_attack_function
 from adversarial_running import AdvRunManager
 from codebase.networks import NSGANetV2
 from codebase.run_manager import get_run_config
@@ -50,10 +48,15 @@ def get_net_info(net, data_shape, measure_latency=None, print_info=True, clean=F
         device = 'cpu'
     model = net.module if isinstance(net, torch.nn.DataParallel) else net
     model = copy.deepcopy(model).to(device)
-    inputs = torch.randn(1, *data_shape).to(device)
-    macs, params = profile(model, inputs=(inputs,), verbose=False)
-    flops = (2 * macs) / 1e6
-    params = params / 1e6
+
+    x = torch.randn(1, *data_shape).to(next(model.parameters()).device)
+    with FlopCounterMode(display=False) as flop_counter:
+        model(x)
+
+    flops = round(float(flop_counter.get_total_flops()) / 1e6, 4)
+    params_num = sum(p.numel() for p in model.parameters() if p.requires_grad)
+    params = round(float(params_num) / 1e6, 4)
+
     net_info = {'gpu_latency': {'val': None}, 'cpu_latency': {'val': None}}
     net_info['flops'] = round(flops, 4)
     net_info['params'] = round(params, 4)
@@ -178,14 +181,6 @@ class OFAEvaluator:
             #    n_classes=run_config.data_provider.n_classes, dropout_rate=cfgs.drop_rate)
             #pass
 
-        params_attack = {
-            "name" : "FGSM",
-            "params": {
-                "eps" : "8/255",
-            }
-        }
-        attack_f = get_attack_function(params_attack)
-
         run_manager = AdvRunManager(log_dir, subnet, run_config, init=False)
         if reset_running_statistics:
             # run_manager.reset_running_statistics(net=subnet, batch_size=vld_batch_size)
@@ -193,9 +188,9 @@ class OFAEvaluator:
 
         # train and validate the subnet
         if n_epochs > 0:
-            subnet = run_manager.train_adv(cfgs, attack_f)
+            subnet = run_manager.train_adv(cfgs)
 
-        total_loss_mean, std_loss, adv_loss, flops, params, (top1, top5) = run_manager.validate_adv(net=subnet, is_test=is_test, no_logs=no_logs, attack_f=attack_f)
+        total_loss_mean, std_loss, adv_loss, flops, params, (top1, top5) = run_manager.validate_adv(net=subnet, is_test=is_test, no_logs=no_logs)
 
         info['loss'], info['top1'], info['top5'] = total_loss_mean, top1, top5
         info['std_loss'], info['adv_loss'] = std_loss, adv_loss

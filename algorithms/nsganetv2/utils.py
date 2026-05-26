@@ -1,6 +1,8 @@
 import os
 import copy
 import json
+import sys
+
 import yaml
 import numpy as np
 from collections import OrderedDict
@@ -56,11 +58,12 @@ def bash_command_template(**kwargs):
     cfg['reset_running_statistics'] = kwargs.pop(
         'reset_running_statistics', DEFAULT_CFG['reset_running_statistics'])
     cfg['sync_cuda'] = kwargs.pop('sync_cuda', True)
+    exec_bash = kwargs.pop('bash', True)
 
     if not cfg['sync_cuda']:
-        execution_line = "CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES={} python3 evaluator.py".format(gpus)
+        execution_line = "CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES={} {} evaluator.py".format(gpus, sys.executable)
     else:
-        execution_line = "CUDA_VISIBLE_DEVICES={} python evaluator.py".format(gpus)
+        execution_line = "CUDA_VISIBLE_DEVICES={} {} evaluator.py".format(gpus, sys.executable)
 
     for k, v in cfg.items():
         if v is not None:
@@ -71,16 +74,20 @@ def bash_command_template(**kwargs):
                     execution_line += " --{}".format(k)
             else:
                 execution_line += " --{} {}".format(k, v)
-    execution_line += ' &'
+    if exec_bash:
+        execution_line += ' &'
     return execution_line
 
 
-def prepare_eval_folder(path, configs, gpu=2, n_gpus=8, **kwargs):
+def prepare_eval_folder(path, configs, gpu=2, n_gpus=8, bash=True, **kwargs):
     """ create a folder for parallel evaluation of a population of architectures """
     os.makedirs(path, exist_ok=True)
     gpu_template = ','.join(['{}'] * gpu)
     gpus = [gpu_template.format(i, i + 1) for i in range(0, n_gpus, gpu)]
-    bash_file = ['#!/bin/bash']
+    if bash:
+        bash_file = ['#!/bin/bash']
+    else:
+        bash_file = []
     for i in range(0, len(configs), n_gpus//gpu):
         for j in range(n_gpus//gpu):
             if i + j < len(configs):
@@ -90,9 +97,10 @@ def prepare_eval_folder(path, configs, gpu=2, n_gpus=8, **kwargs):
                 bash_file.append(bash_command_template(
                     gpus=gpus[j], subnet=job, save=os.path.join(
                         path, "net_{}.stats".format(i + j)), **kwargs))
-        bash_file.append('wait')
-
-    with open(os.path.join(path, 'run_bash.sh'), 'w') as handle:
+        if bash:
+            bash_file.append('wait')
+    file_type = 'run_bash.sh' if bash else 'run_bash.cmd'
+    with open(os.path.join(path, file_type), 'w') as handle:
         for line in bash_file:
             handle.write(line + os.linesep)
 

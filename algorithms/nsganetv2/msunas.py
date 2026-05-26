@@ -58,7 +58,8 @@ class MSuNAS:
         self.supernet_path = kwargs.pop(
             'supernet_path', './data/ofa_mbv3_d234_e346_k357_w1.0')  # supernet model path
         self.latency = self.sec_obj if "cpu" in self.sec_obj or "gpu" in self.sec_obj else None
-        self.sync_cuda = kwargs.pop('sync_cuda', True) # whether to synchronize cuda for latency measurement
+        self.sync_cuda = kwargs.pop('sync_cuda', False) # whether to synchronize cuda for latency measurement
+        self.bash = kwargs.pop('bash', True)
         self.archive = []
         self.archive_2 = []
         self.statistics = {'hyp_log': [], 'r2_log': [], 'hyp2_log': []}
@@ -80,7 +81,7 @@ class MSuNAS:
                 arch_doe = self.search_space.initialize(self.n_doe)
 
             # parallel evaluation of arch_doe
-            std_loss, adv_loss, flops, params = self._evaluate(arch_doe, it=0)
+            std_loss, adv_loss, flops, params = self._evaluate(arch_doe, it=0, bash=self.bash)
 
             # store evaluated / trained architectures
             for member in zip(arch_doe, std_loss, adv_loss, flops, params):
@@ -115,7 +116,7 @@ class MSuNAS:
             # Algo 1 line 13-14 / Fig. 3(e) in the paper
             #c_top1_err, complexity = self._evaluate(candidates, it=it)
 
-            std_loss, adv_loss, flops, params = self._evaluate(candidates, it=it)
+            std_loss, adv_loss, flops, params = self._evaluate(candidates, it=it, bash=self.bash)
             # check for accuracy predictor's performance
             rmse, rho, tau = get_correlation(
                 np.vstack((a_top1_err_pred, c_top1_err_pred)), np.array([x[1] for x in archive] + std_loss))
@@ -213,17 +214,20 @@ class MSuNAS:
 
         return archive
 
-    def _evaluate(self, archs, it):
+    def _evaluate(self, archs, it, bash):
         gen_dir = os.path.join(self.save_path, "iter_{}".format(it))
         prepare_eval_folder(
-            gen_dir, archs, self.gpu, self.n_gpus, data=self.data, dataset=self.dataset,
+            gen_dir, archs, self.gpu, self.n_gpus, bash=bash, data=self.data, dataset=self.dataset,
             n_classes=self.n_classes, supernet_path=self.supernet_path,
             num_workers=self.n_workers, valid_size=self.vld_size,
             trn_batch_size=self.trn_batch_size, vld_batch_size=self.vld_batch_size,
             n_epochs=self.n_epochs, test=self.test, latency=self.latency, verbose=False,
             sync_cuda=self.sync_cuda)
-
-        subprocess.call("sh {}/run_bash.sh".format(gen_dir), shell=True)
+        if bash:
+            subprocess.call("sh {}/run_bash.sh".format(gen_dir), shell=True)
+        else:
+            # use cmd in case the program is run on windows
+            subprocess.call("{}/run_bash.cmd".format(gen_dir), shell=True)
 
         std_loss, adv_loss, flops, params = [], [], [], []
         #top1_err, complexity = [], []
@@ -457,6 +461,8 @@ if __name__ == '__main__':
                         help='number of epochs for CNN training')
     parser.add_argument('--test', action='store_true', default=False,
                         help='evaluation performance on testing set')
+    parser.add_argument('--bash', action='store_true', default=False,
+                        help='exect the subprocess in bash')
     parser.add_argument('--sync_cuda', default=True,
                         help='set this flag to false for disabling cuda synchronization')
     cfgs = parser.parse_args()
