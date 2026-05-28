@@ -23,6 +23,11 @@ def get_weights_r2(n):
         json_data = json.load(f)
     return {int(k): np.array(v) for k, v in json_data.items()}
 
+def get_weights_r2_file(file):
+    with open(file, 'r') as f:
+        json_data = json.load(f)
+    return {int(k): np.array(v) for k, v in json_data.items()}
+
 
 def save_archive_accuracy(archive, archive_path):
     archive_path += os.sep + 'archive_accuracy'

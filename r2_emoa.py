@@ -52,7 +52,9 @@ def prepare_args_standard(args_):
     print("Running with config:")
     for arg in vars(args):
         print(f"{arg}: {getattr(args, arg)}")
-    weights_r2 = utils.get_weights_r2(args.n_population)
+
+    #weights_r2 = utils.get_weights_r2(args.n_population)
+    weights_r2 = utils.get_weights_r2_file(args.r2_weights_dir)
 
     return args, weights_r2, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, architectures_evaluated, initial_generation, pop, statistics, time_search
 
