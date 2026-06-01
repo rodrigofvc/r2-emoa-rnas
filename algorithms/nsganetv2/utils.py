@@ -7,7 +7,6 @@ import yaml
 import numpy as np
 from collections import OrderedDict
 
-from thop import profile
 
 import torch
 import torch.nn as nn
