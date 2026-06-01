@@ -9,7 +9,7 @@ import re
 
 import torch
 from torch import nn
-from torch.cuda.amp import autocast, GradScaler
+from torch.amp import GradScaler, autocast
 import numpy as np
 import torchvision
 
@@ -156,7 +156,7 @@ def train_amp(train_queue, model, criterion, scheduler, optimizer, args):
     model.to(args.device)
     model.train()
 
-    scaler = GradScaler(enabled=getattr(args, "amp", True))
+    scaler = GradScaler('cuda')
 
     for n_batch, (inputs, target) in enumerate(train_queue):
         inputs = inputs.to(args.device, non_blocking=False)
@@ -166,7 +166,7 @@ def train_amp(train_queue, model, criterion, scheduler, optimizer, args):
 
         adv_inputs = fgsm_simple(model, inputs, target)
 
-        with autocast(enabled=getattr(args, "amp", True)):
+        with autocast(device_type="cuda"):
             logits_adv = model(adv_inputs)
             adv_loss = criterion(logits_adv, target)
 
