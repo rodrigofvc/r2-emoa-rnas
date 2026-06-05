@@ -71,6 +71,7 @@ class AdvRunManager(RunManager):
         std_loss_mean = 0
         adv_loss_mean = 0
         total_loss_mean = 0
+        start_time = time.time()
 
         with tqdm(
             total=len(data_loader),
@@ -111,15 +112,14 @@ class AdvRunManager(RunManager):
         model = net.module if isinstance(net, torch.nn.DataParallel) else net
 
         if torch.cuda.is_available():
-            device = 'cuda'
+            device = 'cuda:0'
         else:
             device = 'cpu'
 
         #model = copy.deepcopy(model).to(device)
-
         params_num = sum(p.numel() for p in model.parameters() if p.requires_grad)
         params = round(float(params_num) / 1e6, 4)
-        x = torch.randn(1, 3, 32, 32).to(next(model.parameters()).device)
+        x = torch.randn(1, 3, 32, 32).to(device)
         with FlopCounterMode(display=False) as flop_counter:
             model(x)
         flops = round(float(flop_counter.get_total_flops()) / 1e6, 4)
@@ -251,7 +251,7 @@ class AdvRunManager(RunManager):
             train_loss, (train_top1, train_top5) = self.train_one_epoch_adv(
                 args, epoch, warmup_epoch, warmup_lr
             )
-
+            """
             if (epoch + 1) % self.run_config.validation_frequency == 0:
                 img_size, val_loss, val_acc, val_acc5 = self.validate_all_resolution_adv(
                     epoch=epoch, is_test=False
@@ -278,7 +278,7 @@ class AdvRunManager(RunManager):
                 self.write_log(val_log, prefix="valid", should_print=False)
             else:
                 is_best = False
-
+            """
             self.save_model(
                 {
                     "epoch": epoch,
@@ -286,7 +286,7 @@ class AdvRunManager(RunManager):
                     "optimizer": self.optimizer.state_dict(),
                     "state_dict": self.network.state_dict(),
                 },
-                is_best=is_best,
+                #is_best=is_best,
             )
 
     def reset_running_statistics(

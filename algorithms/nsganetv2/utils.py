@@ -17,8 +17,9 @@ from pymoo.core.sampling import Sampling
 from pymoo.core.crossover import Crossover
 
 DEFAULT_CFG = {
-    'gpus': '0', 'config': None, 'init': None, 'trn_batch_size': 128, 'vld_batch_size': 250, 'num_workers': 4,
-    'n_epochs': 0, 'save': None, 'resolution': 224, 'valid_size': 10000, 'test': True, 'latency': None,
+    'gpus': '0', 'config': None, 'init': None, 'trn_batch_size': 128,
+    'vld_batch_size': 250, 'num_workers': 0, 'n_epochs': 0, 'save': None,
+    'resolution': 32, 'valid_size': 10000, 'test': True, 'latency': None,
     'verbose': False, 'classifier_only': False, 'reset_running_statistics': True,
 }
 
@@ -56,13 +57,13 @@ def bash_command_template(**kwargs):
     cfg['classifier_only'] = kwargs.pop('classifier_only', DEFAULT_CFG['classifier_only'])
     cfg['reset_running_statistics'] = kwargs.pop(
         'reset_running_statistics', DEFAULT_CFG['reset_running_statistics'])
-    cfg['sync_cuda'] = kwargs.pop('sync_cuda', True)
-    exec_bash = kwargs.pop('bash', True)
+    cfg['sync_cuda'] = kwargs.pop('sync_cuda', False)
+    exec_bash = kwargs.pop('bash', False)
 
-    if not cfg['sync_cuda']:
+    if cfg['sync_cuda']:
         execution_line = "CUDA_LAUNCH_BLOCKING=1 CUDA_VISIBLE_DEVICES={} {} evaluator.py".format(gpus, sys.executable)
     else:
-        execution_line = "CUDA_VISIBLE_DEVICES={} {} evaluator.py".format(gpus, sys.executable)
+        execution_line = "{} evaluator.py".format(sys.executable)
 
     for k, v in cfg.items():
         if v is not None:
@@ -98,7 +99,7 @@ def prepare_eval_folder(path, configs, gpu=2, n_gpus=8, bash=True, **kwargs):
                         path, "net_{}.stats".format(i + j)), **kwargs))
         if bash:
             bash_file.append('wait')
-    file_type = 'run_bash.sh' if bash else 'run_bash.cmd'
+    file_type = 'run_bash.sh' if bash else 'run_bash.bat'
     with open(os.path.join(path, file_type), 'w') as handle:
         for line in bash_file:
             handle.write(line + os.linesep)

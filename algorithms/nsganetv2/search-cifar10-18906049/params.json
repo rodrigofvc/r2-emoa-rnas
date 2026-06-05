@@ -1,0 +1,16 @@
+{
+    "iterations": 15,
+    "n_doe": 10,
+    "n_iter": 40,
+    "predictor": "mlp",
+    "predictor_adv": "mlp",
+    "n_gpus": 1,
+    "dataset": "cifar10",
+    "n_classes": 10,
+    "vld_size": 0.5,
+    "n_epochs": 10,
+    "supernet_path": "./data/ofa_mbv3_d234_e346_k357_w1.0",
+    "sync_cuda": false,
+    "save_path": "search-cifar100-18906049-test",
+    "seed": 18906049
+}

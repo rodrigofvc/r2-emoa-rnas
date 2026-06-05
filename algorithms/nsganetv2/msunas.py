@@ -227,7 +227,9 @@ class MSuNAS:
             subprocess.call("sh {}/run_bash.sh".format(gen_dir), shell=True)
         else:
             # use cmd in case the program is run on windows
-            subprocess.call("{}/run_bash.cmd".format(gen_dir), shell=True)
+            #subprocess.call("{}/run_bash.bat".format(gen_dir), shell=True)
+            bat_path = os.path.join(gen_dir, "run_bash.bat")
+            subprocess.call([bat_path], shell=False)
 
         std_loss, adv_loss, flops, params = [], [], [], []
         #top1_err, complexity = [], []
@@ -264,8 +266,8 @@ class MSuNAS:
             del archive[i]
         for i, x in enumerate(inputs):
             assert len(x) == 16, f"input length must be 16 but got {len(x)} at index {i}"
-        print('>>>>>>>> LEN INPUTS: ')
-        print([len(x) for x in inputs])
+        #print('>>>>>>>> LEN INPUTS: ')
+        #print([len(x) for x in inputs])
         inputs = np.array(inputs)
         targets = np.array([x[1] for x in archive]) # std_loss
         # TODO assert len(inputs) > len(inputs[0]), f"# of training samples have to be > # of dimensions {len(inputs[0])} but got {len(inputs)}"
@@ -453,9 +455,9 @@ if __name__ == '__main__':
                         help='number of workers for dataloader per evaluation job')
     parser.add_argument('--vld_size', type=float, default=0.5,
                         help='validation set size, randomly sampled from training set')
-    parser.add_argument('--trn_batch_size', type=int, default=96,
+    parser.add_argument('--trn_batch_size', type=int, default=192,
                         help='train batch size for training')
-    parser.add_argument('--vld_batch_size', type=int, default=96,
+    parser.add_argument('--vld_batch_size', type=int, default=192,
                         help='test batch size for inference')
     parser.add_argument('--n_epochs', type=int, default=10,
                         help='number of epochs for CNN training')
@@ -463,10 +465,11 @@ if __name__ == '__main__':
                         help='evaluation performance on testing set')
     parser.add_argument('--bash', action='store_true', default=False,
                         help='exect the subprocess in bash')
-    parser.add_argument('--sync_cuda', default=True,
+    parser.add_argument('--sync_cuda', action='store_true', default=False,
                         help='set this flag to false for disabling cuda synchronization')
     cfgs = parser.parse_args()
     main(cfgs)
-# python3 msunas.py --seed 18906049 --iterations 1 --n_doe 4 --n_iter 4 --dataset cifar100 --n_classes 100 --n_epochs 1 --sync_cuda True --data ../../data --save search-cifar100-18906049
+
+# python msunas.py --seed 18906049 --iterations 2 --n_doe 10 --n_iter 40 --dataset cifar10 --n_classes 10 --n_epochs 10 --data ../../data --save search-cifar100-18906049-test --n_workers 4
 
 # nohup env CUDA_LAUNCH_BLOCKING=1 PYTHONMALLOC=debug python3 msunas.py --seed 18906049 --iterations 30 --n_doe 40 --n_iter 40 --dataset cifar10 --n_classes 10 --n_epochs 10 --sync_cuda False --data ../../data --save search-cifar10-18906049 > msunas.out 2> msunas.err < /dev/null &

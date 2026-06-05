@@ -8,7 +8,9 @@ class OFASearchSpace:
         self.exp_ratio = [3, 4, 6]  # expansion rate
         #self.depth = [2, 3, 4]  # number of Inverted Residual Bottleneck layers repetition
         self.depth = [1]
-        self.resolution = list(range(192, 257, 4))  # input image resolutions
+        #self.resolution = list(range(192, 257, 4))  # input image resolutions
+        # CIFAR-10/100
+        self.resolution = [32]
 
     def sample(self, n_samples=1, nb=None, ks=None, e=None, d=None, r=None):
         """ randomly sample a architecture"""
@@ -25,7 +27,7 @@ class OFASearchSpace:
             # then sample kernel size, expansion rate and resolution
             kernel_size = np.random.choice(ks, size=int(np.sum(depth)), replace=True).tolist()
             exp_ratio = np.random.choice(e, size=int(np.sum(depth)), replace=True).tolist()
-            resolution = int(np.random.choice(r))
+            resolution = 32
 
             data.append({'ks': kernel_size, 'e': exp_ratio, 'd': depth, 'r': resolution})
         return data
@@ -34,9 +36,9 @@ class OFASearchSpace:
         # sample one arch with least (lb of hyperparameters) and most complexity (ub of hyperparameters)
         data = [
             self.sample(1, ks=[min(self.kernel_size)], e=[min(self.exp_ratio)],
-                        d=[min(self.depth)], r=[min(self.resolution)])[0],
+                        d=[min(self.depth)], r=[self.resolution])[0],
             self.sample(1, ks=[max(self.kernel_size)], e=[max(self.exp_ratio)],
-                        d=[max(self.depth)], r=[max(self.resolution)])[0]
+                        d=[max(self.depth)], r=[self.resolution])[0]
         ]
         data.extend(self.sample(n_samples=n_doe - 2))
         return data
@@ -79,8 +81,6 @@ class OFASearchSpace:
         block_i = [depth, kernel_size, exp_rate]
         """
         depth, kernel_size, exp_rate = [], [], []
-        print('>>>>>>>>>>>   Decoding architecture: ', x, type(x), x.shape)
-        print('<<<<<<<<<<<<<<<<<<<<<<<<<<<')
         x = x.astype(int)
 
         for i in range(0, len(x) - 2, 9):

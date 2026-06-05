@@ -364,7 +364,7 @@ class CIFAR100DataProvider(DataProvider):
     def train_dataset(self, _transforms):
         # dataset = datasets.ImageFolder(self.train_path, _transforms)
         dataset = torchvision.datasets.CIFAR100(
-            root='../../../data', train=True, download=False, transform=_transforms)
+            root='../../../data', train=True, download=True, transform=_transforms)
         return dataset
 
     def test_dataset(self, _transforms):

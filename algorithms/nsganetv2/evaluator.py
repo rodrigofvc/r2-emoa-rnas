@@ -49,7 +49,7 @@ def get_net_info(net, data_shape, measure_latency=None, print_info=True, clean=F
     model = net.module if isinstance(net, torch.nn.DataParallel) else net
     model = copy.deepcopy(model).to(device)
 
-    x = torch.randn(1, *data_shape).to(next(model.parameters()).device)
+    x = torch.randn(1, 3, 224, 224).to(next(model.parameters()).device)
     with FlopCounterMode(display=False) as flop_counter:
         model(x)
 

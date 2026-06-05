@@ -54,7 +54,7 @@ class CIFARRunConfig(RunConfig):
                  opt_type='sgd', opt_param=None, weight_decay=4e-5, label_smoothing=0.0, no_decay_keys=None,
                  mixup_alpha=None,
                  model_init='he_fout', validation_frequency=1, print_frequency=10,
-                 n_worker=2, resize_scale=0.08, distort_color=None, image_size=224,
+                 n_worker=2, resize_scale=0.08, distort_color=None, image_size=32,
                  data_path='/mnt/datastore/CIFAR',
                  **kwargs):
         super(CIFARRunConfig, self).__init__(
