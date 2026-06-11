@@ -143,6 +143,12 @@ def evaluate_population_multiprocessing(gen, pop, weights_r2, nadir_point, ideal
             float(return_dict[i]["flops"]),
             float(return_dict[i]["params"])
         ], dtype=np.float64)
+        individual.F_acc = np.array([
+            100-float(return_dict[i]["std_acc"]),
+            100-float(return_dict[i]["adv_acc"]),
+            float(return_dict[i]["flops"]),
+            float(return_dict[i]["params"])
+        ], dtype=np.float64)
         individual.genotype = return_dict[i]["genotype"]
         individual.feasible = True if individual.genotype is not None else False
 

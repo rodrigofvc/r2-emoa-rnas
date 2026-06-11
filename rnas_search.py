@@ -71,6 +71,7 @@ if __name__ == '__main__':
     parser.add_argument('--debug_cuda', action='store_true', default=False, help='Enable CUDA_LAUNCH_BLOCKING for debugging')
     parser.add_argument('--increase_epochs', action='store_true', default=False, help='Increase the number of epochs to train the supernet and individuals as generations progress')
     parser.add_argument('--r2_weights_dir', type=str, default='r2_weights/weights_40.json', help='Directory to load the R2 weights from (only used for r2-emoa-based algorithms)')
+    parser.add_argument('--losses_objs', action='store_true', default=False, help='Use the standard and adversarial losses as objectives instead of using accuracies as objectives')
     parser.add_argument('--reload_dir', type=str, default=None, help='Directory to reload the experiment from if --reload is set')
     args = parser.parse_args()
 
@@ -80,9 +81,9 @@ if __name__ == '__main__':
         datefmt='%H:%M:%S'
     )
 
-    #if os.path.exists("logs"):
-    #    shutil.rmtree("logs")
-    #os.makedirs("logs", exist_ok=True)
+    if os.path.exists("logs"):
+        shutil.rmtree("logs")
+    os.makedirs("logs", exist_ok=True)
 
     if args.reload_dir is None:
         results_dir = create_experiment_dir(args.algorithm, args.dataset, args.seed)

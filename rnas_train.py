@@ -9,7 +9,7 @@ import re
 
 import torch
 from torch import nn
-from torch.amp import GradScaler, autocast
+from torch.cuda.amp import GradScaler, autocast
 import numpy as np
 import torchvision
 

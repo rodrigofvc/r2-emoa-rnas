@@ -15,23 +15,26 @@ def normalize_objectives(population):
         ind.F_norm = np.clip(ind.F_norm, a_min=0.0, a_max=1.0)
 
 
-def r2(population, weights, nadir_point, z_ref):
+def r2(population, weights, nadir_point, z_ref, losses=True):
     acc = 0.0
     for w in weights:
         min_diff = float('inf')
         for p in population:
-            max_diff = max([w_j * abs((p.F[j] - z_ref[j]) / max(nadir_point[j] - z_ref[j], 1e-10)) for j, w_j in enumerate(w)])
+            if losses:
+                max_diff = max([w_j * abs((p.F[j] - z_ref[j]) / max(nadir_point[j] - z_ref[j], 1e-10)) for j, w_j in enumerate(w)])
+            else:
+                max_diff = max([w_j * abs((p.F_acc[j] - z_ref[j]) / max(nadir_point[j] - z_ref[j], 1e-10)) for j, w_j in enumerate(w)])
             min_diff = min(min_diff, max_diff)
         assert np.isfinite(max_diff), f"Non-finite max_diff encountered in R2 calculation: {max_diff}"
         acc += min_diff
     return acc / weights.shape[0]
 
-def contribution_r2(population, individual, weights, nadir_point, z_ref):
+def contribution_r2(population, individual, weights, nadir_point, z_ref, losses=True):
     n = len(population)
-    #full = r2(population, weights, nadir_point, z_ref)
+    #full = r2(population, weights, nadir_point, z_ref, losses)
     population_exclude = [p for p in population if p != individual]
     assert len(population_exclude) == n - 1, f"population_exclude size != population size - 1 {n - 1}"
-    excl = r2(population_exclude, weights, nadir_point, z_ref)
+    excl = r2(population_exclude, weights, nadir_point, z_ref, losses)
     return excl
 
 def get_dynamic_r2_reference(population):
@@ -52,9 +55,12 @@ def get_dynamic_r2_reference(population):
     print("Dynamic R2 reference point:", z_ref)
     return z_ref
 
-def update_ref_points(population, nadir_point, ideal_point):
+def update_ref_points(population, nadir_point, ideal_point, losses=True):
     for ind in population:
-        F = np.array(ind.F)
+        if losses:
+            F = np.array(ind.F)
+        else:
+            F = np.array(ind.F_acc)
         if ind.feasible:
             nadir_point[:] = np.maximum(nadir_point, F)
             ideal_point[:] = np.minimum(ideal_point, F)
