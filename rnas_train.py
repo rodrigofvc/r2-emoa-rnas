@@ -226,13 +226,13 @@ def train_individual(model, flops, params, train_queue, criterion, optimizer, ar
 
 
 def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
-    inputs = inputs.to(args.device)
-    target = target.to(args.device)
+    inputs = inputs.to(args.device, non_blocking=True)
+    target = target.to(args.device, non_blocking=True)
 
     optimizer.zero_grad()
 
     adv_input = fgsm_simple(model, inputs, target)
-    adv_input = adv_input.to(args.device)
+    adv_input = adv_input.to(args.device, non_blocking=True)
 
     std_logits = model(inputs)
     adv_logits = model(adv_input)
@@ -255,13 +255,13 @@ def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
 
 def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
 
-    inputs = inputs.to(args.device)
-    target = target.to(args.device)
+    inputs = inputs.to(args.device, non_blocking=True)
+    target = target.to(args.device, non_blocking=True)
 
     optimizer.zero_grad()
 
     adv_input = fgsm_simple(model, inputs, target)
-    adv_input = adv_input.to(args.device)
+    adv_input = adv_input.to(args.device, non_blocking=True)
 
     std_logits = model(inputs)
     adv_logits = model(adv_input)
@@ -290,12 +290,12 @@ def infer(valid_queue, model, criterion, args):
     total = 0
     model.eval()
     for step, (inputs, target) in enumerate(valid_queue):
-        inputs  = inputs.to(args.device)
-        target = target.to(args.device)
+        inputs  = inputs.to(args.device, non_blocking=True)
+        target = target.to(args.device, non_blocking=True)
 
         
         adv_input = fgsm_simple(model, inputs, target)
-        adv_input = adv_input.to(args.device)
+        adv_input = adv_input.to(args.device, non_blocking=True)
 
         with torch.no_grad():
             adv_logits = model(adv_input)

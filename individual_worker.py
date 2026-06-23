@@ -81,12 +81,12 @@ def get_model_from_individual(individual_X, args):
     train_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-        num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+        num_workers=4, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
 
     valid_queue = torch.utils.data.DataLoader(
       valid_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-        num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+        num_workers=4, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
 
     criterion = torch.nn.CrossEntropyLoss()
 
