@@ -2,9 +2,10 @@ import copy
 import json
 import os
 import random
-import shutil
 import sys
 from pathlib import Path
+
+from individual import Individual
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 from pymoo.core.termination import NoTermination
@@ -165,6 +166,7 @@ class NAS(Problem):
 
         objs = np.full((x.shape[0], self.n_obj), np.nan)
 
+        population = []
         for i in range(x.shape[0]):
             arch_id = self._n_evaluated + 1
             args_individual = copy.copy(self.args_problem)
@@ -177,8 +179,18 @@ class NAS(Problem):
             objs[i, 1] = performance['adv_loss']
             objs[i, 2] = performance['flops']
             objs[i, 3] = performance['params']
+            individual = Individual(X=x[i, :].copy(), k=self.n_obj, search_space=self._search_space)
+            individual.F = objs[i, :].copy()
+            individual.genotype = performance['genotype']
+            individual.std_acc = performance['std_acc']
+            individual.adv_acc = performance['adv_acc']
+            if individual.genotype is not None:
+                individual.feasible = True
+                population.append(individual)
 
             self._n_evaluated += 1
+        self.archive = archive_update_pq(self.archive, population)
+        self.archive_2 = archive_update_pq(self.archive_2, population, k=2)
 
         out["F"] = objs
         # if your NAS problem has constraints, use the following line to set constraints
@@ -250,18 +262,20 @@ def main():
         pop_obj = pop.get("F")
         pop_X = pop.get("X")
 
-        algorithm.problem.archive = archive_update_pq(algorithm.problem.archive, pop_obj)
-        algorithm.problem.archive_2 = archive_update_pq(algorithm.problem.archive_2, pop_obj[:, :2])
+        #population_wrapped = wrap_individuals(pop_obj, pop_X)
+        #algorithm.problem.archive = archive_update_pq(algorithm.problem.archive, population_wrapped)
+        #algorithm.problem.archive_2 = archive_update_pq(algorithm.problem.archive_2, population_wrapped)
+
         hyp, hyp_2, r2 = store_metrics(algorithm.problem.dataset, algorithm.problem._n_evaluated,
-                                       np.array(algorithm.problem.archive), np.array(algorithm.problem.archive_2),
+                                       algorithm.problem.archive, algorithm.problem.archive_2,
                                        algorithm.problem.save_dir, algorithm.problem.statistics)
         store_population_data(gen, algorithm.problem._n_evaluated, pop_obj, pop_X, algorithm.problem.archive, algorithm.problem.archive_2,
                                     algorithm.problem.statistics, elapsed_time, algorithm.problem.save_dir, args)
         plot_hypervolume(algorithm.problem.statistics, algorithm.problem.save_dir)
         plot_hypervolume2(algorithm.problem.statistics, algorithm.problem.save_dir)
         plot_r2(algorithm.problem.statistics, algorithm.problem.save_dir)
-        save_archive_losses(np.array(problem.archive_2), args.save)
-        plot_archive_losses(np.array(problem.archive_2), args.save)
+        save_archive_losses(problem.archive_2, args.save)
+        plot_archive_losses(problem.archive_2, args.save)
         elapsed_time += time.time() - start_time_gen
         algorithm.problem.elapsed_time = elapsed_time
 
@@ -281,9 +295,9 @@ def main():
         genome = micro_encoding.convert(arch) if args.search_space == 'micro' else macro_encoding.convert(arch)
         genotype = micro_encoding.decode(genome) if args.search_space == 'micro' else macro_encoding.decode(genome)
         save_architecture(i, genotype, res.F[i], args.save)
-    save_archive(np.array(problem.archive), args.save)
-    save_archive_losses(np.array(problem.archive_2), args.save)
-    plot_archive_losses(np.array(problem.archive_2), args.save)
+    save_archive(problem.archive, args.save)
+    save_archive_losses(problem.archive_2, args.save)
+    plot_archive_losses(problem.archive_2, args.save)
     plot_hypervolume(problem.statistics, args.save)
     plot_hypervolume2(problem.statistics, args.save)
     plot_r2(problem.statistics, args.save)
