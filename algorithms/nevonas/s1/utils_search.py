@@ -35,13 +35,13 @@ def save_archive_accuracy(archive, archive_path):
 
 def save_archive(archive, archive_path):
     archive_path += os.sep + 'archive'
-    np_archive = [p for p in archive]
+    np_archive = [p.F for p in archive]
     np_archive = np.array(np_archive)
     np.savez_compressed(archive_path, np_archive)
 
 def save_archive_2(archive, archive_path):
     archive_path += os.sep + 'archive_2'
-    np_archive = [[p[0], p[1]] for p in archive]
+    np_archive = [[p.F[0], p.F[1]] for p in archive]
     np_archive = np.array(np_archive)
     np.savez_compressed(archive_path, np_archive)
 
@@ -52,7 +52,7 @@ def store_metrics(architectures_evaluated, population, population_2, args, weigh
     max_f4 = 5 * 1.5
     # compute hypervolume
     ind = HV(ref_point=np.array([max_f1, max_f2, max_f3, max_f4]))
-    population_array = np.array([ind for ind in population])
+    population_array = np.array([ind.F for ind in population])
     hyp = ind(population_array)
     if type(hyp) == np.ndarray:
         statistics['hyp_log'].append(hyp.item())
@@ -60,7 +60,7 @@ def store_metrics(architectures_evaluated, population, population_2, args, weigh
         statistics['hyp_log'].append(hyp)
     # compute hypervolume 2 (std_loss, adv_loss)
     ind2 = HV(ref_point=np.array([max_f1, max_f2]))
-    population_array2 = np.array([[ind[0], ind[1]] for ind in population_2])
+    population_array2 = np.array([[ind.F[0], ind.F[1]] for ind in population_2])
     hyp2 = ind2(population_array2)
     if type(hyp2) == np.ndarray:
         statistics['hyp2_log'].append(hyp2.item())
@@ -123,8 +123,8 @@ def save_statistics_to_csv(statistics, csv_path):
 
 def plot_archive_losses(archive, archive_path):
     archive_path += os.sep + 'archive.pdf'
-    std_acc = [p[0] for p in archive]
-    adv_acc = [p[1] for p in archive]
+    std_acc = [p.F[0] for p in archive]
+    adv_acc = [p.F[1] for p in archive]
     plt.figure(figsize=(8, 6))
     plt.scatter(std_acc, adv_acc, c='blue', marker='o')
     plt.title('Non-dominated solutions')
@@ -169,26 +169,13 @@ def plot_r2(statistics, path):
 
 def store_population_data(generation, n_evaluated, pop_obj, pop_X, archive, archive_2, statistics, elapsed_time, save_dir, alphas_dim, args):
     population_data_dir = save_dir + os.sep + 'population_data.json'
-    pop_genotype = []
-    for ind in pop_X:
-        genome = convert(ind)
-        genotype = decode(genome, args.steps, args.multiplier)
-        pop_genotype.append(genotype._asdict())
-
-    archive_obj = []
-    for ind in archive:
-        archive_obj.append(ind.tolist())
-    archive_2_obj = []
-    for ind in archive_2:
-        archive_2_obj.append(ind.tolist())
     population_data = {
         'generation': generation,
         'n_evaluated': n_evaluated,
         'pop_obj': pop_obj.tolist(),
         'pop_X': pop_X.tolist(),
-        'archive': archive_obj,
-        'archive_2': archive_2_obj,
-        'pop_genotype': pop_genotype,
+        'archive': [ind.to_dict() for ind in archive],
+        'archive_losses': [ind.to_dict() for ind in archive_2],
         'statistics': statistics,
         'elapsed_time': elapsed_time
     }
