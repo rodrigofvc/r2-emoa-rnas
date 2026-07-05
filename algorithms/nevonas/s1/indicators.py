@@ -5,7 +5,7 @@ def r2(population, weights, nadir_point, z_ref):
     for w in weights:
         min_diff = float('inf')
         for p in population:
-            max_diff = max([w_j * abs((p[j] - z_ref[j]) / max(nadir_point[j] - z_ref[j], 1e-10)) for j, w_j in enumerate(w)])
+            max_diff = max([w_j * abs((p.F[j] - z_ref[j]) / max(nadir_point[j] - z_ref[j], 1e-10)) for j, w_j in enumerate(w)])
             min_diff = min(min_diff, max_diff)
         assert np.isfinite(max_diff), f"Non-finite max_diff encountered in R2 calculation: {max_diff}"
         acc += min_diff

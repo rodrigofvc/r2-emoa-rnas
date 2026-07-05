@@ -197,8 +197,10 @@ def train_supernet(pop, gen, args, warmup=False):
                     time.sleep(5)
             else:
                 training_succeeded = True
-                logging.info(f"Gen {gen} training completed successfully in (HH:MM:SS) {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_gen))}")
-
+                if not warmup:
+                    logging.info(f"Gen {gen} training completed successfully in (HH:MM:SS) {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_gen))}")
+                else:
+                    logging.info(f"Warmup training completed successfully in (HH:MM:SS) {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_gen))}")
         except subprocess.TimeoutExpired:
             logging.info(f"Gen {gen} training exceed timestamp: {args.timestamp_supernet}, it will be skipped. If you want to increase the timestamp, please set --timestamp_supernet argument to a higher value (in minutes).")
             process.kill()

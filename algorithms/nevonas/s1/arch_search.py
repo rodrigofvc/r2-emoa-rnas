@@ -6,6 +6,7 @@ from pathlib import Path
 from pymoo.operators.sampling.rnd import FloatRandomSampling
 
 from archivers import archive_update_pq
+from individual import Individual
 from micro_space.micro_encoding import PRIMITIVES
 from utils_search import save_archive, save_archive_2, plot_archive_losses, plot_hypervolume, plot_hypervolume2, \
   plot_r2, save_statistics_to_csv, save_params, save_architecture
@@ -148,7 +149,7 @@ class NAS(Problem):
   def _evaluate(self, x, out, *args, **kwargs):
 
     objs = np.full((x.shape[0], self.n_obj), np.nan)
-
+    population = []
     arch_id = self._n_evaluated + 1
     for i in range(x.shape[0]):
       args_individual = copy.copy(self.args_problem)
@@ -159,6 +160,16 @@ class NAS(Problem):
       objs[i, 2] = performance['flops']
       objs[i, 3] = performance['params']
       self._n_evaluated += 1
+      individual = Individual(X=x[i,:].copy(), k=self.n_obj, search_space='continuous')
+      individual.F = objs[i, :].copy()
+      individual.std_acc = performance['std_acc']
+      individual.adv_acc = performance['adv_acc']
+      if performance['genotype'] is not None:
+        individual.genotype = performance['genotype']
+        individual.feasible = True
+      population.append(individual)
+    self.archive = archive_update_pq(self.archive, population)
+    self.archive_2 = archive_update_pq(self.archive_2, population, k=2)
     out["F"] = objs
 
 if args.seed is None or args.seed < 0:
@@ -255,17 +266,16 @@ for n_gen in range(initial_generation, args.generations):
 
   architectures_evaluated += len(pop)
 
-  archive = archive_update_pq(archive, pop_obj)
-  archive_losses = archive_update_pq(archive_losses, pop_obj[:, :2], k=2)
-  hyp, hyp2, r2 = utils_search.store_metrics(architectures_evaluated, archive, archive_losses, args, weights_r2, statistics)
+  #archive = archive_update_pq(archive, pop_obj)
+  #archive_losses = archive_update_pq(archive_losses, pop_obj[:, :2], k=2)
+  hyp, hyp2, r2 = utils_search.store_metrics(architectures_evaluated, algorithm.problem.archive, algorithm.problem.archive_2, args, weights_r2, statistics)
   plot_hypervolume(statistics, args.save_path_final_model)
   plot_hypervolume2(statistics, args.save_path_final_model)
   plot_r2(statistics, args.save_path_final_model)
 
   elapsed_time += time.time() - start_time_gen
-  utils_search.store_population_data(n_gen, architectures_evaluated, pop_obj, pop_X, archive,
-                        archive_losses,
-                        statistics, elapsed_time, args.save_path_final_model, alphas_dim, args)
+  utils_search.store_population_data(n_gen, architectures_evaluated, pop_obj, pop_X, algorithm.problem.archive,
+                        algorithm.problem.archive_2, statistics, elapsed_time, args.save_path_final_model, alphas_dim, args)
 
   logging.info(f'>>>>>>> Generation {n_gen}')
   logging.info(f'        hyp: {hyp}, hyp_2: {hyp2}, R2: {r2}')
@@ -280,15 +290,14 @@ logging.info('Total search time: {}'.format(time.strftime('%H:%M:%S', time.gmtim
 # obtain the result objective from the algorithm
 res = algorithm.result()
 
-for i, ind in enumerate(archive):
+for i, ind in enumerate(algorithm.problem.archive):
     save_architecture(i, ind, args.save_path_final_model)
 
-save_archive(archive, args.save_path_final_model)
-save_archive_2(archive_losses, args.save_path_final_model)
-plot_archive_losses(archive_losses, args.save_path_final_model)
+save_archive(algorithm.problem.archive, args.save_path_final_model)
+save_archive_2(algorithm.problem.archive_2, args.save_path_final_model)
+plot_archive_losses(algorithm.problem.archive_2, args.save_path_final_model)
 plot_hypervolume(statistics, args.save_path_final_model)
 plot_hypervolume2(statistics, args.save_path_final_model)
 plot_r2(statistics, args.save_path_final_model)
 save_statistics_to_csv(statistics, args.save_path_final_model)
 print('Results stored in {}'.format(args.save_path_final_model))
-
