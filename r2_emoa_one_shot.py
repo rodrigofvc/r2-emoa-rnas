@@ -87,7 +87,7 @@ def r2_emoa_oneshot_nas(args_):
             logging.info(">>>> Warmup training DONE.")
         statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'),
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': [],
-                  'lr_log': []}
+                  'lr_log': [], 'hyp2_acc_log': [], 'hyp_acc_log': []}
         evaluate_population_multiprocessing(0, pop, weights_r2, nadir_point, ideal_point, args)
         architectures_evaluated += len(pop)
         update_ref_points(pop, nadir_point, ideal_point)
@@ -95,7 +95,7 @@ def r2_emoa_oneshot_nas(args_):
         archive_acc_4objs = archive_update_pq(archive_acc_4objs, pop, k=4, losses=False)
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, pop)
         archive_losses = archive_update_pq(archive_losses, pop, k=2)
-        hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, archive_accuracy, archive_acc_4objs, args, weights_r2, statistics)
+        hyp_archive, hyp_2, hyp4_acc, hyp2_acc, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, archive_accuracy, archive_acc_4objs, args, weights_r2, statistics)
         utils.store_population_data(0, pop, archive, archive_acc_4objs, archive_accuracy, archive_losses, statistics, nadir_point, ideal_point, time_search, args.save_path_final_architect)
         logging.info(f">>>> Gen 0 | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
         initial_generation += 1
@@ -125,7 +125,7 @@ def r2_emoa_oneshot_nas(args_):
         archive_losses = archive_update_pq(archive_losses, pop + mutation, k=2)
         archive_acc_4objs = archive_update_pq(archive_acc_4objs, pop + mutation, k=4, losses=False)
         pop = update_population_r2(args.n_population, pop, mutation, weights_r2)
-        hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, archive_accuracy, archive_acc_4objs, args,
+        hyp_archive, hyp_2, hyp4_acc, hyp2_acc, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, archive_accuracy, archive_acc_4objs, args,
                                                              weights_r2, statistics)
         utils.save_architectures(archive, args.save_path_final_architect)
         utils.plot_hypervolume(statistics, args.save_path_final_architect)
