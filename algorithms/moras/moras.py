@@ -290,7 +290,7 @@ def moras_rnas(args):
     print('Results stored in {}'.format(args.save_path_final_architect))
     return problem.archive, problem.archive_2, problem.statistics
 
-
+# python3 moras.py --seed 18906049 --search_space discrete --dataset cifar10 --batch_size 32 --n_population 10 --epochs_train_individual 1 --generations 3 --lambda_1 0.5 --lambda_2 0.5 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --report_freq 50 --gpu 0 --init_channels 8 --reduction --layers 5 --steps 4 --multiplier 4 --attack FGSM --cutout_length 16 --drop_path_prob 0.3 --grad_clip 0.5 --train_portion 0.5 --increase_epochs
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Running R2-EMOA for RNAS")
     parser.add_argument('--seed', type=int, default=0, help='random seed')
