@@ -17,7 +17,7 @@ import warnings
 warnings.filterwarnings("ignore", category=UserWarning, message=".*MPS backend.*")
 
 
-# python rnas_search.py --seed 18906049 --algorithm r2-emoa-one-shot --dataset cifar10 --search_space continuous --batch_size 96 --n_population 40 --generations 30 --epochs_warmup 100 --epochs_train_supernet 10 --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 --mu 0.1 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --report_freq 50 --gpu 0 --init_channels 16 --reduction True --layers 5 --steps 4 --multiplier 4 --attack FGSM --fgsm_eps 8/255 --drop_path_prob 0.3 --grad_clip 0.5 --train_portion 0.5
+# python rnas_search.py --seed 18906049 --algorithm r2-emoa-one-shot --dataset cifar10 --search_space continuous --batch_size 96 --n_population 40 --generations 30 --epochs_warmup 100 --epochs_train_supernet 10 --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 --mu 0.1 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --report_freq 50 --gpu 0 --init_channels 16 --reduction --layers 5 --steps 4 --multiplier 4 --attack FGSM --fgsm_eps 8/255 --drop_path_prob 0.3 --grad_clip 0.5 --train_portion 0.5
 # python rnas_search.py --seed 18906049 --algorithm r2-emoa --search_space discrete --dataset cifar10 --batch_size 96 --n_population 40 --epochs_train_individual 10 --generations 30 --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 --mu 0.1 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --report_freq 50 --gpu 0 --init_channels 16 --reduction --layers 5 --steps 4 --multiplier 4 --attack FGSM --cutout_length 16 --drop_path_prob 0.3 --grad_clip 0.5 --train_portion 0.5
 # python rnas_search.py --seed 18906049 --algorithm random_search --search_space continuous --dataset cifar10 --batch_size 192 --n_population 40 --epochs_train_individual 10 --generations 15 --loss_type ws --lambda_1 1.0 --lambda_2 0 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --report_freq 50 --gpu 0 --init_channels 16 --reduction --layers 5 --steps 4 --multiplier 4 --attack FGSM --cutout_length 16 --drop_path_prob 0.3 --grad_clip 0.5 --train_portion 0.5
 # python rnas_search.py --seed 18906049 --algorithm r2-emoa --search_space discrete --dataset cifar10 --batch_size 192 --n_population 40 --epochs_train_individual 15 --generations 30 --prob_cross 0.9 --prob_mut 0.1 --eta_cross 15 --eta_mut 20 --mu 0.1 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --report_freq 50 --gpu 0 --init_channels 16 --reduction --layers 5 --steps 4 --multiplier 4 --attack FGSM --cutout_length 16 --drop_path_prob 0.3 --grad_clip 0.5 --train_portion 0.5 --increase_epochs --r2_weights_dir r2_weights/weights_40_60.json --losses_objs
@@ -40,6 +40,7 @@ if __name__ == '__main__':
     parser.add_argument('--flops_index', type=int, default=2, help='index of flops in objectives')
     parser.add_argument('--params_index', type=int, default=3, help='index of params in objectives')
     parser.add_argument('--data', type=str, default='./data', help='location of the data corpus')
+    parser.add_argument('--num_workers', type=int, default=0, help='number of workers for data loading')
     parser.add_argument('--prob_cross', type=float, default=0.9, help='crossover probability')
     parser.add_argument('--prob_mut', type=float, default=0.1, help='mutation probability')
     parser.add_argument('--eta_cross', type=int, default=15, help='crossover eta')
@@ -60,7 +61,8 @@ if __name__ == '__main__':
     parser.add_argument('--steps', type=int, default=6, help='number of steps in one cell (intern nodes except input and output)')
     parser.add_argument('--multiplier', type=int, default=6, help='number of multiplier for number of channels (intern nodes to concat)')
     parser.add_argument('--attack', type=str, default='FGSM', help='adversarial attack to use')
-    parser.add_argument('--fgsm_eps', type=float, default=8/255, help='attack epsilon')
+    parser.add_argument('--attack_eps', type=float, default=8/255, help='attack epsilon')
+    parser.add_argument('--attack_alpha', type=float, default=12/255, help='attack alpha for PGD or FGSM with random start')
     parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
     parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
     parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')

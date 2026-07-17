@@ -93,7 +93,7 @@ def r2_emoa_rnas(args_):
         architectures_evaluated += args.n_population
         update_ref_points(pop, nadir_point, ideal_point, losses=args.losses_objs)
         archive = archive_update_pq(archive, pop)
-        archive_acc_4objs = archive_update_pq(archive, pop, k=4, losses=False)
+        archive_acc_4objs = archive_update_pq(archive_acc_4objs, pop, k=4, losses=False)
         archive_losses = archive_update_pq(archive_losses, pop, k=2)
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, pop)
         hyp_archive, hyp_2, hyp4_acc, hyp2_acc, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, archive_accuracy, archive_acc_4objs, args,

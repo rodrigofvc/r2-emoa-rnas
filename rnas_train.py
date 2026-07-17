@@ -112,7 +112,7 @@ def prepare_args(args_, genotype):
     train_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-        num_workers=0, pin_memory=False)
+        num_workers=args.num_workers, pin_memory=True)
 
     criterion = torch.nn.CrossEntropyLoss().to(args.device)
 
@@ -129,7 +129,7 @@ def train(train_queue, model, criterion, scheduler, optimizer, args):
 
         optimizer.zero_grad()
 
-        adv_inputs = fgsm_simple(model, inputs, target)
+        adv_inputs, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
 
         logits_adv = model(adv_inputs)
         adv_loss = criterion(logits_adv, target)
@@ -164,7 +164,7 @@ def train_amp(train_queue, model, criterion, scheduler, optimizer, args):
 
         optimizer.zero_grad(set_to_none=True)
 
-        adv_inputs = fgsm_simple(model, inputs, target)
+        adv_inputs, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
 
         with autocast(device_type="cuda"):
             logits_adv = model(adv_inputs)
@@ -231,10 +231,9 @@ def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
 
     optimizer.zero_grad()
 
-    adv_input = fgsm_simple(model, inputs, target)
+    adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
     adv_input = adv_input.to(args.device, non_blocking=True)
 
-    std_logits = model(inputs)
     adv_logits = model(adv_input)
 
     adv_loss = criterion(adv_logits, target)
@@ -260,10 +259,9 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
 
     optimizer.zero_grad()
 
-    adv_input = fgsm_simple(model, inputs, target)
+    adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
     adv_input = adv_input.to(args.device, non_blocking=True)
 
-    std_logits = model(inputs)
     adv_logits = model(adv_input)
 
     adv_loss = criterion(adv_logits, target)
@@ -294,12 +292,11 @@ def infer(valid_queue, model, criterion, args):
         target = target.to(args.device, non_blocking=True)
 
         
-        adv_input = fgsm_simple(model, inputs, target)
+        adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
         adv_input = adv_input.to(args.device, non_blocking=True)
 
         with torch.no_grad():
             adv_logits = model(adv_input)
-            std_logits = model(inputs)
 
             adv_loss = criterion(adv_logits, target)
             std_loss = criterion(std_logits, target)        
