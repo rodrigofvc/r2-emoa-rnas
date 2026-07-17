@@ -1,44 +1,30 @@
 import numpy as np
 
 
-def dominates_dep(ind1, ind2, k):
-    if np.allclose(ind1.F[:k], ind2.F[:k], atol=1e-8):
-        return False
-    return all(f1 <= f2 for f1, f2 in zip(ind1.F[:k], ind2.F[:k]))
-
-def dominates(ind1, ind2, k):
-    f1 = [float(x) for x in ind1.F[:k]]
-    f2 = [float(x) for x in ind2.F[:k]]
-
-    is_equal = True
-    for a, b in zip(f1, f2):
-        if abs(a - b) > 1e-8:
-            is_equal = False
-            break
-    
-    if is_equal:
-        return False
-
-    better_in_any = False
-    for a, b in zip(f1, f2):
-        if a > b:
+def dominates(ind1, ind2, k, losses=True):
+    if losses:
+        # Use the vector with losses for dominance comparison
+        if np.allclose(ind1.F[:k], ind2.F[:k], atol=1e-8):
             return False
-        if a < b:
-            better_in_any = True
-            
-    return better_in_any
+        return all(f1 <= f2 for f1, f2 in zip(ind1.F[:k], ind2.F[:k]))
+    else:
+        # Use the vector with accuracies for dominance comparison (100-stc_acc, 100-adv_acc, FLOPs, params)
+        if np.allclose(ind1.F_acc[:k], ind2.F_acc[:k], atol=1e-8):
+            return False
+        return all(f1 <= f2 for f1, f2 in zip(ind1.F_acc[:k], ind2.F_acc[:k]))
+
 
 # Return non-dominated points in archive
-def archive_update_pq(archive, population_, k=4):
+def archive_update_pq(archive, population_, k=4, losses=True):
     population = [ind for ind in population_ if ind.feasible]
     for ind in population:
         dominated = False
         to_remove = []
         for i, arch_ind in enumerate(archive):
-            if dominates(arch_ind, ind, k):
+            if dominates(arch_ind, ind, k, losses=losses):
                 dominated = True
                 break
-            elif dominates(ind, arch_ind, k):
+            elif dominates(ind, arch_ind, k, losses=losses):
                 to_remove.append(i)
         if not dominated:
             for i in reversed(to_remove):

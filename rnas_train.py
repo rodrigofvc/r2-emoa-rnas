@@ -9,7 +9,7 @@ import re
 
 import torch
 from torch import nn
-from torch.cuda.amp import autocast, GradScaler
+from torch.cuda.amp import GradScaler, autocast
 import numpy as np
 import torchvision
 
@@ -112,7 +112,7 @@ def prepare_args(args_, genotype):
     train_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-        num_workers=0, pin_memory=False)
+        num_workers=args.num_workers, pin_memory=True)
 
     criterion = torch.nn.CrossEntropyLoss().to(args.device)
 
@@ -129,7 +129,7 @@ def train(train_queue, model, criterion, scheduler, optimizer, args):
 
         optimizer.zero_grad()
 
-        adv_inputs = fgsm_simple(model, inputs, target)
+        adv_inputs, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
 
         logits_adv = model(adv_inputs)
         adv_loss = criterion(logits_adv, target)
@@ -156,7 +156,7 @@ def train_amp(train_queue, model, criterion, scheduler, optimizer, args):
     model.to(args.device)
     model.train()
 
-    scaler = GradScaler(enabled=getattr(args, "amp", True))
+    scaler = GradScaler('cuda')
 
     for n_batch, (inputs, target) in enumerate(train_queue):
         inputs = inputs.to(args.device, non_blocking=False)
@@ -164,9 +164,9 @@ def train_amp(train_queue, model, criterion, scheduler, optimizer, args):
 
         optimizer.zero_grad(set_to_none=True)
 
-        adv_inputs = fgsm_simple(model, inputs, target)
+        adv_inputs, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
 
-        with autocast(enabled=getattr(args, "amp", True)):
+        with autocast(device_type="cuda"):
             logits_adv = model(adv_inputs)
             adv_loss = criterion(logits_adv, target)
 
@@ -226,15 +226,14 @@ def train_individual(model, flops, params, train_queue, criterion, optimizer, ar
 
 
 def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
-    inputs = inputs.to(args.device)
-    target = target.to(args.device)
+    inputs = inputs.to(args.device, non_blocking=True)
+    target = target.to(args.device, non_blocking=True)
 
     optimizer.zero_grad()
 
-    adv_input = fgsm_simple(model, inputs, target)
-    adv_input = adv_input.to(args.device)
+    adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
+    adv_input = adv_input.to(args.device, non_blocking=True)
 
-    std_logits = model(inputs)
     adv_logits = model(adv_input)
 
     adv_loss = criterion(adv_logits, target)
@@ -255,15 +254,14 @@ def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
 
 def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
 
-    inputs = inputs.to(args.device)
-    target = target.to(args.device)
+    inputs = inputs.to(args.device, non_blocking=True)
+    target = target.to(args.device, non_blocking=True)
 
     optimizer.zero_grad()
 
-    adv_input = fgsm_simple(model, inputs, target)
-    adv_input = adv_input.to(args.device)
+    adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
+    adv_input = adv_input.to(args.device, non_blocking=True)
 
-    std_logits = model(inputs)
     adv_logits = model(adv_input)
 
     adv_loss = criterion(adv_logits, target)
@@ -290,16 +288,15 @@ def infer(valid_queue, model, criterion, args):
     total = 0
     model.eval()
     for step, (inputs, target) in enumerate(valid_queue):
-        inputs  = inputs.to(args.device)
-        target = target.to(args.device)
+        inputs  = inputs.to(args.device, non_blocking=True)
+        target = target.to(args.device, non_blocking=True)
 
         
-        adv_input = fgsm_simple(model, inputs, target)
-        adv_input = adv_input.to(args.device)
+        adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
+        adv_input = adv_input.to(args.device, non_blocking=True)
 
         with torch.no_grad():
             adv_logits = model(adv_input)
-            std_logits = model(inputs)
 
             adv_loss = criterion(adv_logits, target)
             std_loss = criterion(std_logits, target)        

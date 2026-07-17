@@ -33,6 +33,7 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
         '--batch_size', str(args.batch_size),
         '--epochs_train_individual', str(args.epochs_train_individual),
         '--data', str(args.data),
+        '--num_workers', str(args.num_workers),
         '--loss_type', str(args.loss_type),
         '--mu', str(args.mu),
         '--lambda_1', str(args.lambda_1),
@@ -45,7 +46,7 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
         '--layers', str(args.layers),
         '--steps', str(args.steps),
         '--multiplier', str(args.multiplier),
-        '--fgsm_eps', str(args.fgsm_eps),
+        '--attack_eps', str(args.attack_eps),
         '--cutout_length', str(args.cutout_length),
         '--drop_path_prob', str(args.drop_path_prob),
         '--grad_clip', str(args.grad_clip),
@@ -143,6 +144,12 @@ def evaluate_population_multiprocessing(gen, pop, weights_r2, nadir_point, ideal
             float(return_dict[i]["flops"]),
             float(return_dict[i]["params"])
         ], dtype=np.float64)
+        individual.F_acc = np.array([
+            100-float(return_dict[i]["std_acc"]),
+            100-float(return_dict[i]["adv_acc"]),
+            float(return_dict[i]["flops"]),
+            float(return_dict[i]["params"])
+        ], dtype=np.float64)
         individual.genotype = return_dict[i]["genotype"]
         individual.feasible = True if individual.genotype is not None else False
 
@@ -165,6 +172,7 @@ def train_supernet(pop, gen, args, nadir_point, ideal_point, warmup=False):
         '--gpu', str(args.gpu),
         '--batch_size', str(args.batch_size),
         '--data', str(args.data),
+        '--num_workers', str(args.num_workers),
         '--mu', str(args.mu),
         '--learning_rate', str(args.learning_rate),
         '--learning_rate_min', str(args.learning_rate_min),
@@ -174,7 +182,7 @@ def train_supernet(pop, gen, args, nadir_point, ideal_point, warmup=False):
         '--layers', str(args.layers),
         '--steps', str(args.steps),
         '--multiplier', str(args.multiplier),
-        '--fgsm_eps', str(args.fgsm_eps),
+        '--attack_eps', str(args.attack_eps),
         '--cutout_length', str(args.cutout_length),
         '--drop_path_prob', str(args.drop_path_prob),
         '--grad_clip', str(args.grad_clip),

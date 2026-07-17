@@ -95,7 +95,7 @@ def random_search_rnas(args_):
 
         new_population = initial_population(args.n_population, alphas_dim, 4, args)
         evaluate_population_multiprocessing(generation, new_population, weights_r2, nadir_point, ideal_point, args)
-
+        architectures_evaluated += len(new_population)
         archive = archive_update_pq(archive, new_population)
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, new_population)
         archive_losses = archive_update_pq(archive_losses, new_population, k=2)

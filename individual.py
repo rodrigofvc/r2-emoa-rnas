@@ -8,6 +8,8 @@ class Individual:
         else:
             self.X = X.astype(np.int32).copy()
         self.F = None
+        # use accuracy instead of losses as objectives
+        self.F_acc = None
         self.k = k
         self.c_r2 = 0.0
         self.std_acc = 0.0
@@ -19,6 +21,7 @@ class Individual:
         return {
             'X': self.X.tolist(),
             'F': self.F.tolist(),
+            'F_acc': self.F_acc.tolist(),
             'k': self.k,
             'c_r2': self.c_r2,
             'std_acc': self.std_acc,
@@ -33,6 +36,10 @@ def create_from_json(json_dict, search_space):
         ind.F = np.array(json_dict['F'])
     else:
         ind.F = None
+    if json_dict['F_acc'] is not None:
+        ind.F_acc = np.array(json_dict['F_acc'])
+    else:
+        ind.F_acc = None
     ind.c_r2 = json_dict['c_r2']
     ind.std_acc = json_dict['std_acc']
     ind.adv_acc = json_dict['adv_acc']
