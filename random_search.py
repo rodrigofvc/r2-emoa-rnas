@@ -31,7 +31,7 @@ def prepare_args_standard(args_):
         random.seed(args.seed)
         statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'),
                       'min_f2': float('inf'),
-                      'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': []}
+                      'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'hyp2_acc_log': [], 'r2_log': []}
         k = sum(2 + i for i in range(args.steps))
         num_ops = len(PRIMITIVES)
         alphas_dim = (k, num_ops)
@@ -82,7 +82,7 @@ def random_search_rnas(args_):
         archive = archive_update_pq(archive, pop)
         archive_losses = archive_update_pq(archive_losses, pop, k=2)
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, pop)
-        hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args,
+        hyp_archive, hyp_2, hyp2_acc, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, archive_accuracy, args,
                                                          weights_r2, statistics)
         utils.store_population_data(0, pop, archive, archive_accuracy, archive_losses, statistics, nadir_point, ideal_point, time_search, args.save_path_final_architect)
         logging.info(f">>>> Gen 0 | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
@@ -100,7 +100,7 @@ def random_search_rnas(args_):
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, new_population)
         archive_losses = archive_update_pq(archive_losses, new_population, k=2)
 
-        hyp_archive, hyp_2, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, args,
+        hyp_archive, hyp_2, hyp2_acc, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, archive_accuracy, args,
                                                              weights_r2, statistics)
         utils.save_architectures(archive, args.save_path_final_architect)
         utils.plot_hypervolume(statistics, args.save_path_final_architect)

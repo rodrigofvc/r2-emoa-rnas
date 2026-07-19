@@ -67,7 +67,7 @@ def store_statisctics(statistics, objective_space):
     statistics['min_f3'] = min(statistics['min_f3'], np.min(objective_space[:, 2]))
     statistics['min_f4'] = min(statistics['min_f4'], np.min(objective_space[:, 3]))
 
-def store_metrics(architectures_evaluated, population, population_2, population_3, population_4, args, weights_r2, statistics):
+def store_metrics(architectures_evaluated, population, population_2, population_3, args, weights_r2, statistics):
     max_f1 = 4 * 1.5
     max_f2 = 4 * 1.5
     max_f3 = 450 * 1.5
@@ -96,14 +96,6 @@ def store_metrics(architectures_evaluated, population, population_2, population_
         statistics['hyp2_acc_log'].append(hyp2_acc.item())
     else:
         statistics['hyp2_acc_log'].append(hyp2_acc)
-    # compute hypervolume 4 (std_acc, adv_acc, flops, n_params)
-    ind4_acc = HV(ref_point=np.array([100, 100, max_f3, max_f4]))
-    population_array4_acc = np.array([ind.F_acc for ind in population_4])
-    hyp4_acc = ind4_acc(population_array4_acc)
-    if type(hyp4_acc) == np.ndarray:
-        statistics['hyp_acc_log'].append(hyp4_acc.item())
-    else:
-        statistics['hyp_acc_log'].append(hyp4_acc)
     # compute r2
     z_ref = np.zeros(4)
     nadir_point = np.array([max_f1, max_f2, max_f3, max_f4])
@@ -114,18 +106,16 @@ def store_metrics(architectures_evaluated, population, population_2, population_
         statistics['r2_log'].append(r2_population)
     row_hyp = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'hv', hyp, args.save_path_final_model.replace("\\", "/")]
     row_hyp2 = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'hv_2obj', hyp2, args.save_path_final_model.replace("\\", "/")]
-    row_hyp_acc = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'hv_acc_4obj', hyp4_acc, args.save_path_final_model.replace("\\", "/")]
     row_hyp2_acc = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'hv_acc_2obj', hyp2_acc, args.save_path_final_model.replace("\\", "/")]
     row_r2 = [args.algorithm, args.dataset, args.attack, architectures_evaluated, 'r2', r2_population, args.save_path_final_model.replace("\\", "/")]
     file = open('evaluations.csv', 'a', newline='')
     writer = csv.writer(file)
     writer.writerow(row_hyp)
-    writer.writerow(row_hyp_acc)
     writer.writerow(row_hyp2_acc)
     writer.writerow(row_r2)
     writer.writerow(row_hyp2)
     file.close()
-    return hyp, hyp2, hyp4_acc, hyp2_acc, r2_population
+    return hyp, hyp2, hyp2_acc, r2_population
 
 
 def save_supernet(model, model_path):
@@ -370,13 +360,12 @@ def save_params(args, trained_arch_path):
     with open(params_path, 'w') as f:
         json.dump(params_dict, f, indent=4)
 
-def store_population_data(generation, pop, archive, archive_acc_4objs, archive_accuracy, archive_losses, statistics, nadir_point, ideal_point, time_search, save_path_final_architect):
+def store_population_data(generation, pop, archive, archive_accuracy, archive_losses, statistics, nadir_point, ideal_point, time_search, save_path_final_architect):
     population_data_dir = save_path_final_architect + os.sep + 'population_data.json'
     population_data = {
         'generation': generation,
         'population': [ind.to_dict() for ind in pop],
         'archive': [ind.to_dict() for ind in archive],
-        'archive_acc_4objs': [ind.to_dict() for ind in archive_acc_4objs],
         'archive_accuracy': [ind.to_dict() for ind in archive_accuracy],
         'archive_losses': [ind.to_dict() for ind in archive_losses],
         'statistics': statistics,
@@ -412,7 +401,6 @@ def load_execution(args_dir):
         generation = population_data['generation']
         pop = [create_from_json(ind_json, args.search_space) for ind_json in population_data['population']]
         archive = [create_from_json(ind_json, args.search_space) for ind_json in population_data['archive']]
-        archive_acc_4objs = [create_from_json(ind_json, args.search_space) for ind_json in population_data['archive_acc_4objs']]
         archive_accuracy = [create_from_json(ind_json, args.search_space) for ind_json in population_data['archive_accuracy']]
         archive_losses = [create_from_json(ind_json, args.search_space) for ind_json in population_data['archive_losses']]
         statistics = population_data['statistics']
@@ -427,7 +415,7 @@ def load_execution(args_dir):
     if 'epochs_train_supernet' in args_dict:
         args.epochs_train_supernet = args.epochs_train_supernet + (generation // 10) * 5 if args.increase_epochs else args.epochs_train_supernet
         print(f"Updated epochs for training supernet: {args.epochs_train_supernet}")
-    return args, statistics, generation, pop, archive, archive_acc_4objs, archive_accuracy, archive_losses, nadir_point, ideal_point, time_search
+    return args, statistics, generation, pop, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, time_search
 
 if __name__ == '__main__':
     """

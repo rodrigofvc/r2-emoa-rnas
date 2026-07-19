@@ -176,7 +176,7 @@ if __name__ == '__main__':
     args.add_argument('--layers', type=int, required=True, help='total number of layers (cells)')
     args.add_argument('--steps', type=int, required=True, help='number of steps in one cell (intern nodes except input and output)')
     args.add_argument('--multiplier', type=int, required=True, help='number of multiplier for number of channels (intern nodes to concat)')
-    args.add_argument('--fgsm_eps', type=float, required=True, help='attack epsilon')
+    args.add_argument('--attack_eps', type=float, required=True, help='attack epsilon')
     args.add_argument('--cutout', action='store_true', default=False, help='use cutout')
     args.add_argument('--cutout_length', type=int, required=True, help='cutout length')
     args.add_argument('--drop_path_prob', type=float, required=True, help='drop path probability')
