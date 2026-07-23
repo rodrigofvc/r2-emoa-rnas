@@ -55,17 +55,17 @@ def get_model_from_individual(args):
     indices = list(range(num_train))
     split = int(np.floor(args.train_portion * num_train))
 
-    if torch.backends.mps.is_available():
+    #if torch.backends.mps.is_available():
         # testing
-        split = 96
-        num_train = split + 96
+    #    split = 96
+    #    num_train = split + 96
 
     train_queue = torch.utils.data.DataLoader(
       train_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
         num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
 
-
+    print(f"Training on {split} samples out of {num_train} total samples.")
     criterion = torch.nn.CrossEntropyLoss()
 
     return model, optimizer, scheduler, train_queue, criterion
@@ -116,7 +116,7 @@ if __name__ == '__main__':
     args.add_argument('--lambda_2', type=float, default=0.5, help='Lambda value for adversarial loss function')
     args.add_argument('--learning_rate', type=float, default=0.001, help='Initial learning rate')
     args.add_argument('--learning_rate_min', type=float, default=1e-5, help='Minimum learning rate for scheduler')
-    args.add_argument('--weight_decay', type=float, default=5e-4, help='Weight decay for optimizer')
+    args.add_argument('--weight_decay', type=float, default=1e-4, help='Weight decay for optimizer')
     args.add_argument('--momentum', type=float, default=0.9, help='Momentum for optimizer')
     args.add_argument('--grad_clip', type=float, default=5.0, help='Gradient clipping value')
     args.add_argument('--epochs', type=int, default=200, help='Number of epochs to train the model')
