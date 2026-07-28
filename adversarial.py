@@ -14,7 +14,7 @@ def fgsm_simple(model, x, y, eps=8 / 255):
 
 
 # Fast adversarial training with random-start FGSM.
-def fast_adv(model, inputs, targets, criterion, eps=8/255, alpha=12/255):
+def fast_adv(model, inputs, targets, criterion, eps=8/255, alpha=10/255):
     delta = torch.empty_like(inputs).uniform_(-eps, eps)
     delta = torch.clamp(inputs + delta, 0.0, 1.0) - inputs
     delta.requires_grad_(True)

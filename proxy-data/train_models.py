@@ -141,6 +141,10 @@ if __name__ == '__main__':
         format='[%(asctime)s] %(levelname)s: %(message)s',
         datefmt='%H:%M:%S'
     )
+
+    if not os.path.exists(args.output_dir):
+        os.makedirs(args.output_dir)
+
     model, optimizer, scheduler, train_queue, criterion = get_model_from_individual(args)
 
     model.to(args.device)
@@ -156,6 +160,4 @@ if __name__ == '__main__':
             total_size += inputs.size(0)
         logging.info(f"Epoch [{e+1}/{args.epochs}] completed. Average std_acc: {std_correct_total/total_size}, Average adv_acc: {adv_correct_total/total_size}")
         scheduler.step()
-    if not os.path.exists(args.output_dir):
-        os.makedirs(args.output_dir)
-    torch.save(model.state_dict(), os.path.join(args.output_dir, f"{args.model}_{args.dataset}.pth"))
+        torch.save(model.state_dict(), os.path.join(args.output_dir, f"{args.model}_{args.dataset}.pth"))

@@ -37,9 +37,6 @@ def get_entropy_dataset(args):
     num_train = len(train_data)
     split = int(np.floor(args.train_portion * num_train))
 
-    if torch.backends.mps.is_available():
-        # testing
-        split = 96
 
     rng = np.random.default_rng(args.seed)
     indices = rng.permutation(num_train)
@@ -144,11 +141,10 @@ def compute_p1_probabilities(scores, num_bins):
         "sample_weights": sample_weights,
     }
 
-# usage
 """
-python3 entropy.py --dataset cifar10 --seed 42 --batch_size 32 \
+python3 entropy.py --dataset cifar100 --seed 42 --batch_size 32 \
 --train_portion 0.5 --proxy_ratio 0.1 --num_workers 0 --gpu 0 \
---model_path models/resnet20_cifar10.pth --attack_eps 0.03137254901960784 --num_bins 10
+--model resnet56 --model_path models/resnet56_cifar100.pth --num_bins 10
 """
 if __name__ == '__main__':
     args = argparse.ArgumentParser(description='Train a surrogate model on CIFAR datasets')
@@ -160,7 +156,7 @@ if __name__ == '__main__':
     args.add_argument('--proxy_ratio', type=float, default=0.1, help='Ratio of proxy data to use for training')
     args.add_argument('--num_workers', type=int, default=4, help='Number of workers for data loading')
     args.add_argument('--gpu', type=int, default=0, help='GPU id to use for training')
-    args.add_argument('--model', type=str, default='resnet20', choices=['resnet20', 'resnet56'], help='Model architecture to use')
+    args.add_argument('--model', type=str, default=None, choices=['resnet20', 'resnet56'], help='Model architecture to use')
     args.add_argument('--model_path', type=str, required=True, help='Path to the trained model file')
     args.add_argument('--attack_eps', type=float, default=8/255, help='Epsilon value for adversarial training')
     args.add_argument('--num_bins', type=int, default=10, help='Number of bins for entropy histogram')
@@ -199,13 +195,9 @@ if __name__ == '__main__':
 
     #np.savez(f"entropy_data_{args.dataset}.npz", **entropy_results)
 
-    scores = entropy_results[
-        "adversarial_entropy"
-    ]
+    scores = entropy_results["adversarial_entropy"]
 
-    candidate_indices = entropy_results[
-        "indices"
-    ]
+    candidate_indices = entropy_results["indices"]
 
     p1_results = compute_p1_probabilities(
         scores=scores,
@@ -216,9 +208,7 @@ if __name__ == '__main__':
 
     num_candidates = len(scores)
 
-    proxy_size = int(
-        num_candidates * args.proxy_ratio
-    )
+    proxy_size = int(num_candidates * args.proxy_ratio)
 
     rng = np.random.default_rng(args.seed)
 
@@ -236,9 +226,9 @@ if __name__ == '__main__':
     if not os.path.exists(args.output_dir):
         os.makedirs(args.output_dir)
 
-    np.save(os.path.join(args.output_dir, f"proxy_indices_{args.dataset}_{args.model}_{args.proxy_ratio}.npy"), proxy_indices)
+    np.save(os.path.join(args.output_dir, f"proxy_indices_{args.dataset}_{args.model}_{len(proxy_indices)}.npy"), proxy_indices)
 
-    print(f"Proxy indices saved to proxy_indices_{args.dataset}_{args.proxy_ratio}.npy")
+    print(f"Proxy indices saved to proxy_indices_{args.dataset}_{args.model}_{len(proxy_indices)}.npy")
 
     print(f"Original CIFAR training set: {len(train_queue.dataset)}")
 
@@ -259,5 +249,11 @@ if __name__ == '__main__':
     proxy_dataset = torch.utils.data.Subset(
         full_train_dataset,
         proxy_indices.tolist(),
+    )
+
+    train_queue = torch.utils.data.DataLoader(
+        proxy_dataset, batch_size=32,
+        num_workers=0, pin_memory=True, drop_last=True,
+        generator=torch.Generator().manual_seed(args.seed)
     )
     print(f"Proxy dataset size: {len(proxy_dataset)}")
