@@ -66,7 +66,7 @@ def polynomial_mutation(pop, prob_mut, eta):
                 individual.X[i] = np.clip(individual.X[i], 0, 1)
     return pop
 
-def non_dominated_sort(population, losses):
+def non_dominated_sort(population):
     N = len(population)
     S = [[] for _ in range(N)] # solutions dominated by i
     n = [0] * N # number of solutions dominating i
@@ -75,9 +75,9 @@ def non_dominated_sort(population, losses):
         for j in range(N):
             if i == j:
                 continue
-            if dominates(population[i], population[j], k=4, losses=losses):
+            if dominates(population[i], population[j], k=4):
                 S[i].append(j)
-            elif dominates(population[j], population[i], k=4, losses=losses):
+            elif dominates(population[j], population[i], k=4):
                 n[i] += 1
 
     # First front
@@ -102,11 +102,11 @@ def non_dominated_sort(population, losses):
 
     return [[population[i] for i in front] for front in fronts]
 
-def update_population_r2(n, pop, offspring, weights_r2, losses=True):
+def update_population_r2(n, pop, offspring, weights_r2):
     c = pop + offspring
     # Remove unfeasible solutions before sorting and calculating contributions
     c = [p for p in c if p.feasible]
-    fronts = non_dominated_sort(c, losses=losses)
+    fronts = non_dominated_sort(c)
     last_front = len(fronts) - 1
     while len(c) > n:
         weights = weights_r2[len(c)]
@@ -122,14 +122,10 @@ def update_population_r2(n, pop, offspring, weights_r2, losses=True):
             front_k.remove(worst)
             last_front -= 1
             continue
-        if losses:
-            z_ref = np.min([ind.F for ind in front_k], axis=0)
-            nadir_point = np.max([ind.F for ind in front_k], axis=0)
-        else:
-            z_ref = np.min([ind.F_acc for ind in front_k], axis=0)
-            nadir_point = np.max([ind.F_acc for ind in front_k], axis=0)
+        z_ref = np.min([ind.F for ind in front_k], axis=0)
+        nadir_point = np.max([ind.F for ind in front_k], axis=0)
         for ind in front_k:
-            ind.c_r2 = contribution_r2(front_k, ind, weights, nadir_point, z_ref, losses=losses)
+            ind.c_r2 = contribution_r2(front_k, ind, weights, nadir_point, z_ref)
             #print(f"Individual {ind.F} R2 contribution {ind.c_r2}")
         worst = sorted(front_k, key=lambda x: x.c_r2)[0]
         c.remove(worst)
