@@ -92,7 +92,6 @@ class NAS(Problem):
 
         split = int(np.floor(args.train_portion * num_train))
 
-        # only 10000 samples for training are reported
         train_queue = torch.utils.data.DataLoader(
             train_data, batch_size=args.batch_size,
             sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
@@ -198,15 +197,18 @@ def moead_rnas(args):
     next_log = args.n_population
     while algorithm.problem._n_evaluated < target_evaluations:
         current_gen = algorithm.problem._n_evaluated // args.n_population
-        start_time_gen = time.time()
-        if args.increase_epochs and current_gen % 10 == 0 and current_gen > 1:
-            algorithm.problem.args_problem.epochs_train_individual += 5
+        if args.increase_epochs and algorithm.problem._n_evaluated > 0 and algorithm.problem._n_evaluated % args.n_population == 0:
+            generation_to_start = algorithm.problem._n_evaluated // args.n_population
+            if generation_to_start % 10 == 0:
+                algorithm.problem.args_problem.epochs_train_individual += 5
+
         pop = algorithm.ask()
         algorithm.evaluator.eval(problem, pop)
         pop_obj = pop.get("F")
         pop_X = pop.get("X")
         if algorithm.problem._n_evaluated >= next_log:
             next_log += args.n_population
+            elapsed_time = time.time() - start
             hyp, hyp_2, r2 = store_metrics(algorithm.problem._n_evaluated,
                                        algorithm.problem.archive, algorithm.problem.archive_2,
                                        args, r2_weights, algorithm.problem.statistics)
@@ -218,7 +220,6 @@ def moead_rnas(args):
             plot_r2(algorithm.problem.statistics, args.save_path_final_architect)
             save_archive_losses(problem.archive_2, args.save_path_final_architect)
             plot_archive_losses(problem.archive_2, args.save_path_final_architect)
-            elapsed_time += time.time() - start_time_gen
             algorithm.problem.elapsed_time = elapsed_time
 
             # report generation info to files
@@ -280,7 +281,7 @@ if __name__ == '__main__':
     parser.add_argument('--prob_neighbor_mating', type=float, default=0.1, help='mutation probability')
     parser.add_argument('--eta_cross', type=int, default=15, help='crossover eta')
     parser.add_argument('--eta_mut', type=int, default=20, help='mutation eta')
-    parser.add_argument('--loss_type', type=str, default='tchebycheff', choices=['tchebycheff', 'ws'], help='type of loss function to use for backpropagation')
+    parser.add_argument('--loss_type', type=str, default='ws', choices=['tchebycheff', 'ws'], help='type of loss function to use for backpropagation')
     parser.add_argument('--mu', type=float, default=0.1, help='mu for thchebycheff function')
     parser.add_argument('--lambda_1', type=float, default=0.5, help='weight for standard loss in ws scalarization')
     parser.add_argument('--lambda_2', type=float, default=0.5, help='weight for adversarial loss in ws scalarization')
