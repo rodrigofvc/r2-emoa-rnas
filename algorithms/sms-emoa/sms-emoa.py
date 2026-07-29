@@ -10,6 +10,7 @@ import numpy as np
 import torch
 import torchvision
 from pymoo.algorithms.moo.moead import MOEAD
+from pymoo.algorithms.moo.sms import SMSEMOA
 from pymoo.core.problem import Problem
 from pymoo.core.termination import NoTermination
 from pymoo.operators.crossover.pntx import PointCrossover
@@ -184,11 +185,9 @@ def moead_rnas(args):
                   n_obj=4, n_constr=0, lb=lb, ub=ub,
                   init_channels=args.init_channels, layers=args.layers,
                   epochs=args.epochs_train_individual, args_problem=args)
-    ref_dirs = get_reference_directions("energy", n_dim=problem.n_obj, n_points=args.n_population, seed=args.seed)
-    algorithm = MOEAD(
-        ref_dirs=ref_dirs,
-        n_neighbors=15,
-        prob_neighbor_mating=args.prob_neighbor_mating,
+    algorithm = SMSEMOA(
+        pop_size=args.n_population,
+        n_offsprings=1,
         sampling=IntegerRandomSampling(),
         crossover=PointCrossover(n_points=2, prob=args.prob_cross),
         mutation=PolynomialMutation(
@@ -200,7 +199,6 @@ def moead_rnas(args):
         normalize=True
     )
     algorithm.setup(problem, seed=args.seed, termination=NoTermination(), verbose=False)
-
     start = time.time()
     r2_weights = get_weights_r2_file(args.r2_weights_dir)
     target_evaluations = args.generations * args.n_population
@@ -264,9 +262,9 @@ def moead_rnas(args):
     return problem.archive, problem.archive_2, problem.statistics
 
 """
-# python3 moead.py --seed 18906049 --dataset cifar10 --batch_size 32 --n_population 10 \
+# python3 sms-emoa.py --seed 18906049 --dataset cifar10 --batch_size 32 --n_population 10 \
 --generations 2 --epochs_train_individual 1 \
---data ../../data --num_workers 0 --prob_neighbor_mating 0.9 \
+--data ../../data --num_workers 0 \
 --prob_cross 0.9 --prob_mut 0.1 --eta_mut 20 --loss_type ws --mu 0.1 --lambda_1 0.5 \
 --lambda_2 0.5 --learning_rate 0.025 --learning_rate_min 0.001 \
 --momentum 0.9 --weight_decay 3e-4 --report_freq 45 --gpu 0 --init_channels 8 \
@@ -274,7 +272,7 @@ def moead_rnas(args):
 --cutout_length 16 --drop_path_prob 0.3 --grad_clip 5.0 --increase_epochs
 """
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Running MOEAD for RNAS")
+    parser = argparse.ArgumentParser(description="Running SMS-EMOA for RNAS")
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument('--search_space', type=str, default="discrete", choices=['continuous', 'discrete'], help='search space to use')
     parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'], help='dataset to use')
@@ -289,7 +287,6 @@ if __name__ == '__main__':
     parser.add_argument('--params_index', type=int, default=3, help='index of params in objectives')
     parser.add_argument('--data', type=str, default='../../data', help='location of the data corpus')
     parser.add_argument('--num_workers', type=int, default=0, help='number of workers for data loading')
-    parser.add_argument('--prob_neighbor_mating', type=float, default=0.9, help='probability of selecting parents from the MOEA/D neighborhood')
     parser.add_argument('--prob_cross', type=float, default=0.9, help='crossover probability')
     parser.add_argument('--prob_mut', type=float, default=0.1, help='mutation probability')
     parser.add_argument('--eta_mut', type=int, default=20, help='mutation eta')
