@@ -19,7 +19,7 @@ from pymoo.core.termination import NoTermination
 from pymoo.operators.mutation.pm import PolynomialMutation
 from pymoo.operators.sampling.rnd import IntegerRandomSampling
 
-from adversarial import fast_adv
+from adversarial import fast_adv, fgsm_simple
 from archivers import archive_update_pq
 from individual import Individual
 from micro_space import micro_encoding
@@ -42,10 +42,10 @@ def train_individual(model, train_queue, criterion, optimizer, scheduler, args):
 
             optimizer.zero_grad()
 
-            adv_input = fast_adv(model, inputs, target, criterion, eps=args.attack_eps, alpha=args.attack_alpha)
+            #adv_input, std_logits = fast_adv(model, inputs, target, criterion, eps=args.attack_eps, alpha=args.attack_alpha)
+            adv_input, std_logits = fgsm_simple(model, inputs, target, eps=args.attack_eps)
             adv_input = adv_input.to(args.device, non_blocking=True)
 
-            std_logits = model(inputs)
             adv_logits = model(adv_input)
 
             adv_loss = criterion(adv_logits, target)
@@ -123,14 +123,14 @@ class NAS(Problem):
             # testing
             split = 96
             num_train = split + 96
-
+        split = int(np.floor(args.train_portion * num_train))
         # only 10000 samples for training are reported
         train_queue = torch.utils.data.DataLoader(
             train_data, batch_size=args.batch_size,
-            sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:10000]),
+            #sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:10000]),
+            sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
             num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
 
-        split = int(np.floor(args.train_portion * num_train))
 
         valid_queue = torch.utils.data.DataLoader(
             valid_data, batch_size=args.batch_size,
@@ -290,23 +290,19 @@ def moras_rnas(args):
     print('Results stored in {}'.format(args.save_path_final_architect))
     return problem.archive, problem.archive_2, problem.statistics
 
-# python3 moras.py --seed 18906049 --search_space discrete --dataset cifar10 --batch_size 32 --n_population 10 --epochs_train_individual 1 --generations 3 --lambda_1 0.5 --lambda_2 0.5 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --report_freq 50 --gpu 0 --init_channels 8 --reduction --layers 5 --steps 4 --multiplier 4 --attack FGSM --cutout_length 16 --drop_path_prob 0.3 --grad_clip 0.5 --train_portion 0.5 --increase_epochs
+# python moras.py --seed 18906049 --search_space discrete --dataset cifar10 --batch_size 32 --n_population 10 --epochs_train_individual 1 --generations 3 --lambda_1 0.5 --lambda_2 0.5 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --report_freq 50 --gpu 0 --init_channels 8 --reduction --layers 5 --steps 4 --multiplier 4 --attack FGSM --cutout_length 16 --drop_path_prob 0.3 --grad_clip 0.5 --train_portion 0.5 --increase_epochs
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Running R2-EMOA for RNAS")
     parser.add_argument('--seed', type=int, default=0, help='random seed')
-    parser.add_argument('--search_space', type=str, default="continuous", choices=['continuous', 'discrete'],
-                        help='search space to use')
+    parser.add_argument('--search_space', type=str, default="continuous", choices=['continuous', 'discrete'], help='search space to use')
     parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'], help='dataset to use')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--n_population', type=int, default=40, help='population size')
     parser.add_argument('--generations', type=int, default=30, help='number of generations to search')
     parser.add_argument('--epochs_warmup', type=int, default=0, help='number of epochs to warmup supernet')
-    parser.add_argument('--pretrained_supernet', type=str, default=None,
-                        help='path to pretrained supernet to load before training')
-    parser.add_argument('--epochs_train_supernet', type=int, default=0,
-                        help='number of epochs to train supernet per generation')
-    parser.add_argument('--epochs_train_individual', type=int, default=1,
-                        help='number of epochs to train individual per generation')
+    parser.add_argument('--pretrained_supernet', type=str, default=None, help='path to pretrained supernet to load before training')
+    parser.add_argument('--epochs_train_supernet', type=int, default=0, help='number of epochs to train supernet per generation')
+    parser.add_argument('--epochs_train_individual', type=int, default=1, help='number of epochs to train individual per generation')
     parser.add_argument('--objectives', type=int, default=4, help='number of objectives')
     parser.add_argument('--std_loss_index', type=int, default=0, help='index of standard loss in objectives')
     parser.add_argument('--adv_loss_index', type=int, default=1, help='index of adversarial loss in objectives')
@@ -318,8 +314,7 @@ if __name__ == '__main__':
     parser.add_argument('--prob_mut', type=float, default=0.1, help='mutation probability')
     parser.add_argument('--eta_cross', type=int, default=15, help='crossover eta')
     parser.add_argument('--eta_mut', type=int, default=20, help='mutation eta')
-    parser.add_argument('--loss_type', type=str, default='tchebycheff', choices=['tchebycheff', 'ws'],
-                        help='type of loss function to use for backpropagation')
+    parser.add_argument('--loss_type', type=str, default='tchebycheff', choices=['tchebycheff', 'ws'], help='type of loss function to use for backpropagation')
     parser.add_argument('--mu', type=float, default=0.1, help='mu for thchebycheff function')
     parser.add_argument('--lambda_1', type=float, default=0.5, help='weight for standard loss in ws scalarization')
     parser.add_argument('--lambda_2', type=float, default=0.5, help='weight for adversarial loss in ws scalarization')
@@ -332,33 +327,23 @@ if __name__ == '__main__':
     parser.add_argument('--init_channels', type=int, default=16, help='init channels')
     parser.add_argument('--reduction', action='store_true', default=False, help='use reduction cell or not')
     parser.add_argument('--layers', type=int, default=5, help='total number of layers (cells)')
-    parser.add_argument('--steps', type=int, default=6,
-                        help='number of steps in one cell (intern nodes except input and output)')
-    parser.add_argument('--multiplier', type=int, default=6,
-                        help='number of multiplier for number of channels (intern nodes to concat)')
+    parser.add_argument('--steps', type=int, default=4, help='number of steps in one cell (intern nodes except input and output)')
+    parser.add_argument('--multiplier', type=int, default=4, help='number of multiplier for number of channels (intern nodes to concat)')
     parser.add_argument('--attack', type=str, default='FGSM', help='adversarial attack to use')
     parser.add_argument('--attack_eps', type=float, default=8 / 255, help='attack epsilon')
-    parser.add_argument('--attack_alpha', type=float, default=12 / 255,
-                        help='attack alpha for PGD or FGSM with random start')
+    parser.add_argument('--attack_alpha', type=float, default=12 / 255, help='attack alpha for PGD or FGSM with random start')
     parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
     parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
     parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
     parser.add_argument('--grad_clip', type=float, default=5.0, help='gradient clipping')
     parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
-    parser.add_argument('--timestamp_supernet', type=int, default=45,
-                        help='timestamp in minutes for training supernet (including warmup) per generation in one-shot nas')
-    parser.add_argument('--timestamp_individual', type=int, default=7,
-                        help='timestamp in minutes for training/eval each architecture')
-    parser.add_argument('--debug_cuda', action='store_true', default=False,
-                        help='Enable CUDA_LAUNCH_BLOCKING for debugging')
-    parser.add_argument('--increase_epochs', action='store_true', default=False,
-                        help='Increase the number of epochs to train the supernet and individuals as generations progress')
-    parser.add_argument('--r2_weights_dir', type=str, default='r2_weights/weights_40.json',
-                        help='Directory to load the R2 weights from (only used for r2-emoa-based algorithms)')
-    parser.add_argument('--losses_objs', action='store_true', default=False,
-                        help='Use the standard and adversarial losses as objectives instead of using accuracies as objectives')
-    parser.add_argument('--reload_dir', type=str, default=None,
-                        help='Directory to reload the experiment from if --reload is set')
+    parser.add_argument('--timestamp_supernet', type=int, default=45, help='timestamp in minutes for training supernet (including warmup) per generation in one-shot nas')
+    parser.add_argument('--timestamp_individual', type=int, default=7, help='timestamp in minutes for training/eval each architecture')
+    parser.add_argument('--debug_cuda', action='store_true', default=False, help='Enable CUDA_LAUNCH_BLOCKING for debugging')
+    parser.add_argument('--increase_epochs', action='store_true', default=False, help='Increase the number of epochs to train the supernet and individuals as generations progress')
+    parser.add_argument('--r2_weights_dir', type=str, default='r2_weights/weights_40.json', help='Directory to load the R2 weights from (only used for r2-emoa-based algorithms)')
+    parser.add_argument('--losses_objs', action='store_true', default=False, help='Use the standard and adversarial losses as objectives instead of using accuracies as objectives')
+    parser.add_argument('--reload_dir', type=str, default=None, help='Directory to reload the experiment from if --reload is set')
     args = parser.parse_args()
 
     logging.basicConfig(
