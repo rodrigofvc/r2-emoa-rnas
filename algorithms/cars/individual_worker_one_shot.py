@@ -4,7 +4,7 @@ import sys
 import os
 
 import logging
-from adversarial import fgsm_simple_infer
+from adversarial import fgsm_simple
 from micro_space.model import NetworkCIFAR
 from supernet_worker import unpack_alphas
 
@@ -90,7 +90,7 @@ def infer(valid_queue, model, criterion, args):
         inputs = inputs.to(args.device)
         target = target.to(args.device)
 
-        adv_input, std_logits = fgsm_simple_infer(model, inputs, target)
+        adv_input, std_logits = fgsm_simple(model, inputs, target)
         adv_input = adv_input.to(args.device)
         with torch.no_grad():
             adv_logits = model(adv_input)

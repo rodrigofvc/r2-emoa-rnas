@@ -136,10 +136,9 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args):
 
     optimizer.zero_grad()
 
-    adv_input = fgsm_simple(model, inputs, target)
+    adv_input, std_logits = fgsm_simple(model, inputs, target)
     adv_input = adv_input.to(args.device)
 
-    std_logits = model(inputs)
     adv_logits = model(adv_input)
 
     adv_loss = criterion(adv_logits, target)
@@ -170,12 +169,11 @@ def infer(valid_queue, model, criterion, args):
         target = target.to(args.device)
 
         
-        adv_input = fgsm_simple(model, inputs, target)
+        adv_input, std_logits = fgsm_simple(model, inputs, target)
         adv_input = adv_input.to(args.device)
 
         with torch.no_grad():
             adv_logits = model(adv_input)
-            std_logits = model(inputs)
 
             adv_loss = criterion(adv_logits, target)
             std_loss = criterion(std_logits, target)        

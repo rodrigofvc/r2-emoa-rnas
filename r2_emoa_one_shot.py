@@ -28,7 +28,6 @@ def prepare_args_supernet(args_):
         archive = []
         archive_accuracy = []
         archive_losses = []
-        archive_acc_4objs = []
         architectures_evaluated = 0
         nadir_point = np.ones(4, )
         ideal_point = np.zeros(4, )
@@ -54,7 +53,7 @@ def prepare_args_supernet(args_):
         logging.info(f">>>> Supernet weights loaded.")
 
 
-    return args, weights_r2, archive, archive_acc_4objs, archive_accuracy, archive_losses, nadir_point, ideal_point, architectures_evaluated, initial_generation, pop, statistics, time_search
+    return args, weights_r2, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, architectures_evaluated, initial_generation, pop, statistics, time_search
 
 def set_random_seed(seed):
     np.random.seed(seed)
@@ -78,7 +77,7 @@ def initial_population(n_population, alphas_dim, k, args):
 
 
 def r2_emoa_oneshot_nas(args_):
-    args, weights_r2, archive, archive_acc_4objs, archive_accuracy, archive_losses, nadir_point, ideal_point, architectures_evaluated, initial_generation, pop, statistics, time_search = prepare_args_supernet(args_)
+    args, weights_r2, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, architectures_evaluated, initial_generation, pop, statistics, time_search = prepare_args_supernet(args_)
 
     if initial_generation == 0:
         if args.epochs_warmup > 0:
@@ -92,11 +91,10 @@ def r2_emoa_oneshot_nas(args_):
         architectures_evaluated += len(pop)
         update_ref_points(pop, nadir_point, ideal_point)
         archive = archive_update_pq(archive, pop)
-        archive_acc_4objs = archive_update_pq(archive_acc_4objs, pop, k=4, losses=False)
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, pop)
         archive_losses = archive_update_pq(archive_losses, pop, k=2)
-        hyp_archive, hyp_2, hyp4_acc, hyp2_acc, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, archive_accuracy, archive_acc_4objs, args, weights_r2, statistics)
-        utils.store_population_data(0, pop, archive, archive_acc_4objs, archive_accuracy, archive_losses, statistics, nadir_point, ideal_point, time_search, args.save_path_final_architect)
+        hyp_archive, hyp_2, hyp2_acc, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, archive_accuracy, args, weights_r2, statistics)
+        utils.store_population_data(0, pop, archive, archive_accuracy, archive_losses, statistics, nadir_point, ideal_point, time_search, args.save_path_final_architect)
         logging.info(f">>>> Gen 0 | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
         initial_generation += 1
     for generation in range(initial_generation, args.generations):
@@ -123,16 +121,15 @@ def r2_emoa_oneshot_nas(args_):
         archive = archive_update_pq(archive, pop + mutation)
         archive_accuracy = archive_update_pq_accuracy(archive_accuracy, pop + mutation)
         archive_losses = archive_update_pq(archive_losses, pop + mutation, k=2)
-        archive_acc_4objs = archive_update_pq(archive_acc_4objs, pop + mutation, k=4, losses=False)
         pop = update_population_r2(args.n_population, pop, mutation, weights_r2)
-        hyp_archive, hyp_2, hyp4_acc, hyp2_acc, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, archive_accuracy, archive_acc_4objs, args,
+        hyp_archive, hyp_2, hyp2_acc, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, archive_accuracy, args,
                                                              weights_r2, statistics)
         utils.save_architectures(archive, args.save_path_final_architect)
         utils.plot_hypervolume(statistics, args.save_path_final_architect)
         utils.plot_hypervolume2(statistics, args.save_path_final_architect)
         utils.plot_r2(statistics, args.save_path_final_architect)
         utils.store_statisctics(statistics, np.array([p.F for p in mutation if p.feasible]))
-        utils.store_population_data(generation, pop, archive, archive_acc_4objs, archive_accuracy, archive_losses, statistics, nadir_point, ideal_point, time_search, args.save_path_final_architect)
+        utils.store_population_data(generation, pop, archive, archive_accuracy, archive_losses, statistics, nadir_point, ideal_point, time_search, args.save_path_final_architect)
         logging.info(f">>>> Gen {generation} | Hypervolume (4 objs): {hyp_archive}, Hypervolume (2 objs): {hyp_2}, R2: {r2_archive}")
     logging.info(
         f">>>> Total search time: ({(time.time() - time_search) // 86400:02.0f}:{time.strftime('%H:%M:%S', time.gmtime(time.time() - time_search))} (DD:HH:MM:SS)")

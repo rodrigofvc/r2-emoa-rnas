@@ -92,21 +92,34 @@ def prepare_args_supernet(args):
         # testing
         split = 32
         num_train = split + 32
-    logging.info(f"Training samples: {split}, Validation samples: {num_train - split}")
 
-    train_queue = torch.utils.data.DataLoader(
-      train_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-        num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+    if args.proxy_data_dir is None:
+        train_queue = torch.utils.data.DataLoader(
+          train_data, batch_size=args.batch_size,
+          sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
+            num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+    else:
+        proxy_indices = np.load(args.proxy_data_dir)
+        train_data_proxy = torch.utils.data.Subset(
+            train_data,
+            proxy_indices.tolist(),
+        )
+        train_queue = torch.utils.data.DataLoader(
+            train_data_proxy, batch_size=args.batch_size,
+            num_workers=args.num_workers, pin_memory=True, drop_last=True,
+            generator=torch.Generator().manual_seed(args.seed)
+        )
 
     valid_queue = torch.utils.data.DataLoader(
       valid_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-        num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+        num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
 
     epochs_scheduler = args.epochs_warmup if args.warmup else args.epochs_train_supernet
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, epochs_scheduler, eta_min=args.learning_rate_min)
+
+    logging.info(f"Training {len(train_queue.dataset)} samples, validating on {len(valid_queue.dataset)} samples.")
 
     weights_r2 = utils.get_weights_r2(args.n_population)
 
@@ -176,7 +189,7 @@ if __name__ == '__main__':
     args.add_argument('--layers', type=int, required=True, help='total number of layers (cells)')
     args.add_argument('--steps', type=int, required=True, help='number of steps in one cell (intern nodes except input and output)')
     args.add_argument('--multiplier', type=int, required=True, help='number of multiplier for number of channels (intern nodes to concat)')
-    args.add_argument('--fgsm_eps', type=float, required=True, help='attack epsilon')
+    args.add_argument('--attack_eps', type=float, required=True, help='attack epsilon')
     args.add_argument('--cutout', action='store_true', default=False, help='use cutout')
     args.add_argument('--cutout_length', type=int, required=True, help='cutout length')
     args.add_argument('--drop_path_prob', type=float, required=True, help='drop path probability')
@@ -190,6 +203,8 @@ if __name__ == '__main__':
     args.add_argument('--supernet_path', type=str, required=False, help='path to pretrained supernet to load before training the individual')
     args.add_argument('--individuals_X_path', type=str, required=False, help='path to the file containing the individuals X values for the current generation')
     args.add_argument('--report_freq', type=float, required=False, default=45, help='report frequency during training')
+    args.add_argument('--num_workers', type=int, default=0, help='number of workers for data loading')
+    args.add_argument('--proxy_data_dir', type=str, default=None, help='Directory to load the proxy data indices (if provided)')
     args, unknown_args = args.parse_known_args()
 
     with open(args.individuals_X_path, 'r') as f:

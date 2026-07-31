@@ -12,11 +12,13 @@ import torchvision
 from pymoo.algorithms.moo.moead import MOEAD
 from pymoo.core.problem import Problem
 from pymoo.core.termination import NoTermination
+from pymoo.operators.crossover.pntx import PointCrossover
+from pymoo.operators.mutation.pm import PolynomialMutation
+from pymoo.operators.sampling.rnd import IntegerRandomSampling
 from pymoo.util.ref_dirs import get_reference_directions
 
 from archivers import archive_update_pq
 from individual import Individual
-from micro_space import micro_encoding
 from micro_space.micro_encoding import PRIMITIVES, convert, decode
 from micro_space.model import NetworkCIFAR
 from micro_space.model_search import alphas_to_genotype
@@ -147,7 +149,7 @@ class NAS(Problem):
                 individual.feasible = True
                 population.append(individual)
             logging.info(
-                f"Individual {i}: std_acc {performance['std_acc']:.2f}, adv_acc {performance['adv_acc']:.2f} std_loss {performance['std_loss']:.3f}, adv_loss {performance['adv_loss']:.3f}, flops {performance['flops']:.2f}, params {performance['params']:.2f}")
+                f"Individual {self._n_evaluated}: std_acc {performance['std_acc']:.2f}, adv_acc {performance['adv_acc']:.2f} std_loss {performance['std_loss']:.3f}, adv_loss {performance['adv_loss']:.3f}, flops {performance['flops']:.2f}, params {performance['params']:.2f}")
             self._n_evaluated += 1
         self.archive = archive_update_pq(self.archive, population)
         self.archive_2 = archive_update_pq(self.archive_2, population, k=2)
@@ -187,34 +189,44 @@ def moead_rnas(args):
         ref_dirs=ref_dirs,
         n_neighbors=15,
         prob_neighbor_mating=args.prob_neighbor_mating,
+        sampling=IntegerRandomSampling(),
+        crossover=PointCrossover(n_points=2, prob=args.prob_cross),
+        mutation=PolynomialMutation(
+            eta=args.eta_mut,
+            prob=1.0,
+            prob_var=args.prob_mut,
+            vtype=float
+        ),
+        normalize=True
     )
     algorithm.setup(problem, seed=args.seed, termination=NoTermination(), verbose=False)
 
     start = time.time()
-    elapsed_time = 0
     r2_weights = get_weights_r2_file(args.r2_weights_dir)
     target_evaluations = args.generations * args.n_population
     next_log = args.n_population
     while algorithm.problem._n_evaluated < target_evaluations:
         current_gen = algorithm.problem._n_evaluated // args.n_population
-        if args.increase_epochs and algorithm.problem._n_evaluated > 0 and algorithm.problem._n_evaluated % args.n_population == 0:
+        if (args.increase_epochs and algorithm.problem._n_evaluated > 0 and
+                algorithm.problem._n_evaluated % args.n_population == 0):
             generation_to_start = algorithm.problem._n_evaluated // args.n_population
             if generation_to_start % 10 == 0:
                 algorithm.problem.args_problem.epochs_train_individual += 5
 
         pop = algorithm.ask()
         algorithm.evaluator.eval(problem, pop)
-        pop_obj = pop.get("F")
-        pop_X = pop.get("X")
+        algorithm.tell(infills=pop)
         if algorithm.problem._n_evaluated >= next_log:
             next_log += args.n_population
             elapsed_time = time.time() - start
+            pop_obj = algorithm.pop.get("F")
+            pop_X = algorithm.pop.get("X")
             hyp, hyp_2, r2 = store_metrics(algorithm.problem._n_evaluated,
-                                       algorithm.problem.archive, algorithm.problem.archive_2,
-                                       args, r2_weights, algorithm.problem.statistics)
+                                           algorithm.problem.archive, algorithm.problem.archive_2,
+                                           args, r2_weights, algorithm.problem.statistics)
             store_population_data(current_gen, pop_X, pop_obj, algorithm.problem.archive,
-                              algorithm.problem.archive_2,
-                              algorithm.problem.statistics, elapsed_time, args.save_path_final_architect)
+                                  algorithm.problem.archive_2,
+                                  algorithm.problem.statistics, elapsed_time, args.save_path_final_architect)
             plot_hypervolume(algorithm.problem.statistics, args.save_path_final_architect)
             plot_hypervolume2(algorithm.problem.statistics, args.save_path_final_architect)
             plot_r2(algorithm.problem.statistics, args.save_path_final_architect)
@@ -227,7 +239,7 @@ def moead_rnas(args):
             logging.info("       hyp_4 = {}, hyp_2 = {} r2 = {}".format(hyp, hyp_2, r2))
             logging.info('       evaluated so far {} architectures'.format(algorithm.problem._n_evaluated))
 
-        algorithm.tell(infills=pop)
+
 
     res = algorithm.result()
     args.time_taken = time.time() - start
@@ -252,17 +264,17 @@ def moead_rnas(args):
     return problem.archive, problem.archive_2, problem.statistics
 
 """
-# python3 moead.py --dataset cifar10 --batch_size 32 --n_population 10 \
+# python3 moead.py --seed 18906049 --dataset cifar10 --batch_size 32 --n_population 10 \
 --generations 2 --epochs_train_individual 1 \
---data ../../../data --num_workers 0 --prob_neighbor_mating 0.9 \
---eta_cross 15 --eta_mut 20 --loss_type tchebycheff --mu 0.1 --lambda_1 0.5 \
+--data ../../data --num_workers 0 --prob_neighbor_mating 0.9 \
+--prob_cross 0.9 --prob_mut 0.1 --eta_mut 20 --loss_type ws --mu 0.1 --lambda_1 0.5 \
 --lambda_2 0.5 --learning_rate 0.025 --learning_rate_min 0.001 \
 --momentum 0.9 --weight_decay 3e-4 --report_freq 45 --gpu 0 --init_channels 8 \
 --reduction --layers 5 --steps 4 --multiplier 4 --attack FGSM \
 --cutout_length 16 --drop_path_prob 0.3 --grad_clip 5.0 --increase_epochs
 """
 if __name__ == '__main__':
-    parser = argparse.ArgumentParser(description="Running R2-EMOA for RNAS")
+    parser = argparse.ArgumentParser(description="Running MOEAD for RNAS")
     parser.add_argument('--seed', type=int, default=0, help='random seed')
     parser.add_argument('--search_space', type=str, default="discrete", choices=['continuous', 'discrete'], help='search space to use')
     parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'], help='dataset to use')
@@ -275,11 +287,11 @@ if __name__ == '__main__':
     parser.add_argument('--adv_loss_index', type=int, default=1, help='index of adversarial loss in objectives')
     parser.add_argument('--flops_index', type=int, default=2, help='index of flops in objectives')
     parser.add_argument('--params_index', type=int, default=3, help='index of params in objectives')
-    parser.add_argument('--data', type=str, default='../../../data', help='location of the data corpus')
+    parser.add_argument('--data', type=str, default='../../data', help='location of the data corpus')
     parser.add_argument('--num_workers', type=int, default=0, help='number of workers for data loading')
-    #parser.add_argument('--prob_cross', type=float, default=0.9, help='crossover probability')
-    parser.add_argument('--prob_neighbor_mating', type=float, default=0.1, help='mutation probability')
-    parser.add_argument('--eta_cross', type=int, default=15, help='crossover eta')
+    parser.add_argument('--prob_neighbor_mating', type=float, default=0.9, help='probability of selecting parents from the MOEA/D neighborhood')
+    parser.add_argument('--prob_cross', type=float, default=0.9, help='crossover probability')
+    parser.add_argument('--prob_mut', type=float, default=0.1, help='mutation probability')
     parser.add_argument('--eta_mut', type=int, default=20, help='mutation eta')
     parser.add_argument('--loss_type', type=str, default='ws', choices=['tchebycheff', 'ws'], help='type of loss function to use for backpropagation')
     parser.add_argument('--mu', type=float, default=0.1, help='mu for thchebycheff function')
