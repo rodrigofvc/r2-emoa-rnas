@@ -287,7 +287,7 @@ def infer(valid_queue, model, criterion, args):
         target = target.to(args.device, non_blocking=True)
 
         
-        adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
+        adv_input, std_logits, _ = fgsm_simple(model, inputs, target, args.attack_eps)
         adv_input = adv_input.to(args.device, non_blocking=True)
 
         with torch.no_grad():
