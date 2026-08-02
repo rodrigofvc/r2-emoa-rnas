@@ -112,8 +112,11 @@ class NAS(Problem):
 
     def _train_eval_monas(self, genome, args):
         model, optimizer, scheduler, flops, params, train_queue, valid_queue, criterion = self._get_model_from_individual(genome, args)
-        train_individual(model, train_queue, criterion, optimizer, scheduler, args)
-        std_accuracy, adv_accuracy, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
+        feasible = train_individual(model, train_queue, criterion, optimizer, scheduler, args)
+        if feasible:
+            std_accuracy, adv_accuracy, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
+        else:
+            std_accuracy, adv_accuracy, std_loss, adv_loss = 0.0, 0.0, 1000, 1000
         if args.search_space == 'continuous':
             k = sum(2 + i for i in range(args.steps))
             alphas_dim = (k, len(PRIMITIVES))
