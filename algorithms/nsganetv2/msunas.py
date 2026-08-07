@@ -470,6 +470,6 @@ if __name__ == '__main__':
     cfgs = parser.parse_args()
     main(cfgs)
 
-# python msunas.py --seed 18906049 --iterations 2 --n_doe 10 --n_iter 40 --dataset cifar10 --n_classes 10 --n_epochs 10 --data ../../data --save search-cifar100-18906049-test --n_workers 4
+# python msunas.py --seed 18906049 --iterations 30 --n_doe 10 --n_iter 40 --dataset cifar10 --n_classes 10 --n_epochs 15 --data ../../data --save search-cifar100-18906049-31072026 --n_workers 2
 
 # nohup env CUDA_LAUNCH_BLOCKING=1 PYTHONMALLOC=debug python3 msunas.py --seed 18906049 --iterations 30 --n_doe 40 --n_iter 40 --dataset cifar10 --n_classes 10 --n_epochs 10 --sync_cuda False --data ../../data --save search-cifar10-18906049 > msunas.out 2> msunas.err < /dev/null &
