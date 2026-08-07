@@ -13,6 +13,7 @@ def fgsm_simple(model, x, y, eps=8 / 255):
         # If the gradient is None, it means the architecture contains unfeasible operations for gradient computation.
         adv = x_adv.detach().clone()
         feasible = False
+        return adv, std_logits, feasible
     adv = (x_adv + eps * grad.sign()).clamp(0.0, 1.0).detach().clone()
     if adv is None:
         # If the adversarial example is None, it means the architecture contains unfeasible operations for gradient computation.
