@@ -212,8 +212,12 @@ def train_individual(model, train_queue, criterion, optimizer, scheduler, args):
     for epoch in range(args.epochs_train_individual):
         if args.loss_type == 'ws':
             for n_batch, (inputs, target) in enumerate(train_queue):
-                run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args)
+               _, _, _, feasible = run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args)
+               if not feasible:
+                   logging.warning(f"Unfeasible architecture detected during training at epoch {epoch}, batch {n_batch}.")
+                   return False
         scheduler.step()
+    return True
 
 
 def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
@@ -222,7 +226,7 @@ def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
 
     optimizer.zero_grad()
 
-    adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
+    adv_input, std_logits, feasible = fgsm_simple(model, inputs, target, args.attack_eps)
     adv_input = adv_input.to(args.device, non_blocking=True)
 
     adv_logits = model(adv_input)
@@ -241,7 +245,7 @@ def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
     adv_predicts = adv_logits.argmax(dim=1)
     std_correct = (std_predicts == target).sum().item()
     adv_correct = (adv_predicts == target).sum().item()
-    return std_correct, adv_correct, total_loss.item()
+    return std_correct, adv_correct, total_loss.item(), feasible
 
 def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
 
@@ -250,7 +254,7 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
 
     optimizer.zero_grad()
 
-    adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
+    adv_input, std_logits, feasible = fgsm_simple(model, inputs, target, args.attack_eps)
     adv_input = adv_input.to(args.device, non_blocking=True)
 
     adv_logits = model(adv_input)
@@ -269,7 +273,7 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
     adv_predicts = adv_logits.argmax(dim=1)
     std_correct = (std_predicts == target).sum().item()
     adv_correct = (adv_predicts == target).sum().item()
-    return std_correct, adv_correct, total_loss.item()
+    return std_correct, adv_correct, total_loss.item(), feasible
 
 def infer(valid_queue, model, criterion, args):
     std_correct = 0
@@ -283,7 +287,7 @@ def infer(valid_queue, model, criterion, args):
         target = target.to(args.device, non_blocking=True)
 
         
-        adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
+        adv_input, std_logits, _ = fgsm_simple(model, inputs, target, args.attack_eps)
         adv_input = adv_input.to(args.device, non_blocking=True)
 
         with torch.no_grad():

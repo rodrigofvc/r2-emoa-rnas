@@ -111,7 +111,18 @@ class NAS(Problem):
 
     def _train_eval_monas(self, genome, args):
         model, optimizer, scheduler, flops, params, train_queue, valid_queue, criterion = self._get_model_from_individual(genome, args)
-        train_individual(model, train_queue, criterion, optimizer, scheduler, args)
+        feasible = train_individual(model, train_queue, criterion, optimizer, scheduler, args)
+        if not feasible:
+            logging.info(f"Architecture {self._n_evaluated} is not feasible for training.")
+            return {
+                'std_loss': 1000,
+                'adv_loss': 1000,
+                'flops': flops,
+                'params': params,
+                'std_acc': 0.0,
+                'adv_acc': 0.0,
+                'genotype': None
+            }
         std_accuracy, adv_accuracy, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
         if args.search_space == 'continuous':
             k = sum(2 + i for i in range(args.steps))
@@ -148,8 +159,8 @@ class NAS(Problem):
             if individual.genotype is not None:
                 individual.feasible = True
                 population.append(individual)
-            logging.info(
-                f"Individual {self._n_evaluated}: std_acc {performance['std_acc']:.2f}, adv_acc {performance['adv_acc']:.2f} std_loss {performance['std_loss']:.3f}, adv_loss {performance['adv_loss']:.3f}, flops {performance['flops']:.2f}, params {performance['params']:.2f}")
+                logging.info(
+                    f"Individual {self._n_evaluated}: std_acc {performance['std_acc']:.2f}, adv_acc {performance['adv_acc']:.2f} std_loss {performance['std_loss']:.3f}, adv_loss {performance['adv_loss']:.3f}, flops {performance['flops']:.2f}, params {performance['params']:.2f}")
             self._n_evaluated += 1
         self.archive = archive_update_pq(self.archive, population)
         self.archive_2 = archive_update_pq(self.archive_2, population, k=2)
