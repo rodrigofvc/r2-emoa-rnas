@@ -9,7 +9,6 @@ import random
 import numpy as np
 import torch
 import torchvision
-from pymoo.algorithms.moo.moead import MOEAD
 from pymoo.algorithms.moo.sms import SMSEMOA
 from pymoo.core.problem import Problem
 from pymoo.core.termination import NoTermination
@@ -159,7 +158,7 @@ class NAS(Problem):
         self.archive_2 = archive_update_pq(self.archive_2, population, k=2)
         out["F"] = objs
 
-def moead_rnas(args):
+def sms_emoa_rnas(args):
     np.random.seed(args.seed)
     random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -335,7 +334,7 @@ if __name__ == '__main__':
     os.makedirs("logs", exist_ok=True)
 
     if args.reload_dir is None:
-        results_dir = create_experiment_dir('moead', args.dataset, args.seed)
+        results_dir = create_experiment_dir('sms-emoa', args.dataset, args.seed)
     elif args.reload_dir == 'auto-last':
         # reload the last experiment in the results directory for the given algorithm and dataset
         base_dir = Path("results") / args.algorithm / args.dataset
@@ -359,7 +358,7 @@ if __name__ == '__main__':
     args.save_path_final_model = results_dir
     args.save_path_final_architect = results_dir
 
-    archive, archive_losses, statistics = moead_rnas(args)
+    archive, archive_losses, statistics = sms_emoa_rnas(args)
     for i, individual in enumerate(archive):
         save_architecture(i, individual, args.save_path_final_architect)
     save_archive(archive, args.save_path_final_architect)
