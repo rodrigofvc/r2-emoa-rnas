@@ -304,15 +304,14 @@ def infer(valid_queue, model, criterion, args):
             adv_predicts = adv_logits.argmax(dim=1)
             std_correct += (std_predicts == target).sum().item()
             adv_correct += (adv_predicts == target).sum().item()
-            batch_size = target.size(0)
-            total += batch_size
+            total += target.size(0)
 
-            std_loss_mean += std_loss.item() * batch_size
-            adv_loss_mean += adv_loss.item() * batch_size
+            std_loss_mean += std_loss.item()
+            adv_loss_mean += adv_loss.item()
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
-    std_loss_mean /= total
-    adv_loss_mean /= total
+    std_loss_mean /= len(valid_queue)
+    adv_loss_mean /= len(valid_queue)
     return std_accuracy * 100.0, adv_accuracy * 100.0, std_loss_mean, adv_loss_mean
 
 # This file trains architectures found by RNAS
