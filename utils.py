@@ -68,8 +68,8 @@ def store_statisctics(statistics, objective_space):
     statistics['min_f4'] = min(statistics['min_f4'], np.min(objective_space[:, 3]))
 
 def store_metrics(architectures_evaluated, population, population_2, population_3, args, weights_r2, statistics):
-    max_f1 = 4 * 1.5
-    max_f2 = 4 * 1.5
+    max_f1 = 25 * 1.5
+    max_f2 = 20 * 1.5
     max_f3 = 450 * 1.5
     max_f4 = 5 * 1.5
     # compute hypervolume

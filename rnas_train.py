@@ -293,21 +293,22 @@ def infer(valid_queue, model, criterion, args):
 
         
         adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
-        adv_input = adv_input.to(args.device, non_blocking=True)
 
         with torch.no_grad():
             adv_logits = model(adv_input)
 
             adv_loss = criterion(adv_logits, target)
-            std_loss = criterion(std_logits, target)        
+            std_loss = criterion(std_logits, target)
         
             std_predicts = std_logits.argmax(dim=1)
             adv_predicts = adv_logits.argmax(dim=1)
             std_correct += (std_predicts == target).sum().item()
             adv_correct += (adv_predicts == target).sum().item()
-            total += target.size(0)
-            std_loss_mean += std_loss.item()
-            adv_loss_mean += adv_loss.item()
+            batch_size = target.size(0)
+            total += batch_size
+
+            std_loss_mean += std_loss.item() * batch_size
+            adv_loss_mean += adv_loss.item() * batch_size
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
     std_loss_mean /= total
