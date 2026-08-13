@@ -100,7 +100,7 @@ def get_model_from_individual(individual_X, args):
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
         num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
 
-    logging.info(f"Training {len(train_queue.dataset)} samples, validating on {len(valid_queue.dataset)} samples.")
+    logging.info(f"Training {len(train_queue)* args.batch_size} samples, validating {len(valid_queue)* args.batch_size} samples.")
 
     criterion = torch.nn.CrossEntropyLoss()
 
