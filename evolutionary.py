@@ -108,8 +108,13 @@ def update_population_r2(n, pop, offspring, weights_r2):
     c = [p for p in c if p.feasible]
     fronts = non_dominated_sort(c)
     last_front = len(fronts) - 1
+    z_ref = np.min([ind.F for ind in c], axis=0)
+    nadir_point = np.max([ind.F for ind in c], axis=0)
+    print('z_ref', z_ref)
+    print('nadir point', nadir_point)
+    weights = weights_r2[n]
     while len(c) > n:
-        weights = weights_r2[len(c)]
+        #weights = weights_r2[len(c)]
         front_k = fronts[last_front]
         if last_front < 0:
             break
@@ -122,12 +127,11 @@ def update_population_r2(n, pop, offspring, weights_r2):
             front_k.remove(worst)
             last_front -= 1
             continue
-        z_ref = np.min([ind.F for ind in front_k], axis=0)
-        nadir_point = np.max([ind.F for ind in front_k], axis=0)
         for ind in front_k:
             ind.c_r2 = contribution_r2(front_k, ind, weights, nadir_point, z_ref)
-            #print(f"Individual {ind.F} R2 contribution {ind.c_r2}")
-        worst = sorted(front_k, key=lambda x: x.c_r2)[0]
+            print(f"Individual {ind.F} R2 contribution {ind.c_r2}")
+        worst = min(front_k, key=lambda x: x.c_r2)
+        print('removed individual', worst.F, 'with R2 contribution', worst.c_r2)
         c.remove(worst)
         front_k.remove(worst)
     assert len(c) == n, f"len(c)={len(c)}, n={n}"
