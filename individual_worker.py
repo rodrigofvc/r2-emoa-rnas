@@ -83,6 +83,7 @@ def get_model_from_individual(individual_X, args):
           sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
             num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
     else:
+        logging.info(f"Using proxy data from {args.proxy_data_dir}")
         proxy_indices = np.load(args.proxy_data_dir)
         train_data_proxy = torch.utils.data.Subset(
             train_data,
