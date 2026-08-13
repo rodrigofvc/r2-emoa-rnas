@@ -103,8 +103,8 @@ class AdvRunManager(RunManager):
                 std_loss_mean += std_loss.item()
                 adv_loss_mean += adv_loss.item()
                 total_loss_mean += loss.item()
-            std_loss_mean /= total
-            adv_loss_mean /= total
+            std_loss_mean /= len(data_loader)
+            adv_loss_mean /= len(data_loader)
             total_loss_mean /= total
 
         batch = next(iter(data_loader))

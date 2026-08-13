@@ -59,7 +59,7 @@ parser.add_argument('--learning_rate_min', type = float, default = 0.001, help =
 parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
 parser.add_argument('--momentum',          type = float, default = 0.9, help = 'momentum')
 parser.add_argument('--mutate_rate',       type = float, default = 0.1, help = 'mutation rate')
-parser.add_argument('--fgsm_eps', type=float, default=8 / 255, help='attack epsilon')
+parser.add_argument('--attack_eps', type=float, default=8 / 255, help='attack epsilon')
 #parser.add_argument('--output_dir',        type = str, default = None, help = 'location of trials')
 parser.add_argument('--n_population',          type = int, default = 40, help = 'population size')
 parser.add_argument('--report_freq',       type = float, default = 50, help = 'report frequency')
