@@ -87,13 +87,14 @@ def infer(valid_queue, model, criterion, args):
     total = 0
     model.eval()
     for step, (inputs, target) in enumerate(valid_queue):
-        inputs = inputs.to(args.device)
-        target = target.to(args.device)
+        inputs = inputs.to(args.device, non_blocking=True)
+        target = target.to(args.device, non_blocking=True)
 
-        adv_input, std_logits = fgsm_simple(model, inputs, target)
-        adv_input = adv_input.to(args.device)
+        adv_input, std_logits = fgsm_simple(model, inputs, target, args.fgsm_eps)
+
         with torch.no_grad():
             adv_logits = model(adv_input)
+
             adv_loss = criterion(adv_logits, target)
             std_loss = criterion(std_logits, target)
 
@@ -102,12 +103,13 @@ def infer(valid_queue, model, criterion, args):
             std_correct += (std_predicts == target).sum().item()
             adv_correct += (adv_predicts == target).sum().item()
             total += target.size(0)
+
             std_loss_mean += std_loss.item()
             adv_loss_mean += adv_loss.item()
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
-    std_loss_mean /= total
-    adv_loss_mean /= total
+    std_loss_mean /= len(valid_queue)
+    adv_loss_mean /= len(valid_queue)
     return std_accuracy * 100.0, adv_accuracy * 100.0, std_loss_mean, adv_loss_mean
 
 

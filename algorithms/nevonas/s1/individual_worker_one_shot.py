@@ -87,13 +87,14 @@ def infer(valid_queue, model, criterion, args):
     total = 0
     model.eval()
     for step, (inputs, target) in enumerate(valid_queue):
-        inputs = inputs.to(args.device)
-        target = target.to(args.device)
+        inputs = inputs.to(args.device, non_blocking=True)
+        target = target.to(args.device, non_blocking=True)
 
-        adv_input, std_logits = fgsm_simple(model, inputs, target)
-        adv_input = adv_input.to(args.device)
+        adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
+
         with torch.no_grad():
             adv_logits = model(adv_input)
+
             adv_loss = criterion(adv_logits, target)
             std_loss = criterion(std_logits, target)
 
@@ -102,12 +103,13 @@ def infer(valid_queue, model, criterion, args):
             std_correct += (std_predicts == target).sum().item()
             adv_correct += (adv_predicts == target).sum().item()
             total += target.size(0)
+
             std_loss_mean += std_loss.item()
             adv_loss_mean += adv_loss.item()
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
-    std_loss_mean /= total
-    adv_loss_mean /= total
+    std_loss_mean /= len(valid_queue)
+    adv_loss_mean /= len(valid_queue)
     return std_accuracy * 100.0, adv_accuracy * 100.0, std_loss_mean, adv_loss_mean
 
 
@@ -138,7 +140,7 @@ if __name__ == '__main__':
     args.add_argument('--layers', type=int, required=True, help='total number of layers (cells)')
     args.add_argument('--steps', type=int, required=True, help='number of steps in one cell (intern nodes except input and output)')
     args.add_argument('--multiplier', type=int, required=True, help='number of multiplier for number of channels (intern nodes to concat)')
-    args.add_argument('--fgsm_eps', type=float, required=True, help='attack epsilon')
+    args.add_argument('--attack_eps', type=float, required=True, help='attack epsilon')
     args.add_argument('--cutout', action='store_true', default=False, help='use cutout')
     args.add_argument('--cutout_length', type=int, required=True, help='cutout length')
     args.add_argument('--drop_path_prob', type=float, required=True, help='drop path probability')
