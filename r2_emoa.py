@@ -9,7 +9,7 @@ from archivers import archive_update_pq, archive_update_pq_accuracy
 from micro_space.micro_encoding import PRIMITIVES
 from individual import Individual
 from evolutionary import tournament_selection, binary_crossover, polynomial_mutation, point_crossover, \
-    update_population_r2
+    update_population_r2, polynomial_mutation
 from indicators import update_ref_points
 from worker_process import evaluate_population_multiprocessing
 
@@ -110,8 +110,7 @@ def r2_emoa_rnas(args_):
             offsprings = point_crossover(parents, n_childs=args.n_population, prob_cross=args.prob_cross)
         else:
             offsprings = binary_crossover(parents, n_childs=args.n_population, eta=args.eta_cross, prob_cross=args.prob_cross)
-        mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
-
+        mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut, random_state=np.random.RandomState(args.seed + generation), steps=args.steps, n_ops=len(PRIMITIVES), search_space=args.search_space)
         evaluate_population_multiprocessing(generation, mutation, weights_r2, nadir_point, ideal_point, args)
         architectures_evaluated += args.n_population
         update_ref_points(mutation, nadir_point, ideal_point)

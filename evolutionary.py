@@ -1,8 +1,12 @@
+import logging
 import random as rd
 import numpy as np
+from pymoo.operators.mutation.pm import mut_pm
+
 from individual import Individual
 from indicators import contribution_r2
 from archivers import dominates
+from pymoo.operators.survival.rank_and_crowding import RankAndCrowding
 
 def tournament_selection(pop_, n_select, tournament_size=5):
     winners = []
@@ -50,7 +54,56 @@ def binary_crossover(pop, n_childs, eta, prob_cross):
                 offsprings.append(Individual(X=child2_X.copy(), k=parent2.k, search_space='continuous'))
     return offsprings
 
-def polynomial_mutation(pop, prob_mut, eta):
+def polynomial_mutation(pop, prob_mut, eta, random_state, steps, n_ops, search_space, at_least_once=False):
+    if len(pop) == 0:
+        return pop
+
+    X = np.asarray([individual.X for individual in pop], dtype=float)
+
+    if X.ndim != 2:
+        raise ValueError("The decision matrix must have shape (n_individuals, n_variables).")
+
+    n_individuals, n_variables = X.shape
+
+    genes_per_node = 4
+    genes_per_cell = genes_per_node * steps
+
+    # Normally 2: normal cell and reduction cell
+    n_cells = n_variables // genes_per_cell
+
+    xl = []
+    xu = []
+
+    if search_space == 'discrete':
+        for _ in range(n_cells):
+            for node in range(steps):
+                # [op1, input1, op2, input2]
+                xl.extend([0, 0, 0, 0])
+                xu.extend([n_ops - 1, node + 1, n_ops - 1, node + 1])
+        xl = np.array(xl, dtype=float)
+        xu = np.array(xu, dtype=float)
+    else:
+        xl = np.zeros(n_variables, dtype=float)
+        xu = np.ones(n_variables, dtype=float)
+
+    # mut_pm expects one eta value per individual
+    eta_values = np.full(n_individuals, eta, dtype=float)
+
+    prob_values = np.full(n_individuals, prob_mut, dtype=float)
+
+    X_mutated = mut_pm(X=X, xl=xl, xu=xu, eta=eta_values, prob=prob_values, at_least_once=at_least_once, random_state=random_state)
+
+    if search_space == 'discrete':
+        X_mutated = np.rint(X_mutated)
+        X_mutated = np.clip(X_mutated, xl, xu)
+        X_mutated = X_mutated.astype(int)
+
+    for individual, x_mutated in zip(pop, X_mutated):
+        individual.X = x_mutated.copy()
+
+    return pop
+
+def polynomial_mutation_dep(pop, prob_mut, eta):
     xl = np.zeros_like(pop[0].X)
     xu = np.ones_like(pop[0].X)
     for individual in pop:
@@ -110,11 +163,10 @@ def update_population_r2(n, pop, offspring, weights_r2):
     last_front = len(fronts) - 1
     z_ref = np.min([ind.F for ind in c], axis=0)
     nadir_point = np.max([ind.F for ind in c], axis=0)
-    print('z_ref', z_ref)
-    print('nadir point', nadir_point)
+    logging.info('z_ref %s', z_ref)
+    logging.info('nadir point %s', nadir_point)
     weights = weights_r2[n]
     while len(c) > n:
-        #weights = weights_r2[len(c)]
         front_k = fronts[last_front]
         if last_front < 0:
             break
@@ -129,10 +181,24 @@ def update_population_r2(n, pop, offspring, weights_r2):
             continue
         for ind in front_k:
             ind.c_r2 = contribution_r2(front_k, ind, weights, nadir_point, z_ref)
-            print(f"Individual {ind.F} R2 contribution {ind.c_r2}")
+            logging.info(f"Individual {ind.F} R2 contribution {ind.c_r2}")
         worst = min(front_k, key=lambda x: x.c_r2)
-        print('removed individual', worst.F, 'with R2 contribution', worst.c_r2)
+        tied_worst = [ind for ind in front_k if np.allclose(ind.c_r2, worst.c_r2, rtol=1e-10, atol=1e-12)]
+        if len(tied_worst) > 1:
+            crowding_distances = get_crowding_distances(front_k)
+            logging.info('Crowding distances: %s', [(ind.F, cd) for ind, cd in crowding_distances])
+            worst = min(tied_worst, key=lambda x: next(cd for ind, cd in crowding_distances if ind == x))
+        logging.info(f"removed individual {worst.F} with R2 contribution {worst.c_r2}")
         c.remove(worst)
         front_k.remove(worst)
     assert len(c) == n, f"len(c)={len(c)}, n={n}"
     return c
+
+def get_crowding_distances(front):
+    F = np.array([ind.F for ind in front])
+    rank_and_crowding = RankAndCrowding(crowding_func="cd")
+    crowding_function = rank_and_crowding.crowding_func.do(F)
+    crowding_distances = []
+    for ind, cd in zip(front, crowding_function):
+        crowding_distances.append((ind, cd))
+    return crowding_distances
