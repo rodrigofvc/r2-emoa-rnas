@@ -143,7 +143,7 @@ def train_supernet(pop, gen, args, warmup=False):
         '--layers', str(args.layers),
         '--steps', str(args.steps),
         '--multiplier', str(args.multiplier),
-        '--fgsm_eps', str(args.fgsm_eps),
+        '--attack_eps', str(args.attack_eps),
         '--cutout_length', str(args.cutout_length),
         '--drop_path_prob', str(args.drop_path_prob),
         '--grad_clip', str(args.grad_clip),
