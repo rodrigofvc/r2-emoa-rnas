@@ -308,7 +308,7 @@ if __name__ == '__main__':
     parser.add_argument('--adv_loss_index', type=int, default=1, help='index of adversarial loss in objectives')
     parser.add_argument('--flops_index', type=int, default=2, help='index of flops in objectives')
     parser.add_argument('--params_index', type=int, default=3, help='index of params in objectives')
-    parser.add_argument('--data', type=str, default='../../../data', help='location of the data corpus')
+    parser.add_argument('--data', type=str, default='../../data', help='location of the data corpus')
     parser.add_argument('--num_workers', type=int, default=0, help='number of workers for data loading')
     parser.add_argument('--prob_cross', type=float, default=0.9, help='crossover probability')
     parser.add_argument('--prob_mut', type=float, default=0.1, help='mutation probability')
