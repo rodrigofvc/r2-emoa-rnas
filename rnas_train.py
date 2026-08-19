@@ -204,7 +204,7 @@ def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, weights, z
     losses = losses_grad
     ideal_point = ideal_point[:len(losses)]
     nadir_point = nadir_point[:len(losses)]
-    weights = weights[:len(losses)]
+    weights = torch.tensor([0.5, 0.5], device=losses.device, dtype=loss_type)
     z_ref_stch = z_ref_stch[:len(losses)]
     # TESTING
     values = torch.abs(losses - ideal_point) / torch.clamp(torch.abs(nadir_point - ideal_point), 1e-6)
