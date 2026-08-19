@@ -122,7 +122,6 @@ def r2_emoa_rnas(args_):
         hyp_archive, hyp_2, hyp2_acc, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, archive_accuracy, args, weights_r2, statistics)
         utils.save_architectures(archive, args.save_path_final_architect)
         utils.plot_hypervolume(statistics, args.save_path_final_architect)
-        utils.plot_hypervolume(statistics, args.save_path_final_architect, losses=False)
         utils.plot_hypervolume2(statistics, args.save_path_final_architect)
         utils.plot_hypervolume2_acc(statistics, args.save_path_final_architect)
         utils.plot_r2(statistics, args.save_path_final_architect)
