@@ -57,4 +57,4 @@ def update_ref_points(population, nadir_point, ideal_point):
         F = np.array(ind.F)
         if ind.feasible:
             nadir_point[:] = np.maximum(nadir_point, F)
-            ideal_point[:] = np.minimum(ideal_point, F)
+            ideal_point[:] = np.minimum(ideal_point, F, where=(ideal_point != 0))

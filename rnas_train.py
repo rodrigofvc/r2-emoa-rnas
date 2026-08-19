@@ -200,7 +200,13 @@ def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, weights, z
     losses_grad = torch.stack([std_loss, adv_loss])
     losses_const = torch.stack([flops, params]).detach().to(dtype=loss_type)
     losses = torch.cat([losses_grad, losses_const])
-
+    # TESTING 2 objectives
+    losses = losses_grad
+    ideal_point = ideal_point[:len(losses)]
+    nadir_point = nadir_point[:len(losses)]
+    weights = weights[:len(losses)]
+    z_ref_stch = z_ref_stch[:len(losses)]
+    # TESTING
     values = torch.abs(losses - ideal_point) / torch.clamp(torch.abs(nadir_point - ideal_point), 1e-6)
     stch_value = mu * torch.logsumexp(weights * (values - z_ref_stch) / mu, dim=-1)
     if not torch.isfinite(stch_value):
