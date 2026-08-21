@@ -155,7 +155,7 @@ def non_dominated_sort(population):
 
     return [[population[i] for i in front] for front in fronts]
 
-def update_population_r2(n, pop, offspring, weights_r2):
+def update_population_r2(n, pop, offspring, weights):
     c = pop + offspring
     # Remove unfeasible solutions before sorting and calculating contributions
     c = [p for p in c if p.feasible]
@@ -165,7 +165,6 @@ def update_population_r2(n, pop, offspring, weights_r2):
     nadir_point = np.max([ind.F for ind in c], axis=0)
     logging.info('z_ref %s', z_ref)
     logging.info('nadir point %s', nadir_point)
-    weights = weights_r2[n]
     while len(c) > n:
         front_k = fronts[last_front]
         if last_front < 0:

@@ -53,7 +53,6 @@ def prepare_args_standard(args_):
     for arg in vars(args):
         print(f"{arg}: {getattr(args, arg)}")
 
-    #weights_r2 = utils.get_weights_r2(args.n_population)
     weights_r2 = utils.get_weights_r2_file(args.r2_weights_dir)
 
     return args, weights_r2, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, architectures_evaluated, initial_generation, pop, statistics, time_search
@@ -122,7 +121,6 @@ def r2_emoa_rnas(args_):
         hyp_archive, hyp_2, hyp2_acc, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, archive_accuracy, args, weights_r2, statistics)
         utils.save_architectures(archive, args.save_path_final_architect)
         utils.plot_hypervolume(statistics, args.save_path_final_architect)
-        utils.plot_hypervolume(statistics, args.save_path_final_architect, losses=False)
         utils.plot_hypervolume2(statistics, args.save_path_final_architect)
         utils.plot_hypervolume2_acc(statistics, args.save_path_final_architect)
         utils.plot_r2(statistics, args.save_path_final_architect)

@@ -26,7 +26,7 @@ def get_weights_r2(n):
 def get_weights_r2_file(file):
     with open(file, 'r') as f:
         json_data = json.load(f)
-    return {int(k): np.array(v) for k, v in json_data.items()}
+    return np.array(json_data["weights"])
 
 
 def save_archive_accuracy(archive, archive_path):
@@ -99,7 +99,7 @@ def store_metrics(architectures_evaluated, population, population_2, population_
     # compute r2
     z_ref = np.zeros(4)
     nadir_point = np.array([max_f1, max_f2, max_f3, max_f4])
-    r2_population = r2(population, weights_r2[args.n_population], nadir_point, z_ref)
+    r2_population = r2(population, weights_r2, nadir_point, z_ref)
     if type(r2_population) == np.ndarray:
         statistics['r2_log'].append(r2_population.item())
     else:

@@ -135,7 +135,7 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
 def evaluate_population_multiprocessing(gen, pop, weights_r2, nadir_point, ideal_point, args):
     return_dict = {}
     for i, individual in enumerate(pop):
-        weight_individual = weights_r2[len(pop)][i].copy()
+        weight_individual = weights_r2[i].copy()
         worker_evaluate_individual(gen, i, individual.X.copy(),
                                    weight_individual, nadir_point.copy(),
                                    ideal_point.copy(), args, return_dict)
