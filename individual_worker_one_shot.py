@@ -60,13 +60,19 @@ def get_model_from_individual(individual_X, args):
     flops, params = utils.get_model_metrics(discrete_model)
     del discrete_model
 
-    optimizer = torch.optim.Adam(
-        model.parameters(),
-        args.learning_rate,
-        weight_decay=args.weight_decay,
-        foreach=False,
-        fused=False
-    )
+    if args.optimizer == 'Adam':
+        optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=args.learning_rate,
+            weight_decay=args.weight_decay
+        )
+    elif args.optimizer == 'SGD':
+        optimizer = torch.optim.SGD(
+            model.parameters(),
+            lr=args.learning_rate,
+            momentum=args.momentum,
+            weight_decay=args.weight_decay
+        )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
 
@@ -141,6 +147,7 @@ if __name__ == '__main__':
     args.add_argument('--mu', type=float, required=True, help='mu for thchebycheff function')
     args.add_argument('--lambda_1', type=float, default=0.5, help='weight for standard loss in ws scalarization')
     args.add_argument('--lambda_2', type=float, default=0.5, help='weight for adversarial loss in ws scalarization')
+    args.add_argument('--optimizer', type=str, required=True, help='optimizer to use for training')
     args.add_argument('--learning_rate', type=float, required=True, help='init learning rate')
     args.add_argument('--learning_rate_min', type=float, required=True, help='min learning rate')
     args.add_argument('--momentum', type=float, required=True, help='momentum')

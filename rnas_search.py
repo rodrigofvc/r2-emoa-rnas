@@ -50,6 +50,7 @@ if __name__ == '__main__':
     parser.add_argument('--mu', type=float, default=0.1, help='mu for thchebycheff function')
     parser.add_argument('--lambda_1', type=float, default=0.5, help='weight for standard loss in ws scalarization')
     parser.add_argument('--lambda_2', type=float, default=0.5, help='weight for adversarial loss in ws scalarization')
+    parser.add_argument('--optimizer', type=str, default='SGD', choices=['SGD', 'Adam'], help='optimizer to use')
     parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
     parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
