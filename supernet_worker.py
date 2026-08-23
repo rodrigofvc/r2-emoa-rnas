@@ -69,10 +69,17 @@ def prepare_args_supernet(args):
             device=args.device,
         ).to(args.device)
 
-    optimizer = torch.optim.Adam(
-      model.parameters(),
-      args.learning_rate,
-      weight_decay=args.weight_decay)
+    if args.optimizer == 'Adam':
+        optimizer = torch.optim.Adam(
+          model.parameters(),
+          lr=args.learning_rate,
+          weight_decay=args.weight_decay)
+    else:
+        optimizer = torch.optim.SGD(
+          model.parameters(),
+          lr=args.learning_rate,
+          momentum=args.momentum,
+          weight_decay=args.weight_decay)
 
     ssl._create_default_https_context = ssl._create_unverified_context
     train_transform, valid_transform = utils.data_transforms_cifar10(args)
@@ -180,6 +187,7 @@ if __name__ == '__main__':
     args.add_argument('--batch_size', type=int, required=True, help='batch size')
     args.add_argument('--data', type=str, required=True, help='location of the data corpus')
     args.add_argument('--mu', type=float, required=True, help='mu for thchebycheff function')
+    args.add_argument('--optimizer', type=str, required=True, help='optimizer to use')
     args.add_argument('--learning_rate', type=float, required=True, help='init learning rate')
     args.add_argument('--learning_rate_min', type=float, required=True, help='min learning rate')
     args.add_argument('--momentum', type=float, required=True, help='momentum')
