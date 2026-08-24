@@ -8,21 +8,41 @@ from indicators import contribution_r2
 from archivers import dominates
 from pymoo.operators.survival.rank_and_crowding import RankAndCrowding
 
-def tournament_selection(pop_, n_select, tournament_size=5):
-    winners = []
+
+def tournament_selection(pop_, n_select, tournament_size=2):
     pop = [ind for ind in pop_ if ind.feasible]
+
+    if len(pop) == 0:
+        raise ValueError("No feasible individuals available for selection.")
+
+    tournament_size = min(tournament_size, len(pop))
+
+    fronts = non_dominated_sort(pop)
+
+    rank_by_id = {}
+    crowding_by_id = {}
+
+    for rank, front in enumerate(fronts):
+        for ind, crowding in get_crowding_distances(front):
+            rank_by_id[id(ind)] = rank
+            crowding_by_id[id(ind)] = crowding
+
+    winners = []
+
     while len(winners) < n_select:
-        P = rd.sample(pop, k=tournament_size)
-        winner = min(P, key=lambda ind: ind.c_r2)
-        if winner not in winners:
-            winners.append(winner)
+        participants = rd.sample(pop, k=tournament_size)
+        rd.shuffle(participants)
+
+        # Select the winner based on rank and crowding distance
+        winner = min(participants, key=lambda ind: (rank_by_id[id(ind)], -crowding_by_id[id(ind)]))
+        winners.append(winner)
+
     return winners
 
-def point_crossover(parents, n_childs, prob_cross):
+def point_crossover_dep(parents, n_childs, prob_cross):
     offsprings = []
     while len(offsprings) < n_childs:
-        parent1 = rd.choice(parents)
-        parent2 = rd.choice(parents)
+        parent1, parent2 = rd.sample(parents, 2)
         if np.random.rand() < prob_cross and not np.array_equal(parent1.X, parent2.X):
             point = rd.randint(1, parent1.X.shape[0] - 1)
             child1_X = np.concatenate((parent1.X[:point], parent2.X[point:]))
@@ -30,6 +50,66 @@ def point_crossover(parents, n_childs, prob_cross):
             offsprings.append(Individual(X=child1_X.copy(), k=parent1.k, search_space='discrete'))
             if len(offsprings) < n_childs:
                 offsprings.append(Individual(X=child2_X.copy(), k=parent2.k, search_space='discrete'))
+    return offsprings
+
+def point_crossover(parents, n_childs, prob_cross, n_points=2):
+    if n_points < 1:
+        raise ValueError("n_points must be at least one.")
+
+    required_parents = 2 * int(np.ceil(n_childs / 2))
+
+    if len(parents) < required_parents:
+        raise ValueError(f"Expected at least {required_parents} parent positions, received {len(parents)}.")
+
+    offsprings = []
+
+    for i in range(0, required_parents, 2):
+        parent1 = parents[i]
+        parent2 = parents[i + 1]
+
+        child1_X = parent1.X.copy()
+        child2_X = parent2.X.copy()
+
+        perform_crossover = (
+            np.random.rand() < prob_cross
+            and not np.array_equal(parent1.X, parent2.X)
+        )
+
+        if perform_crossover:
+            n_variables = parent1.X.shape[0]
+
+            available_points = list(range(1, n_variables))
+
+            current_n_points = min(n_points, len(available_points))
+
+            points = sorted(rd.sample(available_points, current_n_points))
+
+            boundaries = [0] + points + [n_variables]
+
+            for segment in range(len(boundaries) - 1):
+                start = boundaries[segment]
+                end = boundaries[segment + 1]
+                if segment % 2 == 1:
+                    child1_X[start:end] = parent2.X[start:end]
+                    child2_X[start:end] = parent1.X[start:end]
+
+        offsprings.append(
+            Individual(
+                X=child1_X.copy(),
+                k=parent1.k,
+                search_space="discrete",
+            )
+        )
+
+        if len(offsprings) < n_childs:
+            offsprings.append(
+                Individual(
+                    X=child2_X.copy(),
+                    k=parent2.k,
+                    search_space="discrete",
+                )
+            )
+
     return offsprings
 
 def binary_crossover(pop, n_childs, eta, prob_cross):
@@ -155,7 +235,7 @@ def non_dominated_sort(population):
 
     return [[population[i] for i in front] for front in fronts]
 
-def update_population_r2(n, pop, offspring, weights_r2):
+def update_population_r2(n, pop, offspring, weights):
     c = pop + offspring
     # Remove unfeasible solutions before sorting and calculating contributions
     c = [p for p in c if p.feasible]
@@ -165,7 +245,6 @@ def update_population_r2(n, pop, offspring, weights_r2):
     nadir_point = np.max([ind.F for ind in c], axis=0)
     logging.info('z_ref %s', z_ref)
     logging.info('nadir point %s', nadir_point)
-    weights = weights_r2[n]
     while len(c) > n:
         front_k = fronts[last_front]
         if last_front < 0:
@@ -186,9 +265,9 @@ def update_population_r2(n, pop, offspring, weights_r2):
         tied_worst = [ind for ind in front_k if np.allclose(ind.c_r2, worst.c_r2, rtol=1e-10, atol=1e-12)]
         if len(tied_worst) > 1:
             crowding_distances = get_crowding_distances(front_k)
-            logging.info('Crowding distances: %s', [(ind.F, cd) for ind, cd in crowding_distances])
+            #logging.info('Crowding distances: %s', [(ind.F, cd) for ind, cd in crowding_distances])
             worst = min(tied_worst, key=lambda x: next(cd for ind, cd in crowding_distances if ind == x))
-        logging.info(f"removed individual {worst.F} with R2 contribution {worst.c_r2}")
+        #logging.info(f"removed individual {worst.F} with R2 contribution {worst.c_r2}")
         c.remove(worst)
         front_k.remove(worst)
     assert len(c) == n, f"len(c)={len(c)}, n={n}"

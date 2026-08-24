@@ -38,6 +38,7 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
         '--mu', str(args.mu),
         '--lambda_1', str(args.lambda_1),
         '--lambda_2', str(args.lambda_2),
+        '--optimizer', str(args.optimizer),
         '--learning_rate', str(args.learning_rate),
         '--learning_rate_min', str(args.learning_rate_min),
         '--momentum', str(args.momentum),
@@ -135,7 +136,7 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
 def evaluate_population_multiprocessing(gen, pop, weights_r2, nadir_point, ideal_point, args):
     return_dict = {}
     for i, individual in enumerate(pop):
-        weight_individual = weights_r2[len(pop)][i].copy()
+        weight_individual = weights_r2[i].copy()
         worker_evaluate_individual(gen, i, individual.X.copy(),
                                    weight_individual, nadir_point.copy(),
                                    ideal_point.copy(), args, return_dict)
@@ -177,6 +178,7 @@ def train_supernet(pop, gen, args, nadir_point, ideal_point, warmup=False):
         '--data', str(args.data),
         '--num_workers', str(args.num_workers),
         '--mu', str(args.mu),
+        '--optimizer', str(args.optimizer),
         '--learning_rate', str(args.learning_rate),
         '--learning_rate_min', str(args.learning_rate_min),
         '--momentum', str(args.momentum),

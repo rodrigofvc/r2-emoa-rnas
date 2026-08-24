@@ -53,7 +53,6 @@ def prepare_args_standard(args_):
     for arg in vars(args):
         print(f"{arg}: {getattr(args, arg)}")
 
-    #weights_r2 = utils.get_weights_r2(args.n_population)
     weights_r2 = utils.get_weights_r2_file(args.r2_weights_dir)
 
     return args, weights_r2, archive, archive_accuracy, archive_losses, nadir_point, ideal_point, architectures_evaluated, initial_generation, pop, statistics, time_search
@@ -105,9 +104,9 @@ def r2_emoa_rnas(args_):
             args.epochs_train_individual += 5
         time_stamp_gen = time.time()
 
-        parents = tournament_selection(pop, n_select=args.n_population // 2, tournament_size=5)
+        parents = tournament_selection(pop, n_select=args.n_population, tournament_size=args.tournament_size)
         if args.search_space == 'discrete':
-            offsprings = point_crossover(parents, n_childs=args.n_population, prob_cross=args.prob_cross)
+            offsprings = point_crossover(parents, n_childs=args.n_population, prob_cross=args.prob_cross, n_points=args.n_points_cross)
         else:
             offsprings = binary_crossover(parents, n_childs=args.n_population, eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut, random_state=np.random.RandomState(args.seed + generation), steps=args.steps, n_ops=len(PRIMITIVES), search_space=args.search_space)
