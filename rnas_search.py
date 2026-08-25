@@ -78,6 +78,7 @@ if __name__ == '__main__':
     parser.add_argument('--increase_epochs', action='store_true', default=False, help='Increase the number of epochs to train the supernet and individuals as generations progress')
     parser.add_argument('--r2_weights_dir', type=str, default='r2_weights/weights/weights_75_25_n40.json', help='Directory to load the R2 weights from (only used for r2-emoa-based algorithms)')
     parser.add_argument('--proxy_data_dir', type=str, default=None, help='Directory to load the proxy data indices (if provided)')
+    parser.add_argument('--proxy_eval_dir', type=str, default=None, help='Directory to load the proxy evaluation data indices (if provided)')
     parser.add_argument('--reload_dir', type=str, default=None, help='Directory to reload the experiment from if --reload is set')
     args = parser.parse_args()
 
