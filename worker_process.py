@@ -67,6 +67,9 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
     if args.proxy_data_dir is not None:
         process_args.append('--proxy_data_dir')
         process_args.append(str(args.proxy_data_dir))
+    if args.proxy_eval_dir is not None:
+        process_args.append('--proxy_eval_dir')
+        process_args.append(str(args.proxy_eval_dir))
     env_worker = os.environ.copy()
     env_worker['CUDA_VISIBLE_DEVICES'] = str(args.gpu) # Set the GPU device for the subprocess
     if args.debug_cuda:

@@ -260,7 +260,7 @@ def update_population_r2(n, pop, offspring, weights):
             continue
         for ind in front_k:
             ind.c_r2 = contribution_r2(front_k, ind, weights, nadir_point, z_ref)
-            logging.info(f"Individual {ind.F} R2 contribution {ind.c_r2}")
+            #logging.info(f"Individual {ind.F} R2 contribution {ind.c_r2}")
         worst = min(front_k, key=lambda x: x.c_r2)
         tied_worst = [ind for ind in front_k if np.allclose(ind.c_r2, worst.c_r2, rtol=1e-10, atol=1e-12)]
         if len(tied_worst) > 1:

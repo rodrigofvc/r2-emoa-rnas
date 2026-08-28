@@ -195,23 +195,31 @@ def train_amp(train_queue, model, criterion, scheduler, optimizer, args):
     adv_accuracy = adv_correct / total
     return adv_accuracy * 100.0
 
-def smooth_tchebycheff_sc_loss(args, std_loss, adv_loss, flops, params, weights, z_ref_stch, nadir_point, ideal_point):
+def smooth_tchebycheff_sc_loss_4_objs(args, std_loss, adv_loss, flops, params, weights, z_ref_stch, nadir_point, ideal_point):
     loss_type = std_loss.dtype
     losses_grad = torch.stack([std_loss, adv_loss])
     losses_const = torch.stack([flops, params]).detach().to(dtype=loss_type)
     losses = torch.cat([losses_grad, losses_const])
-    # TESTING 2 objectives
-    losses = losses_grad
-    ideal_point = ideal_point[:len(losses)]
-    nadir_point = nadir_point[:len(losses)]
-    weights = torch.tensor([args.lambda_1, args.lambda_2], device=losses.device, dtype=loss_type)
-    z_ref_stch = z_ref_stch[:len(losses)]
-    # TESTING
     values = torch.abs(losses - ideal_point) / torch.clamp(torch.abs(nadir_point - ideal_point), 1e-6)
     stch_value = args.mu * torch.logsumexp(weights * (values - z_ref_stch) / args.mu, dim=-1)
     if not torch.isfinite(stch_value):
         raise ValueError(f"stch_value is not finite {stch_value.item()}")
     return stch_value
+
+def smooth_tchebycheff_loss_2_objs(std_loss, adv_loss, lambda_1, lambda_2, mu):
+    if mu <= 0:
+        raise ValueError("mu must be greater than zero.")
+
+    losses = torch.stack([std_loss, adv_loss])
+    weights = losses.new_tensor([lambda_1, lambda_2])
+
+    assert np.isclose(weights.sum().item(), 1.0), "Weights must sum to 1."
+
+    stch_loss = mu * torch.logsumexp(weights * losses / mu, dim=0)
+    if not torch.isfinite(stch_loss):
+        raise ValueError(f"Non-finite STCH loss: {stch_loss.item()}")
+
+    return stch_loss
 
 def train_individual(model, flops, params, train_queue, criterion, optimizer, args, r2_weight, nadir_point, ideal_point, scheduler):
     weight_individual = torch.tensor(r2_weight, device=args.device, dtype=torch.float32)
@@ -273,8 +281,8 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
     adv_loss = criterion(adv_logits, target)
     std_loss = criterion(std_logits, target)
     
-    total_loss = smooth_tchebycheff_sc_loss(args, std_loss, adv_loss, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point)
-
+    #total_loss = smooth_tchebycheff_loss_4_objs(args, std_loss, adv_loss, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point)
+    total_loss = smooth_tchebycheff_loss_2_objs(std_loss, adv_loss, args.lambda_1, args.lambda_2, args.mu)
     total_loss.backward()
 
     nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip, foreach=False)

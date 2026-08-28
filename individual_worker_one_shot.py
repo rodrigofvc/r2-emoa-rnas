@@ -111,10 +111,24 @@ def get_model_from_individual(individual_X, args):
             generator=torch.Generator().manual_seed(args.seed)
         )
 
-    valid_queue = torch.utils.data.DataLoader(
-      valid_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-        num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+    if args.proxy_eval_dir is None:
+        valid_queue = torch.utils.data.DataLoader(
+            valid_data, batch_size=args.batch_size,
+            sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
+            num_workers=args.num_workers, pin_memory=True, drop_last=True,
+            generator=torch.Generator().manual_seed(args.seed))
+    else:
+        logging.info(f"Using proxy evaluation data from {args.proxy_eval_dir}")
+        proxy_eval_indices = np.load(args.proxy_eval_dir)
+        valid_data_proxy = torch.utils.data.Subset(
+            valid_data,
+            proxy_eval_indices.tolist(),
+        )
+        valid_queue = torch.utils.data.DataLoader(
+            valid_data_proxy, batch_size=args.batch_size,
+            num_workers=args.num_workers, pin_memory=True, drop_last=True,
+            generator=torch.Generator().manual_seed(args.seed)
+        )
 
     logging.info(f"Training {len(train_queue.dataset)} samples, validating on {len(valid_queue.dataset)} samples.")
 
@@ -167,6 +181,7 @@ if __name__ == '__main__':
     args.add_argument('--nadir_point', type=str, required=True, help='string representation of the nadir point')
     args.add_argument('--ideal_point', type=str, required=True, help='string representation of the ideal point')
     args.add_argument('--proxy_data_dir', type=str, default=None, help='Directory to load the proxy data indices (if provided)')
+    args.add_argument('--proxy_eval_dir', type=str, default=None, help='Directory to load the proxy evaluation indices (if provided)')
     args = args.parse_args()
 
     print(f"Running individual {args.i} with the following arguments:")
