@@ -61,7 +61,28 @@ def set_random_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
 
-def initial_population(n_population, alphas_dim, k, args):
+def get_discrete_bounds(args):
+    n_var = 4 * args.steps * 2
+    n_ops = len(PRIMITIVES)
+
+    lb = np.zeros(n_var, dtype=np.int32)
+    ub = np.ones(n_var, dtype=np.int32)
+
+    h = 1
+
+    for b in range(0, n_var // 2, 4):
+        ub[b] = n_ops - 1
+        ub[b + 1] = h
+        ub[b + 2] = n_ops - 1
+        ub[b + 3] = h
+        h += 1
+
+    ub[n_var // 2:] = ub[:n_var // 2]
+
+    return lb, ub
+
+
+def initial_population_dep(n_population, alphas_dim, k, args):
     individuals = []
     for i in range(n_population):
         if args.search_space == 'discrete':
@@ -82,6 +103,21 @@ def initial_population(n_population, alphas_dim, k, args):
         individuals.append(Individual(X=flattened.copy(), k=k, search_space=args.search_space))
     return individuals
 
+def initial_population(n_population, alphas_dim, k, args):
+    individuals = []
+
+    if args.search_space == "discrete":
+        lb, ub = get_discrete_bounds(args)
+        X = np.column_stack([np.random.randint(int(lb[j]), int(ub[j]) + 1, size=n_population) for j in range(len(lb))]).astype(np.int32)
+
+    else:
+        n_var = alphas_dim[0] * alphas_dim[1] * 2
+        X = np.random.rand(n_population, n_var)
+
+    for i in range(n_population):
+        individuals.append(Individual(X=X[i].copy(), k=k, search_space=args.search_space))
+
+    return individuals
 
 # R2 version where each architecture has its own weights (no supernet training). This is a baseline to compare with the supernet version.
 def r2_emoa_rnas(args_):
