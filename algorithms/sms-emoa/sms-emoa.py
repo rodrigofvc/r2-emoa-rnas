@@ -198,7 +198,7 @@ def sms_emoa_rnas(args):
 
     algorithm = SMSEMOA(
         pop_size=args.n_population,
-        n_offsprings=1,
+        n_offsprings=args.n_population,
         sampling=X,
         crossover=PointCrossover(n_points=2, prob=args.prob_cross),
         mutation=PolynomialMutation(
