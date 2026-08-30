@@ -203,8 +203,7 @@ def sms_emoa_rnas(args):
         crossover=PointCrossover(n_points=2, prob=args.prob_cross),
         mutation=PolynomialMutation(
             eta=args.eta_mut,
-            prob=1.0,
-            prob_var=args.prob_mut,
+            prob=args.prob_mut,
             vtype=float
         ),
         normalize=True
