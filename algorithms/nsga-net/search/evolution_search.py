@@ -5,6 +5,8 @@ import random
 import sys
 from pathlib import Path
 
+from pymoo.operators.mutation.pm import PolynomialMutation
+
 from individual import Individual
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -65,6 +67,8 @@ parser.add_argument('--n_nodes', type=int, default=6, help='number of nodes per 
 parser.add_argument('--pop_size', type=int, default=5, help='population size of networks')
 parser.add_argument('--n_gens', type=int, default=50, help='population size')
 parser.add_argument('--n_offspring', type=int, default=40, help='number of offspring created per generation')
+parser.add_argument('--prob_mut', type=float, default=0.1, help='mutation probability')
+parser.add_argument('--eta_mut', type=float, default=3.0, help='mutation eta')
 # arguments for back-propagation training during search
 parser.add_argument('--init_channels', type=int, default=16, help='# of filters for first cell')
 parser.add_argument('--layers', type=int, default=4, help='equivalent with N = 3')
@@ -220,6 +224,14 @@ def main():
         ub = np.ones(n_var)
     else:
         raise NameError('Unknown search space type')
+    X = np.column_stack([
+        np.random.randint(
+            int(lb[j]),
+            int(ub[j]) + 1,
+            size=args.pop_size
+        )
+        for j in range(n_var)
+    ]).astype(np.int32)
     start = time.time()
     problem = NAS(dataset=args.dataset, n_classes=args.n_classes, n_var=n_var, search_space=args.search_space,
                   n_obj=4, n_constr=0, lb=lb, ub=ub,
@@ -230,6 +242,8 @@ def main():
     # configure the nsga-net method
     algorithm = engine.nsganet(pop_size=args.pop_size,
                             n_offsprings=args.n_offspring,
+                            sampling=X,
+                            mutation=PolynomialMutation(eta=args.eta_mut, prob=args.prob_mut),
                             eliminate_duplicates=True)
 
     algorithm.setup(problem, seed=args.seed, termination=NoTermination(), verbose=False)
