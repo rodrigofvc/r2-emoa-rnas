@@ -106,13 +106,18 @@ def initial_population_dep(n_population, alphas_dim, k, args):
 def initial_population(n_population, alphas_dim, k, args):
     individuals = []
 
-    if args.search_space == "discrete":
-        lb, ub = get_discrete_bounds(args)
-        X = np.column_stack([np.random.randint(int(lb[j]), int(ub[j]) + 1, size=n_population) for j in range(len(lb))]).astype(np.int32)
-
+    if args.initial_population is not None:
+        # Load initial population from file
+        X = np.load(args.initial_population)
+        if X.shape[0] != n_population:
+            raise ValueError(f"Initial population file contains only {X.shape[0]} individuals, but n_population is set to {n_population}.")
     else:
-        n_var = alphas_dim[0] * alphas_dim[1] * 2
-        X = np.random.rand(n_population, n_var)
+        if args.search_space == "discrete":
+            lb, ub = get_discrete_bounds(args)
+            X = np.column_stack([np.random.randint(int(lb[j]), int(ub[j]) + 1, size=n_population) for j in range(len(lb))]).astype(np.int32)
+        else:
+            n_var = alphas_dim[0] * alphas_dim[1] * 2
+            X = np.random.rand(n_population, n_var)
 
     for i in range(n_population):
         individuals.append(Individual(X=X[i].copy(), k=k, search_space=args.search_space))
