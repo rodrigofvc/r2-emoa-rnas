@@ -33,6 +33,15 @@ import torchvision
 
 from rnas_train import train_individual, infer
 
+def set_seeds(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 def get_model_from_individual(individual_X, args):
 
@@ -45,6 +54,8 @@ def get_model_from_individual(individual_X, args):
     genome = convert(individual_X)
     genotype = decode(genome, args.steps, args.multiplier)
 
+    set_seeds(args.seed)
+
     model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype).to(args.device)
     optimizer = torch.optim.SGD(
         model.parameters(),
@@ -55,6 +66,8 @@ def get_model_from_individual(individual_X, args):
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
     flops, params = utils_search.get_model_metrics(model)
+
+    set_seeds(args.seed)
 
     train_transform, valid_transform = utils_search.data_transforms_cifar10(args)
     if args.dataset == 'cifar10':
@@ -184,6 +197,7 @@ if __name__ == '__main__':
         args.device = torch.device('cpu')
     model, optimizer, scheduler, individual_flops, individual_params, train_queue, valid_queue, criterion = get_model_from_individual(individual_X, args)
     time_training = time.time()
+    set_seeds(args.seed)
     train_individual(model, train_queue, criterion, optimizer, args, scheduler)
     logging.info(
         f'Gen {args.gen} Training {args.i + 1} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
