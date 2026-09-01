@@ -53,11 +53,19 @@ def worker_evaluate_individual(gen, i, individual_X, args):
         process_args.append('--reduction')
     if args.cutout:
         process_args.append('--cutout')
+    if args.proxy_data_dir is not None:
+        process_args.append('--proxy_data_dir')
+        process_args.append(str(args.proxy_data_dir))
+    if args.proxy_eval_dir is not None:
+        process_args.append('--proxy_eval_dir')
+        process_args.append(str(args.proxy_eval_dir))
+
     env_worker = os.environ.copy()
     env_worker['CUDA_VISIBLE_DEVICES'] = str(args.gpu) # Set the GPU device for the subprocess
     if args.debug_cuda:
         env_worker['CUDA_LAUNCH_BLOCKING'] = '1'
         env_worker['TORCH_USE_CUDA_DSA'] = '1'
+
     clean_file = False
     with open(log_file, 'w') as f_log:
         process = subprocess.Popen(process_args,

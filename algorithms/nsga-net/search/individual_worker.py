@@ -58,10 +58,10 @@ def get_model_from_individual(individual_X, args):
     train_transform, valid_transform = utils_search.data_transforms_cifar10(args)
     if args.dataset == 'cifar10':
         train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
-        valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
+        valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=valid_transform)
     elif args.dataset == 'cifar100':
         train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
-        valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
+        valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=valid_transform)
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
     num_train = len(train_data)
@@ -73,15 +73,53 @@ def get_model_from_individual(individual_X, args):
         split = 96
         num_train = split + 96
 
-    train_queue = torch.utils.data.DataLoader(
-      train_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-        num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+    if args.proxy_data_dir is None:
+        train_sampler = torch.utils.data.sampler.SubsetRandomSampler(
+            indices[:split],
+            generator=torch.Generator().manual_seed(args.seed),
+        )
+        train_queue = torch.utils.data.DataLoader(
+            train_data, batch_size=args.batch_size,
+            sampler=train_sampler,
+            num_workers=0, pin_memory=True,
+            drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+    else:
+        logging.info(f"Using proxy data from {args.proxy_data_dir}")
+        proxy_indices = np.load(args.proxy_data_dir)
+        train_data_proxy = torch.utils.data.Subset(
+            train_data,
+            proxy_indices.tolist(),
+        )
+        train_queue = torch.utils.data.DataLoader(
+            train_data_proxy, batch_size=args.batch_size,
+            num_workers=0, pin_memory=True, drop_last=True, shuffle=True,
+            generator=torch.Generator().manual_seed(args.seed)
+        )
 
-    valid_queue = torch.utils.data.DataLoader(
-      valid_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-        num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+    if args.proxy_eval_dir is None:
+        valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(
+            indices[split:num_train],
+            generator=torch.Generator().manual_seed(args.seed),
+        )
+        valid_queue = torch.utils.data.DataLoader(
+            valid_data, batch_size=args.batch_size,
+            sampler=valid_sampler,
+            num_workers=0, pin_memory=True,
+            generator=torch.Generator().manual_seed(args.seed))
+    else:
+        logging.info(f"Using proxy evaluation data from {args.proxy_eval_dir}")
+        proxy_eval_indices = np.load(args.proxy_eval_dir)
+        valid_data_proxy = torch.utils.data.Subset(
+            valid_data,
+            proxy_eval_indices.tolist(),
+        )
+        valid_queue = torch.utils.data.DataLoader(
+            valid_data_proxy, batch_size=args.batch_size,
+            num_workers=0, pin_memory=True,
+            generator=torch.Generator().manual_seed(args.seed)
+        )
+
+    logging.info(f"Training {len(train_queue)* args.batch_size} samples, validating {len(valid_queue)* args.batch_size} samples.")
 
     criterion = torch.nn.CrossEntropyLoss()
 
@@ -120,6 +158,8 @@ if __name__ == '__main__':
     args.add_argument('--drop_path_prob', type=float, required=True, help='drop path probability')
     args.add_argument('--grad_clip', type=float, required=True, help='gradient clipping')
     args.add_argument('--train_portion', type=float, required=True, help='portion of training data')
+    args.add_argument('--proxy_data_dir', type=str, default=None, help='Directory to load the proxy data indices (if provided)')
+    args.add_argument('--proxy_eval_dir', type=str, default=None, help='Directory to load the proxy evaluation data indices (if provided)')
     args = args.parse_args()
 
     print(f"Running individual {args.i} with the following arguments:")

@@ -89,6 +89,10 @@ parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path
 parser.add_argument('--grad_clip', type=float, default=5.0, help='gradient clipping')
 parser.add_argument('--epochs', type=int, default=25, help='# of epochs to train during architecture search')
 parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
+parser.add_argument('--proxy_data_dir', type=str, default=None,
+                    help='Directory to load the proxy data indices (if provided)')
+parser.add_argument('--proxy_eval_dir', type=str, default=None,
+                    help='Directory to load the proxy evaluation data indices (if provided)')
 parser.add_argument('--timestamp', type=int, default=6, help='timestamp in minutes for training/eval each architecture')
 parser.add_argument('--debug_cuda', action='store_true', default=False,
                     help='Enable CUDA_LAUNCH_BLOCKING for debugging')
