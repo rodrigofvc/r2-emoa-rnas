@@ -33,11 +33,6 @@ import random
 
 from rnas_train import train_individual, infer
 
-def seed_everything(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)
 
 def get_model_from_individual(individual_X, args):
 
@@ -55,7 +50,6 @@ def get_model_from_individual(individual_X, args):
         genome = convert(individual_X)
         genotype = decode(genome, args.steps, args.multiplier)
 
-    seed_everything(42)
     model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype).to(args.device)
     if args.optimizer == 'Adam':
         optimizer = torch.optim.Adam(
@@ -78,10 +72,10 @@ def get_model_from_individual(individual_X, args):
 
     train_transform, valid_transform = utils.data_transforms_cifar10(args)
     if args.dataset == 'cifar10':
-        train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=valid_transform)
+        train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
         valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=valid_transform)
     elif args.dataset == 'cifar100':
-        train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=valid_transform)
+        train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
         valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=valid_transform)
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
@@ -113,7 +107,7 @@ def get_model_from_individual(individual_X, args):
         )
         train_queue = torch.utils.data.DataLoader(
             train_data_proxy, batch_size=args.batch_size,
-            num_workers=args.num_workers, pin_memory=True, drop_last=True, shuffle=True,
+            num_workers=args.num_workers, pin_memory=True, drop_last=True,
             generator=torch.Generator().manual_seed(args.seed)
         )
 
@@ -210,6 +204,9 @@ if __name__ == '__main__':
         torch.cuda.manual_seed(args.seed)
         torch.backends.cudnn.enabled = True
         args.device = torch.device('cuda:{}'.format(args.gpu))
+        random.seed(args.seed)
+        np.random.seed(args.seed)
+        torch.manual_seed(args.seed)
     elif torch.backends.mps.is_available():
         args.device = torch.device('mps')
     else:
