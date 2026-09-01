@@ -145,7 +145,7 @@ def r2_emoa_rnas(args_):
             offsprings = point_crossover(parents, n_childs=args.n_population, prob_cross=args.prob_cross, n_points=args.n_points_cross)
         else:
             offsprings = binary_crossover(parents, n_childs=args.n_population, eta=args.eta_cross, prob_cross=args.prob_cross)
-        mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut, random_state=np.random.RandomState(args.seed + generation), steps=args.steps, n_ops=len(PRIMITIVES), search_space=args.search_space)
+        mutation = polynomial_mutation(offsprings, prob_individual=args.prob_mut, eta=args.eta_mut, random_state=np.random.RandomState(args.seed + generation), steps=args.steps, n_ops=len(PRIMITIVES), search_space=args.search_space)
         evaluate_population_multiprocessing(generation, mutation, weights_r2, nadir_point, ideal_point, args)
         architectures_evaluated += args.n_population
         update_ref_points(mutation, nadir_point, ideal_point)
