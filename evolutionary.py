@@ -134,7 +134,75 @@ def binary_crossover(pop, n_childs, eta, prob_cross):
                 offsprings.append(Individual(X=child2_X.copy(), k=parent2.k, search_space='continuous'))
     return offsprings
 
-def polynomial_mutation(pop, prob_mut, eta, random_state, steps, n_ops, search_space, at_least_once=False):
+def get_discrete_bounds(steps, n_ops, n_cells=2):
+
+    n_variables = 4 * steps * n_cells
+
+    xl = np.zeros(n_variables, dtype=float)
+    xu = np.zeros(n_variables, dtype=float)
+
+    for cell in range(n_cells):
+        cell_offset = cell * 4 * steps
+
+        for node in range(steps):
+            gene = cell_offset + 4 * node
+            max_input = node + 1
+
+            # [op1, input1, op2, input2]
+            xu[gene] = n_ops - 1
+            xu[gene + 1] = max_input
+            xu[gene + 2] = n_ops - 1
+            xu[gene + 3] = max_input
+
+    return xl, xu
+
+def polynomial_mutation(pop, prob_individual, eta, random_state, steps, n_ops, search_space, at_least_once=False):
+    if len(pop) == 0:
+        return pop
+
+    X = np.asarray([individual.X for individual in pop], dtype=float)
+
+    n_individuals, n_variables = X.shape
+
+    prob_var = min(0.5, 1.0 / n_variables)
+
+    if search_space == "discrete":
+        xl, xu = get_discrete_bounds(steps=steps, n_ops=n_ops, n_cells=2)
+    else:
+        xl = np.zeros(n_variables, dtype=float)
+        xu = np.ones(n_variables, dtype=float)
+
+    eta_values = np.full(n_individuals, eta, dtype=float)
+
+    prob_var_values = np.full(n_individuals, prob_var, dtype=float)
+
+    X_candidates = mut_pm(
+        X=X,
+        xl=xl,
+        xu=xu,
+        eta=eta_values,
+        prob=prob_var_values,
+        at_least_once=at_least_once,
+        random_state=random_state
+    )
+
+    # Decide qué individuos aceptan la mutación
+    mutate_individual = (random_state.random(n_individuals) <= prob_individual)
+
+    X_mutated = X.copy()
+    X_mutated[mutate_individual] = X_candidates[mutate_individual]
+
+    if search_space == "discrete":
+        X_mutated = np.rint(X_mutated)
+        X_mutated = np.clip(X_mutated, xl, xu)
+        X_mutated = X_mutated.astype(np.int32)
+
+    for individual, x_mutated in zip(pop, X_mutated):
+        individual.X = x_mutated.copy()
+
+    return pop
+
+def polynomial_mutation_novar(pop, prob_mut, eta, random_state, steps, n_ops, search_space, at_least_once=False):
     if len(pop) == 0:
         return pop
 

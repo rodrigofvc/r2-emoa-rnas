@@ -106,13 +106,18 @@ def initial_population_dep(n_population, alphas_dim, k, args):
 def initial_population(n_population, alphas_dim, k, args):
     individuals = []
 
-    if args.search_space == "discrete":
-        lb, ub = get_discrete_bounds(args)
-        X = np.column_stack([np.random.randint(int(lb[j]), int(ub[j]) + 1, size=n_population) for j in range(len(lb))]).astype(np.int32)
-
+    if args.initial_population is not None:
+        # Load initial population from file
+        X = np.load(args.initial_population)
+        if X.shape[0] != n_population:
+            raise ValueError(f"Initial population file contains only {X.shape[0]} individuals, but n_population is set to {n_population}.")
     else:
-        n_var = alphas_dim[0] * alphas_dim[1] * 2
-        X = np.random.rand(n_population, n_var)
+        if args.search_space == "discrete":
+            lb, ub = get_discrete_bounds(args)
+            X = np.column_stack([np.random.randint(int(lb[j]), int(ub[j]) + 1, size=n_population) for j in range(len(lb))]).astype(np.int32)
+        else:
+            n_var = alphas_dim[0] * alphas_dim[1] * 2
+            X = np.random.rand(n_population, n_var)
 
     for i in range(n_population):
         individuals.append(Individual(X=X[i].copy(), k=k, search_space=args.search_space))
@@ -145,7 +150,7 @@ def r2_emoa_rnas(args_):
             offsprings = point_crossover(parents, n_childs=args.n_population, prob_cross=args.prob_cross, n_points=args.n_points_cross)
         else:
             offsprings = binary_crossover(parents, n_childs=args.n_population, eta=args.eta_cross, prob_cross=args.prob_cross)
-        mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut, random_state=np.random.RandomState(args.seed + generation), steps=args.steps, n_ops=len(PRIMITIVES), search_space=args.search_space)
+        mutation = polynomial_mutation(offsprings, prob_individual=args.prob_mut, eta=args.eta_mut, random_state=np.random.RandomState(args.seed + generation), steps=args.steps, n_ops=len(PRIMITIVES), search_space=args.search_space)
         evaluate_population_multiprocessing(generation, mutation, weights_r2, nadir_point, ideal_point, args)
         architectures_evaluated += args.n_population
         update_ref_points(mutation, nadir_point, ideal_point)
