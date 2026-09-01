@@ -90,7 +90,80 @@ def create_evaluation_proxy_indices(dataset, train_portion, eval_size, seed):
     assert np.intersect1d(selected_indices, train_candidate_indices).size == 0
 
     return selected_indices
+def save_eval_indices(data_dir, output_path, train_portion=0.5, dataset="cifar10"):
+    if dataset == "cifar10":
+        data = torchvision.datasets.CIFAR10(
+            root=data_dir,
+            train=True,
+            download=True,
+        )
+    elif dataset == "cifar100":
+        data = torchvision.datasets.CIFAR100(
+            root=data_dir,
+            train=True,
+            download=True,
+        )
+    else:
+        raise ValueError(f"Unknown dataset: {dataset}")
 
+    num_train = len(data)
+    split = int(np.floor(train_portion * num_train))
+
+    eval_indices = np.arange(split, num_train, dtype=np.int64)
+
+    os.makedirs(os.path.dirname(os.path.abspath(output_path)), exist_ok=True)
+
+    np.save(output_path, eval_indices)
+
+    print(f"Dataset: {dataset}")
+    print(f"Total images: {num_train}")
+    print(f"Train split: {split}")
+    print(f"Saved evaluation indices: {len(eval_indices)}")
+    print(f"First index: {eval_indices[0]}")
+    print(f"Last index: {eval_indices[-1]}")
+    print(f"Output: {output_path}")
+
+def save_train_indices(data_dir, output_path, train_portion=0.5, dataset="cifar10"):
+    if dataset == "cifar10":
+        data = torchvision.datasets.CIFAR10(
+            root=data_dir,
+            train=True,
+            download=True,
+        )
+    elif dataset == "cifar100":
+        data = torchvision.datasets.CIFAR100(
+            root=data_dir,
+            train=True,
+            download=True,
+        )
+    else:
+        raise ValueError(f"Unknown dataset: {dataset}")
+
+    num_train = len(data)
+    split = int(np.floor(train_portion * num_train))
+
+
+    train_indices = np.arange(0, split, dtype=np.int64)
+
+    output_directory = os.path.dirname(os.path.abspath(output_path))
+    os.makedirs(output_directory, exist_ok=True)
+
+    np.save(output_path, train_indices)
+
+    print(f"Dataset: {dataset}")
+    print(f"Total images: {num_train}")
+    print(f"Train split: {split}")
+    print(f"Saved training indices: {len(train_indices)}")
+    print(f"First index: {train_indices[0]}")
+    print(f"Last index: {train_indices[-1]}")
+    print(f"Output: {output_path}")
+
+
+
+"""
+python3 proxy_eval.py --dataset cifar10 --train_portion 0.5 \
+ --eval_size 2500 --seed 42 --batch_size 192 --data ../data --output_dir ./proxy_eval/
+"""
 if __name__ == '__main__':
     args = argparse.ArgumentParser(description='Proxy Evaluation')
     args.add_argument('--dataset', type=str, default='cifar10', help='Dataset name (cifar10 or cifar100)')
@@ -143,3 +216,17 @@ if __name__ == '__main__':
     )
 
     print(f"Evaluation proxy size: {len(eval_proxy_dataset)}")
+
+    save_train_indices(
+        data_dir="./data",
+        output_path="./proxy_indices/cifar10_train_25000.npy",
+        train_portion=0.5,
+        dataset="cifar10",
+    )
+
+    save_eval_indices(
+        data_dir="../data",
+        output_path="./proxy_indices/cifar100_eval_25000.npy",
+        train_portion=0.5,
+        dataset="cifar100",
+    )
