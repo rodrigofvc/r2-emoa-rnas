@@ -195,12 +195,21 @@ def moead_rnas(args):
                   n_obj=4, n_constr=0, lb=lb, ub=ub,
                   init_channels=args.init_channels, layers=args.layers,
                   epochs=args.epochs_train_individual, args_problem=args)
+    X = np.column_stack([
+        np.random.randint(
+            int(lb[j]),
+            int(ub[j]) + 1,
+            size=args.n_population
+        )
+        for j in range(n_var)
+    ]).astype(np.int32)
+
     ref_dirs = get_reference_directions("energy", n_dim=problem.n_obj, n_points=args.n_population, seed=args.seed)
     algorithm = MOEAD(
         ref_dirs=ref_dirs,
         n_neighbors=15,
         prob_neighbor_mating=args.prob_neighbor_mating,
-        sampling=IntegerRandomSampling(),
+        sampling=X,
         crossover=PointCrossover(n_points=2, prob=args.prob_cross),
         mutation=PolynomialMutation(
             eta=args.eta_mut,

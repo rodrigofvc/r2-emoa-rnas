@@ -217,9 +217,18 @@ def moras_rnas(args):
                   n_obj=4, n_constr=0, lb=lb, ub=ub,
                   init_channels=args.init_channels, layers=args.layers,
                   epochs=args.epochs_train_individual, args_problem=args)
+    X = np.column_stack([
+        np.random.randint(
+            int(lb[j]),
+            int(ub[j]) + 1,
+            size=args.n_population
+        )
+        for j in range(n_var)
+    ]).astype(np.int32)
+
     algorithm = NSGA2(pop_size=args.n_population,
                       n_offsprings=args.n_population,
-                      sampling=IntegerRandomSampling(),
+                      sampling=X,
                       crossover=SBX(
                           prob=args.prob_cross,
                           eta=args.eta_cross,
