@@ -100,6 +100,7 @@ parser.add_argument('--increase_epochs', action='store_true', default=False,
                     help='Increase the number of epochs to train the supernet and individuals as generations progress')
 parser.add_argument('--reload_dir', type=str, default=None,
                     help='Directory to reload the experiment from if --reload is set')
+parser.add_argument('--initial_population', type=str, default=None, help='Path to the initial population file (if provided)')
 args = parser.parse_args()
 
 
@@ -228,14 +229,21 @@ def main():
         ub = np.ones(n_var)
     else:
         raise NameError('Unknown search space type')
-    X = np.column_stack([
-        np.random.randint(
-            int(lb[j]),
-            int(ub[j]) + 1,
-            size=args.pop_size
-        )
-        for j in range(n_var)
-    ]).astype(np.int32)
+    if args.initial_population is not None:
+        # Load initial population from file
+        X = np.load(args.initial_population)
+        if X.shape[0] != args.pop_size:
+            raise ValueError(f"Initial population file contains only {X.shape[0]} individuals, but pop_size is set to {args.pop_size}.")
+        logging.info("Loaded initial population from {} with shape {}".format(args.initial_population, X.shape))
+    else:
+        X = np.column_stack([
+            np.random.randint(
+                int(lb[j]),
+                int(ub[j]) + 1,
+                size=args.pop_size
+            )
+            for j in range(n_var)
+        ]).astype(np.int32)
     start = time.time()
     problem = NAS(dataset=args.dataset, n_classes=args.n_classes, n_var=n_var, search_space=args.search_space,
                   n_obj=4, n_constr=0, lb=lb, ub=ub,
