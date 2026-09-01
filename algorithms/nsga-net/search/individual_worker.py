@@ -1,5 +1,6 @@
 import argparse
 import json
+import random
 import sys
 import os
 import gc
@@ -32,6 +33,12 @@ import torchvision
 
 from rnas_train import train_individual, infer
 
+def seed_everything(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
+
 def get_model_from_individual(individual_X, args):
 
     if args.dataset == 'cifar10':
@@ -42,6 +49,8 @@ def get_model_from_individual(individual_X, args):
         raise ValueError(f"Unknown dataset: {args.dataset}")
     genome = convert(individual_X)
     genotype = decode(genome, args.steps, args.multiplier)
+
+    seed_everything(42)
 
     model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype).to(args.device)
     optimizer = torch.optim.SGD(
