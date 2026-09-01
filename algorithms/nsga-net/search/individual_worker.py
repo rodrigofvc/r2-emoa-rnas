@@ -56,10 +56,10 @@ def get_model_from_individual(individual_X, args):
 
     train_transform, valid_transform = utils_search.data_transforms_cifar10(args)
     if args.dataset == 'cifar10':
-        train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
+        train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=valid_transform)
         valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=valid_transform)
     elif args.dataset == 'cifar100':
-        train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
+        train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=valid_transform)
         valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=valid_transform)
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
