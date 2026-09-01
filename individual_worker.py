@@ -29,8 +29,15 @@ from micro_space.model_search import alphas_to_genotype
 import numpy as np
 import torch
 import torchvision
+import random
 
 from rnas_train import train_individual, infer
+
+def seed_everything(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)
 
 def get_model_from_individual(individual_X, args):
 
@@ -48,6 +55,7 @@ def get_model_from_individual(individual_X, args):
         genome = convert(individual_X)
         genotype = decode(genome, args.steps, args.multiplier)
 
+    seed_everything(42)
     model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype).to(args.device)
     if args.optimizer == 'Adam':
         optimizer = torch.optim.Adam(
