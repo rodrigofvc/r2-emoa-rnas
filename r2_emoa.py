@@ -36,8 +36,8 @@ def prepare_args_standard(args_):
         archive_accuracy = []
         archive_losses = []
         architectures_evaluated = 0
-        nadir_point = np.ones(4, )
-        ideal_point = np.zeros(4, )
+        nadir_point = np.zeros(4, )
+        ideal_point = np.full(4, np.inf, dtype=float)
         np.random.seed(args.seed)
         random.seed(args.seed)
         statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'),
