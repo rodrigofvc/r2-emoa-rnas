@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 import random
 
+import time
 import numpy as np
 import torch
 import torchvision
@@ -109,7 +110,7 @@ class NAS(Problem):
             train_queue = torch.utils.data.DataLoader(
                 train_data, batch_size=args.batch_size,
                 sampler=train_sampler,
-                num_workers=0, pin_memory=True,
+                num_workers=args.num_workers, pin_memory=True,
                 drop_last=True, generator=torch.Generator().manual_seed(args.seed))
         else:
             logging.info(f"Using proxy data from {args.proxy_data_dir}")
@@ -120,7 +121,7 @@ class NAS(Problem):
             )
             train_queue = torch.utils.data.DataLoader(
                 train_data_proxy, batch_size=args.batch_size,
-                num_workers=0, pin_memory=True, drop_last=True,
+                num_workers=args.num_workers, pin_memory=True, drop_last=True,
                 generator=torch.Generator().manual_seed(args.seed)
             )
 
@@ -132,7 +133,7 @@ class NAS(Problem):
             valid_queue = torch.utils.data.DataLoader(
                 valid_data, batch_size=args.batch_size,
                 sampler=valid_sampler,
-                num_workers=0, pin_memory=True,
+                num_workers=args.num_workers, pin_memory=True, drop_last=True,
                 generator=torch.Generator().manual_seed(args.seed))
         else:
             logging.info(f"Using proxy evaluation data from {args.proxy_eval_dir}")
@@ -143,7 +144,7 @@ class NAS(Problem):
             )
             valid_queue = torch.utils.data.DataLoader(
                 valid_data_proxy, batch_size=args.batch_size,
-                num_workers=0, pin_memory=True,
+                num_workers=args.num_workers, pin_memory=True,
                 generator=torch.Generator().manual_seed(args.seed)
             )
         criterion = torch.nn.CrossEntropyLoss()
@@ -180,6 +181,7 @@ class NAS(Problem):
         objs = np.full((x.shape[0], self.n_obj), np.nan)
         population = []
         for i in range(x.shape[0]):
+            start_time = time.time()
             performance = self._train_eval_monas(i, x[i, :], self.args_problem)
             objs[i, 0] = performance['std_loss']
             objs[i, 1] = performance['adv_loss']
@@ -194,7 +196,7 @@ class NAS(Problem):
                 individual.feasible = True
                 population.append(individual)
             logging.info(
-                f"Individual {self._n_evaluated}: std_acc {performance['std_acc']:.2f}, adv_acc {performance['adv_acc']:.2f} std_loss {performance['std_loss']:.3f}, adv_loss {performance['adv_loss']:.3f}, flops {performance['flops']:.2f}, params {performance['params']:.2f}")
+                f"Individual {self._n_evaluated}: std_acc {performance['std_acc']:.2f}, adv_acc {performance['adv_acc']:.2f} std_loss {performance['std_loss']:.3f}, adv_loss {performance['adv_loss']:.3f}, flops {performance['flops']:.2f}, params {performance['params']:.2f}, time {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}")
             self._n_evaluated += 1
         self.archive = archive_update_pq(self.archive, population)
         self.archive_2 = archive_update_pq(self.archive_2, population, k=2)
@@ -229,14 +231,17 @@ def sms_emoa_rnas(args):
                   n_obj=4, n_constr=0, lb=lb, ub=ub,
                   init_channels=args.init_channels, layers=args.layers,
                   epochs=args.epochs_train_individual, args_problem=args)
-    X = np.column_stack([
-        np.random.randint(
-            int(lb[j]),
-            int(ub[j]) + 1,
-            size=args.n_population
-        )
-        for j in range(n_var)
-    ]).astype(np.int32)
+    if args.initial_population is not None:
+        X = np.load(args.initial_population)
+    else:
+        X = np.column_stack([
+            np.random.randint(
+                int(lb[j]),
+                int(ub[j]) + 1,
+                size=args.n_population
+            )
+            for j in range(n_var)
+        ]).astype(np.int32)
 
     algorithm = SMSEMOA(
         pop_size=args.n_population,
@@ -246,9 +251,7 @@ def sms_emoa_rnas(args):
         mutation=PolynomialMutation(
             eta=args.eta_mut,
             prob=args.prob_mut,
-            vtype=float
-        ),
-        normalize=True
+        )
     )
     algorithm.setup(problem, seed=args.seed, termination=NoTermination(), verbose=False)
     start = time.time()
