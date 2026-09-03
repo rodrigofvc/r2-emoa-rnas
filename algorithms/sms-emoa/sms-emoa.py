@@ -28,6 +28,16 @@ from utils import create_experiment_dir, save_architecture, save_archive, save_a
     get_weights_r2_file, store_metrics, store_population_data, save_params
 
 
+def set_seeds(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
 class NAS(Problem):
     def __init__(self, dataset, n_var=20, n_obj=4, n_constr=0, lb=None, ub=None,
                  init_channels=16, layers=5, epochs=25, args_problem=None):
@@ -45,7 +55,7 @@ class NAS(Problem):
         self.args_problem = args_problem
         self.vtype = int
 
-    def _get_model_from_individual(self, individual_X, args):
+    def _get_model_from_individual(self, id, individual_X, args):
 
         if args.dataset == 'cifar10':
             n_classes = 10
@@ -60,7 +70,7 @@ class NAS(Problem):
         else:
             genome = convert(individual_X)
             genotype = decode(genome, args.steps, args.multiplier)
-
+        set_seeds(args.seed + id)
         model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype).to(args.device)
         optimizer = torch.optim.SGD(
             model.parameters(),
@@ -71,18 +81,15 @@ class NAS(Problem):
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
             optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
         flops, params = get_model_metrics(model)
+        set_seeds(args.seed + id)
 
         train_transform, valid_transform = data_transforms_cifar10(args)
         if args.dataset == 'cifar10':
-            train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True,
-                                                      transform=train_transform)
-            valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True,
-                                                      transform=train_transform)
+            train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
+            valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=valid_transform)
         elif args.dataset == 'cifar100':
-            train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True,
-                                                       transform=train_transform)
-            valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True,
-                                                       transform=train_transform)
+            train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
+            valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=valid_transform)
         else:
             raise ValueError(f"Unknown dataset: {args.dataset}")
         num_train = len(train_data)
@@ -94,23 +101,58 @@ class NAS(Problem):
 
         split = int(np.floor(args.train_portion * num_train))
 
-        train_queue = torch.utils.data.DataLoader(
-            train_data, batch_size=args.batch_size,
-            sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-            num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+        if args.proxy_data_dir is None:
+            train_sampler = torch.utils.data.sampler.SubsetRandomSampler(
+                indices[:split],
+                generator=torch.Generator().manual_seed(args.seed),
+            )
+            train_queue = torch.utils.data.DataLoader(
+                train_data, batch_size=args.batch_size,
+                sampler=train_sampler,
+                num_workers=0, pin_memory=True,
+                drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+        else:
+            logging.info(f"Using proxy data from {args.proxy_data_dir}")
+            proxy_indices = np.load(args.proxy_data_dir)
+            train_data_proxy = torch.utils.data.Subset(
+                train_data,
+                proxy_indices.tolist(),
+            )
+            train_queue = torch.utils.data.DataLoader(
+                train_data_proxy, batch_size=args.batch_size,
+                num_workers=0, pin_memory=True, drop_last=True,
+                generator=torch.Generator().manual_seed(args.seed)
+            )
 
-
-        valid_queue = torch.utils.data.DataLoader(
-            valid_data, batch_size=args.batch_size,
-            sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-            num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
-
+        if args.proxy_eval_dir is None:
+            valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(
+                indices[split:num_train],
+                generator=torch.Generator().manual_seed(args.seed),
+            )
+            valid_queue = torch.utils.data.DataLoader(
+                valid_data, batch_size=args.batch_size,
+                sampler=valid_sampler,
+                num_workers=0, pin_memory=True,
+                generator=torch.Generator().manual_seed(args.seed))
+        else:
+            logging.info(f"Using proxy evaluation data from {args.proxy_eval_dir}")
+            proxy_eval_indices = np.load(args.proxy_eval_dir)
+            valid_data_proxy = torch.utils.data.Subset(
+                valid_data,
+                proxy_eval_indices.tolist(),
+            )
+            valid_queue = torch.utils.data.DataLoader(
+                valid_data_proxy, batch_size=args.batch_size,
+                num_workers=0, pin_memory=True,
+                generator=torch.Generator().manual_seed(args.seed)
+            )
         criterion = torch.nn.CrossEntropyLoss()
 
         return model, optimizer, scheduler, flops, params, train_queue, valid_queue, criterion
 
-    def _train_eval_monas(self, genome, args):
-        model, optimizer, scheduler, flops, params, train_queue, valid_queue, criterion = self._get_model_from_individual(genome, args)
+    def _train_eval_monas(self, id, genome, args):
+        model, optimizer, scheduler, flops, params, train_queue, valid_queue, criterion = self._get_model_from_individual(id, genome, args)
+        set_seeds(args.seed + id)
         feasible = train_individual(model, train_queue, criterion, optimizer, scheduler, args)
         if feasible:
             std_accuracy, adv_accuracy, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
@@ -138,7 +180,7 @@ class NAS(Problem):
         objs = np.full((x.shape[0], self.n_obj), np.nan)
         population = []
         for i in range(x.shape[0]):
-            performance = self._train_eval_monas(x[i, :], self.args_problem)
+            performance = self._train_eval_monas(i, x[i, :], self.args_problem)
             objs[i, 0] = performance['std_loss']
             objs[i, 1] = performance['adv_loss']
             objs[i, 2] = performance['flops']
@@ -281,6 +323,7 @@ def sms_emoa_rnas(args):
 --reduction --layers 5 --steps 4 --multiplier 4 --attack FGSM \
 --cutout_length 16 --drop_path_prob 0.3 --grad_clip 5.0 --increase_epochs
 """
+# python sms-emoa.py --seed 18906049 --dataset cifar10 --batch_size 192 --n_population 40 --generations 30 --epochs_train_individual 10 --data ../../data --num_workers 0 --prob_cross 0.9 --prob_mut 0.1 --eta_mut 3 --loss_type ws --lambda_1 0.5 --lambda_2 0.5 --learning_rate 0.025 --learning_rate_min 0.001 --momentum 0.9 --weight_decay 3e-4 --report_freq 45 --gpu 0 --init_channels 8 --reduction --layers 5 --steps 4 --multiplier 4 --attack FGSM --grad_clip 5.0 --increase_epochs --proxy_data_dir proxy-data/cifar10_train_25000.npy --proxy_eval_dir proxy-data/cifar10_eval_25000.npy --initial_population initial/initial_population_40.npy
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="Running SMS-EMOA for RNAS")
     parser.add_argument('--seed', type=int, default=0, help='random seed')
@@ -329,6 +372,9 @@ if __name__ == '__main__':
     parser.add_argument('--increase_epochs', action='store_true', default=False, help='Increase the number of epochs to train the supernet and individuals as generations progress')
     parser.add_argument('--losses_objs', action='store_true', default=False, help='Use the standard and adversarial losses as objectives instead of using accuracies as objectives')
     parser.add_argument('--reload_dir', type=str, default=None, help='Directory to reload the experiment from if --reload is set')
+    parser.add_argument('--proxy_data_dir', type=str, default=None, help='Directory to load the proxy data indices (if provided)')
+    parser.add_argument('--proxy_eval_dir', type=str, default=None, help='Directory to load the proxy evaluation data indices (if provided)')
+    parser.add_argument('--initial_population', type=str, default=None, help='Path to the initial population file (if provided)')
     args = parser.parse_args()
 
     logging.basicConfig(
