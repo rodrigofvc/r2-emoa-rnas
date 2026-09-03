@@ -177,9 +177,7 @@ class NAS(Problem):
 
         population = []
         for i in range(x.shape[0]):
-            arch_id = self._n_evaluated + 1
             args_individual = copy.copy(self.args_problem)
-            args_individual.seed = args_individual.seed + arch_id
             args_individual.epochs_train_individual = self.args_problem.epochs
             args_individual.gen = -1 # not used in individual worker
             gen = len(self.statistics['hyp_log'])
