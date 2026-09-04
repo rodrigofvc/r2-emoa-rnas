@@ -154,7 +154,13 @@ class NAS(Problem):
     def _train_eval_monas(self, id, genome, args):
         model, optimizer, scheduler, flops, params, train_queue, valid_queue, criterion = self._get_model_from_individual(id, genome, args)
         set_seeds(args.seed + id)
-        feasible = train_individual(model, train_queue, criterion, optimizer, scheduler, args)
+        try:
+            train_individual(model, train_queue, criterion, optimizer, scheduler, args)
+            feasible = True
+        except RuntimeError as e:
+            logging.error(f"RuntimeError during training individual {id}: {e}")
+            feasible = False
+
         if feasible:
             std_accuracy, adv_accuracy, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
         else:

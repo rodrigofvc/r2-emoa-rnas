@@ -212,13 +212,8 @@ def train_individual(model, train_queue, criterion, optimizer, scheduler, args):
     for epoch in range(args.epochs_train_individual):
         if args.loss_type == 'ws':
             for n_batch, (inputs, target) in enumerate(train_queue):
-                #run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args)
-                std_correct, adv_correct, total_loss, feasible = run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args)
-                if not feasible:
-                    logging.warning(f"Batch {n_batch} contains unfeasible operations for gradient computation.")
-                    return False
+                run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args)
         scheduler.step()
-    return True
 
 def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
     inputs = inputs.to(args.device, non_blocking=True)
@@ -226,7 +221,7 @@ def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
 
     optimizer.zero_grad()
 
-    adv_input, std_logits, feasible = fgsm_simple(model, inputs, target, args.attack_eps)
+    adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
     adv_input = adv_input.to(args.device, non_blocking=True)
 
     adv_logits = model(adv_input)
@@ -245,7 +240,7 @@ def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
     adv_predicts = adv_logits.argmax(dim=1)
     std_correct = (std_predicts == target).sum().item()
     adv_correct = (adv_predicts == target).sum().item()
-    return std_correct, adv_correct, total_loss.item(), feasible
+    return std_correct, adv_correct, total_loss.item()
 
 def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
 

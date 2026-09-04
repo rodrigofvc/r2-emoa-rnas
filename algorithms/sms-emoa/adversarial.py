@@ -40,16 +40,10 @@ def fgsm_simple(model, x, y, eps=8 / 255):
 
     grad = torch.autograd.grad(outputs=std_loss, inputs=x_adv, retain_graph=True, create_graph=False, allow_unused=True)[0]
 
-    feasible = grad is not None
+    adv = x_adv + eps_normalized * grad.sign()
+    adv = torch.maximum(torch.minimum(adv, upper_bound), lower_bound).detach()
 
-    if not feasible:
-        # If the gradient is None, it means the architecture contains unfeasible operations for gradient computation.
-        adv = x_adv.detach()
-    else:
-        adv = x_adv + eps_normalized * grad.sign()
-        adv = torch.maximum(torch.minimum(adv, upper_bound), lower_bound).detach()
-
-    return adv, std_logits, feasible
+    return adv, std_logits
 
 
 # Fast adversarial training with random-start FGSM.
