@@ -5,7 +5,7 @@ import shutil
 import time
 from pathlib import Path
 import random
-
+import copy
 import time
 import numpy as np
 import torch
@@ -27,6 +27,7 @@ from rnas_train import train_individual, infer
 from utils import create_experiment_dir, save_architecture, save_archive, save_archive_losses, plot_archive_losses, \
     plot_hypervolume, plot_hypervolume2, plot_r2, save_statistics_to_csv, data_transforms_cifar10, get_model_metrics, \
     get_weights_r2_file, store_metrics, store_population_data, save_params
+from worker_process import worker_evaluate_individual
 
 
 def set_seeds(seed):
@@ -188,7 +189,10 @@ class NAS(Problem):
         population = []
         for i in range(x.shape[0]):
             start_time = time.time()
-            performance = self._train_eval_monas(i, x[i, :], self.args_problem)
+            args_individual = copy.copy(self.args_problem)
+            args_individual.gen = -1  # not used in individual worker
+            gen = len(self.statistics['hyp_log'])
+            performance = worker_evaluate_individual(gen, i, x[i, :], args_individual)
             objs[i, 0] = performance['std_loss']
             objs[i, 1] = performance['adv_loss']
             objs[i, 2] = performance['flops']
@@ -377,6 +381,7 @@ if __name__ == '__main__':
     parser.add_argument('--r2_weights_dir', type=str, default='r2_weights/weights_40.json', help='directory to store r2 weights')
     parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
     parser.add_argument('--timestamp_individual', type=int, default=7, help='timestamp in minutes for training/eval each architecture')
+    parser.add_argument('--timestamp', type=int, default=6, help='timestamp in minutes for training/eval each architecture')
     parser.add_argument('--debug_cuda', action='store_true', default=False, help='Enable CUDA_LAUNCH_BLOCKING for debugging')
     parser.add_argument('--increase_epochs', action='store_true', default=False, help='Increase the number of epochs to train the supernet and individuals as generations progress')
     parser.add_argument('--losses_objs', action='store_true', default=False, help='Use the standard and adversarial losses as objectives instead of using accuracies as objectives')

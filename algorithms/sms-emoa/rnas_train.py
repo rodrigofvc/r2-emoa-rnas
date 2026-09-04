@@ -210,26 +210,24 @@ def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, weights, z
 def train_individual(model, train_queue, criterion, optimizer, scheduler, args):
     model.train()
     for epoch in range(args.epochs_train_individual):
-        if args.loss_type == 'ws':
-            for n_batch, (inputs, target) in enumerate(train_queue):
-                run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args)
+        for n_batch, (inputs, target) in enumerate(train_queue):
+            run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args)
         scheduler.step()
 
 def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
-    inputs = inputs.to(args.device, non_blocking=True)
-    target = target.to(args.device, non_blocking=True)
+    inputs = inputs.to(args.device)
+    target = target.to(args.device)
 
     optimizer.zero_grad()
 
     adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
-    adv_input = adv_input.to(args.device, non_blocking=True)
 
     adv_logits = model(adv_input)
 
     adv_loss = criterion(adv_logits, target)
     std_loss = criterion(std_logits, target)
 
-    total_loss = std_loss * args.lambda_1 + adv_loss * args.lambda_2
+    total_loss = std_loss * 0.5 + adv_loss * 0.5
 
     total_loss.backward()
 
@@ -282,7 +280,7 @@ def infer(valid_queue, model, criterion, args):
         inputs = inputs.to(args.device, non_blocking=True)
         target = target.to(args.device, non_blocking=True)
 
-        adv_input, std_logits, _ = fgsm_simple(model, inputs, target, args.attack_eps)
+        adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
 
         with torch.no_grad():
             adv_logits = model(adv_input)
