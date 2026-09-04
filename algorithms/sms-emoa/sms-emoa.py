@@ -205,8 +205,6 @@ class NAS(Problem):
             if individual.genotype is not None:
                 individual.feasible = True
                 population.append(individual)
-            logging.info(
-                f"Individual {self._n_evaluated}: std_acc {performance['std_acc']:.2f}, adv_acc {performance['adv_acc']:.2f} std_loss {performance['std_loss']:.3f}, adv_loss {performance['adv_loss']:.3f}, flops {performance['flops']:.2f}, params {performance['params']:.2f}, time {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}")
             self._n_evaluated += 1
         self.archive = archive_update_pq(self.archive, population)
         self.archive_2 = archive_update_pq(self.archive_2, population, k=2)

@@ -75,6 +75,7 @@ def worker_evaluate_individual(gen, i, individual_X, args):
                                    env=env_worker)
 
         try:
+            timestamp_individual = time.time()
             process.communicate(timeout=args.timestamp * 60)
 
             if process.returncode == 0 and os.path.exists(result_file):
@@ -83,7 +84,7 @@ def worker_evaluate_individual(gen, i, individual_X, args):
                     return_dict['genotype'] = Genotype(**return_dict['genotype'])
                 os.remove(result_file)
                 clean_file = True
-                logging.info(f"Gen {gen} Individual {i}: std_acc {return_dict['std_acc']:.2f}, adv_acc {return_dict['adv_acc']:.2f} std_loss {return_dict['std_loss']:.3f}, adv_loss {return_dict['adv_loss']:.3f}, flops {return_dict['flops']:.2f}, params {return_dict['params']:.2f}")
+                logging.info(f"Gen {gen} Individual {i}: std_acc {return_dict['std_acc']:.2f}, adv_acc {return_dict['adv_acc']:.2f} std_loss {return_dict['std_loss']:.3f}, adv_loss {return_dict['adv_loss']:.3f}, flops {return_dict['flops']:.2f}, params {return_dict['params']:.2f}, time {time.strftime('%H:%M:%S', time.gmtime(time.time() - timestamp_individual))}")
             else:
                 logging.info(f"Gen {gen} Individual {i} failed with return code {process.returncode}")
                 if process.returncode < 0 or process.returncode > 128:
