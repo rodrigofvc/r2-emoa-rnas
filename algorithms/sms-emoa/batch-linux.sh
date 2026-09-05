@@ -47,7 +47,7 @@ for SEED in "${SEEDS[@]}"; do
         --multiplier 4 \
         --attack FGSM \
         --grad_clip 5.0 \
-        --proxy_data_dir proxy-data/proxy_train/train_proxy_cifar10_resnet20_5000.npy \
+        --proxy_data_dir proxy-data/proxy_train/train_proxy_cifar10_resnet20_2500.npy \
         --proxy_eval_dir proxy-data/proxy_eval/eval_proxy_indices_cifar10_192_5000.npy \
         --initial_population initial/initial_population_40.npy \
         2>&1 | tee "$LOG_FILE"
