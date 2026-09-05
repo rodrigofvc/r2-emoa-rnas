@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# nohup ./batch-linux.sh > sms_emoa_all_seeds.log 2>&1 &
 
 set -u
 set -o pipefail
