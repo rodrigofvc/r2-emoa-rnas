@@ -222,21 +222,25 @@ def smooth_tchebycheff_loss_2_objs(std_loss, adv_loss, lambda_1, lambda_2, mu):
     return stch_loss
 
 def train_individual(model, flops, params, train_queue, criterion, optimizer, args, r2_weight, nadir_point, ideal_point, scheduler):
-    weight_individual = torch.tensor(r2_weight, device=args.device, dtype=torch.float32)
-    model_flops = torch.tensor(float(flops), device=args.device, dtype=torch.float32)
-    model_parameters = torch.tensor(float(params), device=args.device, dtype=torch.float32)
-    z_ref_stch = torch.zeros(4, device=args.device, dtype=torch.float32)
-    nadir_point = torch.tensor(nadir_point, device=args.device, dtype=torch.float32)
-    ideal_point = torch.tensor(ideal_point, device=args.device, dtype=torch.float32)
     model.train()
-    for epoch in range(args.epochs_train_individual):
-        if args.loss_type == 'tchebycheff':
+    if args.loss_type == 'tchebycheff':
+        weight_individual = torch.tensor(r2_weight, device=args.device, dtype=torch.float32)
+        model_flops = torch.tensor(float(flops), device=args.device, dtype=torch.float32)
+        model_parameters = torch.tensor(float(params), device=args.device, dtype=torch.float32)
+        z_ref_stch = torch.zeros(4, device=args.device, dtype=torch.float32)
+        nadir_point = torch.tensor(nadir_point, device=args.device, dtype=torch.float32)
+        ideal_point = torch.tensor(ideal_point, device=args.device, dtype=torch.float32)
+        for epoch in range(args.epochs_train_individual):
             for n_batch, (inputs, target) in enumerate(train_queue):
                 run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, weight_individual, z_ref_stch, nadir_point, ideal_point)
-        elif args.loss_type == 'ws':
+            scheduler.step()
+    elif args.loss_type == 'ws':
+        for epoch in range(args.epochs_train_individual):
             for n_batch, (inputs, target) in enumerate(train_queue):
                 run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args)
-        scheduler.step()
+            scheduler.step()
+    else:
+        raise ValueError(f"Unsupported loss type: {args.loss_type}")
 
 
 def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
@@ -246,7 +250,6 @@ def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
     optimizer.zero_grad()
 
     adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
-    adv_input = adv_input.to(args.device, non_blocking=True)
 
     adv_logits = model(adv_input)
 
@@ -257,7 +260,7 @@ def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
 
     total_loss.backward()
 
-    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip, foreach=False)
+    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
     optimizer.step()
 
     std_predicts = std_logits.argmax(dim=1)
@@ -274,7 +277,6 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
     optimizer.zero_grad()
 
     adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
-    adv_input = adv_input.to(args.device, non_blocking=True)
 
     adv_logits = model(adv_input)
 
@@ -285,7 +287,7 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flo
     total_loss = smooth_tchebycheff_loss_2_objs(std_loss, adv_loss, args.lambda_1, args.lambda_2, args.mu)
     total_loss.backward()
 
-    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip, foreach=False)
+    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
     optimizer.step()
 
     std_predicts = std_logits.argmax(dim=1)
