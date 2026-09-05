@@ -1,0 +1,21 @@
+/Library/Frameworks/Python.framework/Versions/3.11/lib/python3.11/site-packages/einops/_torch_specific.py:108: ImportWarning: allow_ops_in_compiled_graph failed to import torch: ensure pytorch >=2.0
+  warnings.warn("allow_ops_in_compiled_graph failed to import torch: ensure pytorch >=2.0", ImportWarning)
+05/03 03:07:12 PM args = Namespace(save='search-NSGA-Net-micro-20260503-001903', data='../../data', dataset='cifar10', n_classes=10, seed=18906049, search_space='micro', n_blocks=6, n_ops=10, n_cells=2, n_nodes=6, pop_size=10, n_gens=4, n_offspring=10, init_channels=16, layers=5, batch_size=32, learning_rate=0.025, learning_rate_min=0.001, momentum=0.9, weight_decay=0.0003, report_freq=45.0, gpu=0, reduction=False, steps=4, multiplier=4, fgsm_eps=0.03137254901960784, cutout=False, cutout_length=16, drop_path_prob=0.3, grad_clip=5.0, epochs=1, train_portion=0.5, timestamp=6, debug_cuda=False, increase_epochs=False, reload_dir='search-NSGA-Net-micro-20260503-001903')
+05/03 03:07:12 PM >>>>>> loading checkpoint from search-NSGA-Net-micro-20260503-001903
+Updated epochs for training individuals: 1
+(10, 4) 10
+05/03 03:07:17 PM Gen 3 Individual 0: std_acc 9.38, adv_acc 7.29 std_loss 0.198, adv_loss 0.166, flops 62.71, params 0.18
+05/03 03:07:22 PM Gen 3 Individual 1: std_acc 14.58, adv_acc 12.50 std_loss 0.142, adv_loss 0.130, flops 62.35, params 0.19
+05/03 03:07:27 PM Gen 3 Individual 2: std_acc 6.25, adv_acc 7.29 std_loss 0.155, adv_loss 0.077, flops 68.76, params 0.20
+05/03 03:07:32 PM Gen 3 Individual 3: std_acc 14.58, adv_acc 9.38 std_loss 0.123, adv_loss 0.099, flops 70.35, params 0.22
+05/03 03:07:37 PM Gen 3 Individual 4: std_acc 9.38, adv_acc 8.33 std_loss 0.182, adv_loss 0.091, flops 83.44, params 0.26
+05/03 03:07:42 PM Gen 3 Individual 5: std_acc 11.46, adv_acc 8.33 std_loss 0.205, adv_loss 0.117, flops 59.74, params 0.17
+05/03 03:07:47 PM Gen 3 Individual 6: std_acc 9.38, adv_acc 5.21 std_loss 0.149, adv_loss 0.090, flops 78.12, params 0.24
+05/03 03:07:52 PM Gen 3 Individual 7: std_acc 12.50, adv_acc 10.42 std_loss 0.100, adv_loss 0.089, flops 90.39, params 0.27
+05/03 03:07:57 PM Gen 3 Individual 8: std_acc 9.38, adv_acc 9.38 std_loss 0.814, adv_loss 0.479, flops 60.69, params 0.18
+05/03 03:08:02 PM Gen 3 Individual 9: std_acc 13.54, adv_acc 17.71 std_loss 0.156, adv_loss 0.139, flops 66.53, params 0.19
+05/03 03:08:03 PM >>>>>> generation = 3
+05/03 03:08:03 PM        hyp_4 = 157916.76412108247, hyp_2 = 35.03886589756549 r2 = 0.012726158369703939
+05/03 03:08:03 PM        evaluated so far 40 architectures
+>>>> Total search time: (00:00:00:50) (DD:HH:MM:SS)
+Results stored in search-NSGA-Net-micro-20260503-001903
