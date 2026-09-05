@@ -49,8 +49,7 @@ for %%S in (18906049 15798821 65381509 27293207 27522793) do (
         --r2_weights_dir r2_weights/weights/weights_60_40_n40.json ^
         --initial_population initial/initial_population_40.npy ^
         --proxy_data_dir proxy-data/proxy_train/train_proxy_cifar10_resnet20_2500.npy ^
-        --proxy_eval_dir proxy-data/proxy_eval/eval_proxy_indices_cifar10_192_5000.npy ^
-        >> "!LOG_FILE!" 2>&1
+        --proxy_eval_dir proxy-data/proxy_eval/eval_proxy_indices_cifar10_192_5000.npy
 
     set "STATUS=!ERRORLEVEL!"
 
