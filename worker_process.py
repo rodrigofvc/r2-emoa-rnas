@@ -100,7 +100,7 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
                 if process.returncode < 0 or process.returncode > 128:
                     # Process was killed by the system (segmentation fault, out of memory, etc.)
                     # Wait a bit to ensure the process has terminated and released resources before starting the next one
-                    time.sleep(10)
+                    time.sleep(2)
 
         except subprocess.TimeoutExpired:
             logging.info(f"Individual {i} exceed timestamp: {args.timestamp_individual}, it will be removed from the population. If you want to increase the timestamp, please set --timestamp_individual argument to a higher value (in minutes).")
@@ -120,7 +120,7 @@ def worker_evaluate_individual(gen, i, individual_X, weight_individual, nadir_po
             logging.info(f"Failed {i}: {e}")
         finally:
             # wait a bit to ensure the process has terminated and released resources before starting the next one
-            time.sleep(5)
+            time.sleep(0.5)
             # set default values for failed individuals
             if i not in return_dict:
                 return_dict[i] = {

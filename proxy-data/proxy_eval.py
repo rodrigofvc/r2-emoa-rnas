@@ -218,15 +218,15 @@ if __name__ == '__main__':
     print(f"Evaluation proxy size: {len(eval_proxy_dataset)}")
 
     save_train_indices(
-        data_dir="./data",
-        output_path="./proxy_indices/cifar10_train_25000.npy",
+        data_dir="../data",
+        output_path="proxy_train/cifar10_train_25000.npy",
         train_portion=0.5,
         dataset="cifar10",
     )
 
     save_eval_indices(
         data_dir="../data",
-        output_path="./proxy_indices/cifar100_eval_25000.npy",
+        output_path="proxy_train/cifar100_eval_25000.npy",
         train_portion=0.5,
         dataset="cifar100",
     )

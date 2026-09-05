@@ -213,7 +213,6 @@ if __name__ == '__main__':
 
 
     if torch.cuda.is_available():
-        torch.backends.cudnn.benchmark = False
         torch.backends.cudnn.deterministic = True
         torch.cuda.manual_seed(args.seed)
         torch.backends.cudnn.enabled = True
