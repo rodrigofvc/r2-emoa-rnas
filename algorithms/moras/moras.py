@@ -11,53 +11,20 @@ import numpy as np
 import torch
 from pymoo.operators.crossover.sbx import SBX
 from pymoo.operators.repair.rounding import RoundingRepair
-from torch import nn
-import torchvision
 from pymoo.algorithms.moo.nsga2 import NSGA2
 from pymoo.core.problem import Problem
 from pymoo.core.termination import NoTermination
 from pymoo.operators.mutation.pm import PolynomialMutation
-from pymoo.operators.sampling.rnd import IntegerRandomSampling
 
-from adversarial import fast_adv, fgsm_simple
 from archivers import archive_update_pq
 from individual import Individual
 from micro_space import micro_encoding
-from micro_space.micro_encoding import PRIMITIVES, convert, decode
-from micro_space.model import NetworkCIFAR
-from micro_space.model_search import Network, alphas_to_genotype
-from rnas_train import infer
+from micro_space.micro_encoding import PRIMITIVES
+
 from utils import create_experiment_dir, save_archive, save_archive_losses, save_statistics_to_csv, save_params, \
     plot_hypervolume, \
-    plot_hypervolume2, plot_r2, plot_archive_losses, save_architecture, store_metrics, store_population_data, \
-    save_archive_accuracy, plot_archive_accuracy, get_model_metrics, data_transforms_cifar10, get_weights_r2_file
-
-
-def train_individual(model, train_queue, criterion, optimizer, scheduler, args):
-    model.train()
-    for epoch in range(args.epochs_train_individual):
-        for n_batch, (inputs, target) in enumerate(train_queue):
-            inputs = inputs.to(args.device, non_blocking=True)
-            target = target.to(args.device, non_blocking=True)
-
-            optimizer.zero_grad()
-
-            #adv_input, std_logits = fast_adv(model, inputs, target, criterion, eps=args.attack_eps, alpha=args.attack_alpha)
-            adv_input, std_logits = fgsm_simple(model, inputs, target, eps=args.attack_eps)
-            adv_input = adv_input.to(args.device, non_blocking=True)
-
-            adv_logits = model(adv_input)
-
-            adv_loss = criterion(adv_logits, target)
-            std_loss = criterion(std_logits, target)
-
-            total_loss = std_loss * args.lambda_1 + adv_loss * args.lambda_2
-
-            total_loss.backward()
-
-            nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip, foreach=False)
-            optimizer.step()
-        scheduler.step()
+    plot_hypervolume2, plot_r2, plot_archive_losses, save_architecture, store_metrics, store_population_data, get_weights_r2_file
+from worker_process import worker_evaluate_individual
 
 
 class NAS(Problem):
@@ -77,97 +44,14 @@ class NAS(Problem):
         self.args_problem = args_problem
         self.vtype = int
 
-    def _get_model_from_individual(self, individual_X, args):
-
-        if args.dataset == 'cifar10':
-            n_classes = 10
-        elif args.dataset == 'cifar100':
-            n_classes = 100
-        else:
-            raise ValueError(f"Unknown dataset: {args.dataset}")
-        if args.search_space == 'continuous':
-            k = sum(2 + i for i in range(args.steps))
-            alphas_dim = (k, len(PRIMITIVES))
-            genotype = alphas_to_genotype(individual_X, alphas_dim, args)
-        else:
-            genome = convert(individual_X)
-            genotype = decode(genome, args.steps, args.multiplier)
-
-        model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype).to(args.device)
-        optimizer = torch.optim.SGD(
-            model.parameters(),
-            lr=args.learning_rate,
-            momentum=args.momentum,
-            weight_decay=args.weight_decay
-        )
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
-        flops, params = get_model_metrics(model)
-
-        train_transform, valid_transform = data_transforms_cifar10(args)
-        if args.dataset == 'cifar10':
-            train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True,
-                                                      transform=train_transform)
-            valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True,
-                                                      transform=train_transform)
-        elif args.dataset == 'cifar100':
-            train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True,
-                                                       transform=train_transform)
-            valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True,
-                                                       transform=train_transform)
-        else:
-            raise ValueError(f"Unknown dataset: {args.dataset}")
-        num_train = len(train_data)
-        indices = list(range(num_train))
-        if torch.backends.mps.is_available():
-            # testing
-            split = 96
-            num_train = split + 96
-        split = int(np.floor(args.train_portion * num_train))
-        # only 10000 samples for training are reported
-        train_queue = torch.utils.data.DataLoader(
-            train_data, batch_size=args.batch_size,
-            #sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:10000]),
-            sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-            num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
-
-
-        valid_queue = torch.utils.data.DataLoader(
-            valid_data, batch_size=args.batch_size,
-            sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-            num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
-
-        criterion = torch.nn.CrossEntropyLoss()
-
-        return model, optimizer, scheduler, flops, params, train_queue, valid_queue, criterion
-
-    def _train_eval_monas(self, genome, args):
-        model, optimizer, scheduler, flops, params, train_queue, valid_queue, criterion = self._get_model_from_individual(genome, args)
-        train_individual(model, train_queue, criterion, optimizer, scheduler, args)
-        std_accuracy, adv_accuracy, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
-        if args.search_space == 'continuous':
-            k = sum(2 + i for i in range(args.steps))
-            alphas_dim = (k, len(PRIMITIVES))
-            genotype = alphas_to_genotype(genome, alphas_dim, args)
-        else:
-            genome = convert(genome)
-            genotype = decode(genome, args.steps, args.multiplier)
-        performance = {
-            'std_loss': std_loss,
-            'adv_loss': adv_loss,
-            'flops': flops,
-            'params': params,
-            'std_acc': std_accuracy,
-            'adv_acc': adv_accuracy,
-            'genotype': genotype
-        }
-        return performance
-
     def _evaluate(self, x, out, *args, **kwargs):
         objs = np.full((x.shape[0], self.n_obj), np.nan)
         population = []
         for i in range(x.shape[0]):
-            performance = self._train_eval_monas(x[i, :], self.args_problem)
+            args_individual = copy.copy(self.args_problem)
+            args_individual.gen = -1  # not used in individual worker
+            gen = len(self.statistics['hyp_log'])
+            performance = worker_evaluate_individual(gen, i, x[i, :], args_individual)
             objs[i, 0] = performance['std_loss']
             objs[i, 1] = performance['adv_loss']
             objs[i, 2] = performance['flops']
@@ -180,8 +64,6 @@ class NAS(Problem):
             if individual.genotype is not None:
                 individual.feasible = True
                 population.append(individual)
-            logging.info(
-                f"Individual {i}: std_acc {performance['std_acc']:.2f}, adv_acc {performance['adv_acc']:.2f} std_loss {performance['std_loss']:.3f}, adv_loss {performance['adv_loss']:.3f}, flops {performance['flops']:.2f}, params {performance['params']:.2f}")
             self._n_evaluated += 1
         self.archive = archive_update_pq(self.archive, population)
         self.archive_2 = archive_update_pq(self.archive_2, population, k=2)
@@ -217,14 +99,17 @@ def moras_rnas(args):
                   n_obj=4, n_constr=0, lb=lb, ub=ub,
                   init_channels=args.init_channels, layers=args.layers,
                   epochs=args.epochs_train_individual, args_problem=args)
-    X = np.column_stack([
-        np.random.randint(
-            int(lb[j]),
-            int(ub[j]) + 1,
-            size=args.n_population
-        )
-        for j in range(n_var)
-    ]).astype(np.int32)
+    if args.initial_population is not None:
+        X = np.load(args.initial_population)
+    else:
+        X = np.column_stack([
+            np.random.randint(
+                int(lb[j]),
+                int(ub[j]) + 1,
+                size=args.n_population
+            )
+            for j in range(n_var)
+        ]).astype(np.int32)
 
     algorithm = NSGA2(pop_size=args.n_population,
                       n_offsprings=args.n_population,
@@ -286,7 +171,6 @@ def moras_rnas(args):
         genome = micro_encoding.convert(arch)
         genotype = micro_encoding.decode(genome, args.steps, args.multiplier)
         # check architecture
-        model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype).to(args.device)
         save_architecture(i, genotype, args.save_path_final_architect)
     save_archive(problem.archive, args.save_path_final_architect)
     save_archive_losses(problem.archive_2, args.save_path_final_architect)
@@ -346,13 +230,15 @@ if __name__ == '__main__':
     parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
     parser.add_argument('--grad_clip', type=float, default=5.0, help='gradient clipping')
     parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
-    parser.add_argument('--timestamp_supernet', type=int, default=45, help='timestamp in minutes for training supernet (including warmup) per generation in one-shot nas')
     parser.add_argument('--timestamp_individual', type=int, default=7, help='timestamp in minutes for training/eval each architecture')
     parser.add_argument('--debug_cuda', action='store_true', default=False, help='Enable CUDA_LAUNCH_BLOCKING for debugging')
     parser.add_argument('--increase_epochs', action='store_true', default=False, help='Increase the number of epochs to train the supernet and individuals as generations progress')
     parser.add_argument('--r2_weights_dir', type=str, default='r2_weights/weights_40.json', help='Directory to load the R2 weights from (only used for r2-emoa-based algorithms)')
     parser.add_argument('--losses_objs', action='store_true', default=False, help='Use the standard and adversarial losses as objectives instead of using accuracies as objectives')
     parser.add_argument('--reload_dir', type=str, default=None, help='Directory to reload the experiment from if --reload is set')
+    parser.add_argument('--proxy_data_dir', type=str, default=None, help='Directory to load the proxy data indices (if provided)')
+    parser.add_argument('--proxy_eval_dir', type=str, default=None, help='Directory to load the proxy evaluation data indices (if provided)')
+    parser.add_argument('--initial_population', type=str, default=None, help='Path to the initial population file (if provided)')
     args = parser.parse_args()
 
     logging.basicConfig(

@@ -378,7 +378,6 @@ if __name__ == '__main__':
     parser.add_argument('--r2_weights_dir', type=str, default='r2_weights/weights_40.json', help='directory to store r2 weights')
     parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
     parser.add_argument('--timestamp_individual', type=int, default=7, help='timestamp in minutes for training/eval each architecture')
-    parser.add_argument('--timestamp', type=int, default=6, help='timestamp in minutes for training/eval each architecture')
     parser.add_argument('--debug_cuda', action='store_true', default=False, help='Enable CUDA_LAUNCH_BLOCKING for debugging')
     parser.add_argument('--increase_epochs', action='store_true', default=False, help='Increase the number of epochs to train the supernet and individuals as generations progress')
     parser.add_argument('--losses_objs', action='store_true', default=False, help='Use the standard and adversarial losses as objectives instead of using accuracies as objectives')
