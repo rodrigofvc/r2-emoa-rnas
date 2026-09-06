@@ -47,7 +47,7 @@ for %%S in (18906049 15798821 65381509 27293207 27522793) do (
         --multiplier 4 ^
         --attack FGSM ^
         --grad_clip 5.0 ^
-        --proxy_data_dir proxy-data/proxy_train/train_proxy_cifar10_resnet20_5000.npy ^
+        --proxy_data_dir proxy-data/proxy_train/train_proxy_cifar10_resnet20_2500.npy ^
         --proxy_eval_dir proxy-data/proxy_eval/eval_proxy_indices_cifar10_192_5000.npy ^
         --initial_population initial/initial_population_40.npy ^
         >> "!LOG_FILE!" 2>&1
