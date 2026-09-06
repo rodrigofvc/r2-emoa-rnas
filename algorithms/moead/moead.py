@@ -5,27 +5,25 @@ import shutil
 import time
 from pathlib import Path
 import random
+import copy
 
 import numpy as np
 import torch
-import torchvision
 from pymoo.algorithms.moo.moead import MOEAD
 from pymoo.core.problem import Problem
 from pymoo.core.termination import NoTermination
 from pymoo.operators.crossover.pntx import PointCrossover
 from pymoo.operators.mutation.pm import PolynomialMutation
-from pymoo.operators.sampling.rnd import IntegerRandomSampling
 from pymoo.util.ref_dirs import get_reference_directions
 
 from archivers import archive_update_pq
 from individual import Individual
 from micro_space.micro_encoding import PRIMITIVES, convert, decode
 from micro_space.model import NetworkCIFAR
-from micro_space.model_search import alphas_to_genotype
-from rnas_train import train_individual, infer
 from utils import create_experiment_dir, save_architecture, save_archive, save_archive_losses, plot_archive_losses, \
     plot_hypervolume, plot_hypervolume2, plot_r2, save_statistics_to_csv, data_transforms_cifar10, get_model_metrics, \
     get_weights_r2_file, store_metrics, store_population_data, save_params
+from worker_process import worker_evaluate_individual
 
 
 class NAS(Problem):
@@ -45,108 +43,15 @@ class NAS(Problem):
         self.args_problem = args_problem
         self.vtype = int
 
-    def _get_model_from_individual(self, individual_X, args):
-
-        if args.dataset == 'cifar10':
-            n_classes = 10
-        elif args.dataset == 'cifar100':
-            n_classes = 100
-        else:
-            raise ValueError(f"Unknown dataset: {args.dataset}")
-        if args.search_space == 'continuous':
-            k = sum(2 + i for i in range(args.steps))
-            alphas_dim = (k, len(PRIMITIVES))
-            genotype = alphas_to_genotype(individual_X, alphas_dim, args)
-        else:
-            genome = convert(individual_X)
-            genotype = decode(genome, args.steps, args.multiplier)
-
-        model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype).to(args.device)
-        optimizer = torch.optim.SGD(
-            model.parameters(),
-            lr=args.learning_rate,
-            momentum=args.momentum,
-            weight_decay=args.weight_decay
-        )
-        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
-            optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
-        flops, params = get_model_metrics(model)
-
-        train_transform, valid_transform = data_transforms_cifar10(args)
-        if args.dataset == 'cifar10':
-            train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True,
-                                                      transform=train_transform)
-            valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True,
-                                                      transform=train_transform)
-        elif args.dataset == 'cifar100':
-            train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True,
-                                                       transform=train_transform)
-            valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True,
-                                                       transform=train_transform)
-        else:
-            raise ValueError(f"Unknown dataset: {args.dataset}")
-        num_train = len(train_data)
-        indices = list(range(num_train))
-        if torch.backends.mps.is_available():
-            # testing
-            split = 96
-            num_train = split + 96
-
-        split = int(np.floor(args.train_portion * num_train))
-
-        train_queue = torch.utils.data.DataLoader(
-            train_data, batch_size=args.batch_size,
-            sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-            num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
-
-
-        valid_queue = torch.utils.data.DataLoader(
-            valid_data, batch_size=args.batch_size,
-            sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-            num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
-
-        criterion = torch.nn.CrossEntropyLoss()
-
-        return model, optimizer, scheduler, flops, params, train_queue, valid_queue, criterion
-
-    def _train_eval_monas(self, genome, args):
-        model, optimizer, scheduler, flops, params, train_queue, valid_queue, criterion = self._get_model_from_individual(genome, args)
-        feasible = train_individual(model, train_queue, criterion, optimizer, scheduler, args)
-        if not feasible:
-            logging.info(f"Architecture {self._n_evaluated} is not feasible for training.")
-            return {
-                'std_loss': 1000,
-                'adv_loss': 1000,
-                'flops': flops,
-                'params': params,
-                'std_acc': 0.0,
-                'adv_acc': 0.0,
-                'genotype': None
-            }
-        std_accuracy, adv_accuracy, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
-        if args.search_space == 'continuous':
-            k = sum(2 + i for i in range(args.steps))
-            alphas_dim = (k, len(PRIMITIVES))
-            genotype = alphas_to_genotype(genome, alphas_dim, args)
-        else:
-            genome = convert(genome)
-            genotype = decode(genome, args.steps, args.multiplier)
-        performance = {
-            'std_loss': std_loss,
-            'adv_loss': adv_loss,
-            'flops': flops,
-            'params': params,
-            'std_acc': std_accuracy,
-            'adv_acc': adv_accuracy,
-            'genotype': genotype
-        }
-        return performance
 
     def _evaluate(self, x, out, *args, **kwargs):
         objs = np.full((x.shape[0], self.n_obj), np.nan)
         population = []
         for i in range(x.shape[0]):
-            performance = self._train_eval_monas(x[i, :], self.args_problem)
+            args_individual = copy.copy(self.args_problem)
+            args_individual.gen = -1  # not used in individual worker
+            gen = len(self.statistics['hyp_log'])
+            performance = worker_evaluate_individual(gen, i, x[i, :], args_individual)
             objs[i, 0] = performance['std_loss']
             objs[i, 1] = performance['adv_loss']
             objs[i, 2] = performance['flops']
@@ -159,8 +64,6 @@ class NAS(Problem):
             if individual.genotype is not None:
                 individual.feasible = True
                 population.append(individual)
-                logging.info(
-                    f"Individual {self._n_evaluated}: std_acc {performance['std_acc']:.2f}, adv_acc {performance['adv_acc']:.2f} std_loss {performance['std_loss']:.3f}, adv_loss {performance['adv_loss']:.3f}, flops {performance['flops']:.2f}, params {performance['params']:.2f}")
             self._n_evaluated += 1
         self.archive = archive_update_pq(self.archive, population)
         self.archive_2 = archive_update_pq(self.archive_2, population, k=2)
@@ -195,14 +98,17 @@ def moead_rnas(args):
                   n_obj=4, n_constr=0, lb=lb, ub=ub,
                   init_channels=args.init_channels, layers=args.layers,
                   epochs=args.epochs_train_individual, args_problem=args)
-    X = np.column_stack([
-        np.random.randint(
-            int(lb[j]),
-            int(ub[j]) + 1,
-            size=args.n_population
-        )
-        for j in range(n_var)
-    ]).astype(np.int32)
+    if args.initial_population is not None:
+        X = np.load(args.initial_population)
+    else:
+        X = np.column_stack([
+            np.random.randint(
+                int(lb[j]),
+                int(ub[j]) + 1,
+                size=args.n_population
+            )
+            for j in range(n_var)
+        ]).astype(np.int32)
 
     ref_dirs = get_reference_directions("energy", n_dim=problem.n_obj, n_points=args.n_population, seed=args.seed)
     algorithm = MOEAD(
@@ -213,11 +119,9 @@ def moead_rnas(args):
         crossover=PointCrossover(n_points=2, prob=args.prob_cross),
         mutation=PolynomialMutation(
             eta=args.eta_mut,
-            prob=1.0,
-            prob_var=args.prob_mut,
+            prob=args.prob_mut,
             vtype=float
-        ),
-        normalize=True
+        )
     )
     algorithm.setup(problem, seed=args.seed, termination=NoTermination(), verbose=False)
 
@@ -314,7 +218,7 @@ if __name__ == '__main__':
     parser.add_argument('--prob_mut', type=float, default=0.1, help='mutation probability')
     parser.add_argument('--eta_mut', type=int, default=20, help='mutation eta')
     parser.add_argument('--loss_type', type=str, default='ws', choices=['tchebycheff', 'ws'], help='type of loss function to use for backpropagation')
-    parser.add_argument('--mu', type=float, default=0.1, help='mu for thchebycheff function')
+    parser.add_argument('--mu', type=float, default=0.3, help='mu for thchebycheff function')
     parser.add_argument('--lambda_1', type=float, default=0.5, help='weight for standard loss in ws scalarization')
     parser.add_argument('--lambda_2', type=float, default=0.5, help='weight for adversarial loss in ws scalarization')
     parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
@@ -342,6 +246,9 @@ if __name__ == '__main__':
     parser.add_argument('--increase_epochs', action='store_true', default=False, help='Increase the number of epochs to train the supernet and individuals as generations progress')
     parser.add_argument('--losses_objs', action='store_true', default=False, help='Use the standard and adversarial losses as objectives instead of using accuracies as objectives')
     parser.add_argument('--reload_dir', type=str, default=None, help='Directory to reload the experiment from if --reload is set')
+    parser.add_argument('--proxy_data_dir', type=str, default=None, help='Directory to load the proxy data indices (if provided)')
+    parser.add_argument('--proxy_eval_dir', type=str, default=None, help='Directory to load the proxy evaluation data indices (if provided)')
+    parser.add_argument('--initial_population', type=str, default=None, help='Path to the initial population file (if provided)')
     args = parser.parse_args()
 
     logging.basicConfig(

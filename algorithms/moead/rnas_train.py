@@ -209,15 +209,18 @@ def smooth_tchebycheff_sc_loss(mu, std_loss, adv_loss, flops, params, weights, z
 
 def train_individual(model, train_queue, criterion, optimizer, scheduler, args):
     model.train()
-    for epoch in range(args.epochs_train_individual):
-        if args.loss_type == 'ws':
+    if args.loss_type == 'tchebycheff':
+        for epoch in range(args.epochs_train_individual):
             for n_batch, (inputs, target) in enumerate(train_queue):
-               _, _, _, feasible = run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args)
-               if not feasible:
-                   logging.warning(f"Unfeasible architecture detected during training at epoch {epoch}, batch {n_batch}.")
-                   return False
-        scheduler.step()
-    return True
+                run_batch_epoch(model, inputs, target, criterion, optimizer, args)
+            scheduler.step()
+    elif args.loss_type == 'ws':
+        for epoch in range(args.epochs_train_individual):
+            for n_batch, (inputs, target) in enumerate(train_queue):
+                run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args)
+            scheduler.step()
+    else:
+        raise ValueError(f"Unsupported loss type: {args.loss_type}")
 
 
 def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
@@ -226,8 +229,7 @@ def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
 
     optimizer.zero_grad()
 
-    adv_input, std_logits, feasible = fgsm_simple(model, inputs, target, args.attack_eps)
-    adv_input = adv_input.to(args.device, non_blocking=True)
+    adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
 
     adv_logits = model(adv_input)
 
@@ -245,35 +247,47 @@ def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
     adv_predicts = adv_logits.argmax(dim=1)
     std_correct = (std_predicts == target).sum().item()
     adv_correct = (adv_predicts == target).sum().item()
-    return std_correct, adv_correct, total_loss.item(), feasible
+    return std_correct, adv_correct, total_loss.item()
 
-def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
+def smooth_tchebycheff_loss_2_objs(std_loss, adv_loss, lambda_1, lambda_2, mu):
+    if mu <= 0:
+        raise ValueError("mu must be greater than zero.")
 
+    losses = torch.stack([std_loss, adv_loss])
+    weights = losses.new_tensor([lambda_1, lambda_2])
+
+    assert np.isclose(weights.sum().item(), 1.0), "Weights must sum to 1."
+
+    stch_loss = mu * torch.logsumexp(weights * losses / mu, dim=0)
+    if not torch.isfinite(stch_loss):
+        raise ValueError(f"Non-finite STCH loss: {stch_loss.item()}")
+
+    return stch_loss
+
+def run_batch_epoch(model, inputs, target, criterion, optimizer, args):
     inputs = inputs.to(args.device, non_blocking=True)
     target = target.to(args.device, non_blocking=True)
 
     optimizer.zero_grad()
 
-    adv_input, std_logits, feasible = fgsm_simple(model, inputs, target, args.attack_eps)
-    adv_input = adv_input.to(args.device, non_blocking=True)
+    adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
 
     adv_logits = model(adv_input)
 
     adv_loss = criterion(adv_logits, target)
     std_loss = criterion(std_logits, target)
-    
-    total_loss = smooth_tchebycheff_sc_loss(args.mu, std_loss, adv_loss, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point)
 
+    total_loss = smooth_tchebycheff_loss_2_objs(std_loss, adv_loss, args.lambda_1, args.lambda_2, args.mu)
     total_loss.backward()
 
-    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip, foreach=False)
+    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
     optimizer.step()
 
     std_predicts = std_logits.argmax(dim=1)
     adv_predicts = adv_logits.argmax(dim=1)
     std_correct = (std_predicts == target).sum().item()
     adv_correct = (adv_predicts == target).sum().item()
-    return std_correct, adv_correct, total_loss.item(), feasible
+    return std_correct, adv_correct, total_loss.item()
 
 
 def infer(valid_queue, model, criterion, args):
@@ -287,7 +301,7 @@ def infer(valid_queue, model, criterion, args):
         inputs = inputs.to(args.device, non_blocking=True)
         target = target.to(args.device, non_blocking=True)
 
-        adv_input, std_logits, _ = fgsm_simple(model, inputs, target, args.attack_eps)
+        adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
 
         with torch.no_grad():
             adv_logits = model(adv_input)

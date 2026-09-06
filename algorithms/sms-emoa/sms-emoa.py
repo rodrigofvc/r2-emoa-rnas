@@ -188,7 +188,6 @@ class NAS(Problem):
         objs = np.full((x.shape[0], self.n_obj), np.nan)
         population = []
         for i in range(x.shape[0]):
-            start_time = time.time()
             args_individual = copy.copy(self.args_problem)
             args_individual.gen = -1  # not used in individual worker
             gen = len(self.statistics['hyp_log'])
