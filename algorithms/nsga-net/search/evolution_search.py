@@ -73,6 +73,13 @@ parser.add_argument('--eta_mut', type=float, default=3.0, help='mutation eta')
 parser.add_argument('--init_channels', type=int, default=16, help='# of filters for first cell')
 parser.add_argument('--layers', type=int, default=4, help='equivalent with N = 3')
 parser.add_argument('--batch_size', type=int, default=64, help='batch size for training')
+parser.add_argument('--num_workers', type=int, default=0, help='number of workers for data loading')
+# loss backward
+parser.add_argument('--loss_type', type=str, default='ws', choices=['tchebycheff', 'ws'], help='type of loss function to use for backpropagation')
+parser.add_argument('--mu', type=float, default=0.1, help='mu for thchebycheff function')
+parser.add_argument('--lambda_1', type=float, default=0.5, help='weight for standard loss in two-objective scalarization')
+parser.add_argument('--lambda_2', type=float, default=0.5, help='weight for adversarial loss in two-objective scalarization')
+
 parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
 parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
 parser.add_argument('--momentum', type=float, default=0.9, help='momentum')

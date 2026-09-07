@@ -35,6 +35,11 @@ def worker_evaluate_individual(gen, i, individual_X, args):
         '--batch_size', str(args.batch_size),
         '--epochs_train_individual', str(args.epochs_train_individual),
         '--data', str(args.data),
+        '--num_workers', str(args.num_workers),
+        '--loss_type', str(args.loss_type),
+        '--mu', str(args.mu),
+        '--lambda_1', str(args.lambda_1),
+        '--lambda_2', str(args.lambda_2),
         '--learning_rate', str(args.learning_rate),
         '--learning_rate_min', str(args.learning_rate_min),
         '--momentum', str(args.momentum),
@@ -75,6 +80,7 @@ def worker_evaluate_individual(gen, i, individual_X, args):
                                    env=env_worker)
 
         try:
+            time_start = time.time()
             process.communicate(timeout=args.timestamp * 60)
 
             if process.returncode == 0 and os.path.exists(result_file):
@@ -83,7 +89,7 @@ def worker_evaluate_individual(gen, i, individual_X, args):
                     return_dict['genotype'] = Genotype(**return_dict['genotype'])
                 os.remove(result_file)
                 clean_file = True
-                logging.info(f"Gen {gen} Individual {i}: std_acc {return_dict['std_acc']:.2f}, adv_acc {return_dict['adv_acc']:.2f} std_loss {return_dict['std_loss']:.3f}, adv_loss {return_dict['adv_loss']:.3f}, flops {return_dict['flops']:.2f}, params {return_dict['params']:.2f}")
+                logging.info(f"Gen {gen} Individual {i}: std_acc {return_dict['std_acc']:.2f}, adv_acc {return_dict['adv_acc']:.2f} std_loss {return_dict['std_loss']:.3f}, adv_loss {return_dict['adv_loss']:.3f}, flops {return_dict['flops']:.2f}, params {return_dict['params']:.2f}, time {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_start))}")
             else:
                 logging.info(f"Gen {gen} Individual {i} failed with return code {process.returncode}")
                 if process.returncode < 0 or process.returncode > 128:
