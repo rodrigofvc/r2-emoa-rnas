@@ -95,7 +95,7 @@ def get_model_from_individual(individual_X, args):
         train_queue = torch.utils.data.DataLoader(
             train_data, batch_size=args.batch_size,
             sampler=train_sampler,
-            num_workers=0, pin_memory=True,
+            num_workers=args.num_workers, pin_memory=True,
             drop_last=True, generator=torch.Generator().manual_seed(args.seed))
     else:
         logging.info(f"Using proxy data from {args.proxy_data_dir}")
@@ -106,7 +106,7 @@ def get_model_from_individual(individual_X, args):
         )
         train_queue = torch.utils.data.DataLoader(
             train_data_proxy, batch_size=args.batch_size,
-            num_workers=0, pin_memory=True, drop_last=True,
+            num_workers=args.num_workers, pin_memory=True, drop_last=True,
             generator=torch.Generator().manual_seed(args.seed)
         )
 
@@ -118,7 +118,7 @@ def get_model_from_individual(individual_X, args):
         valid_queue = torch.utils.data.DataLoader(
             valid_data, batch_size=args.batch_size,
             sampler=valid_sampler,
-            num_workers=0, pin_memory=True,
+            num_workers=args.num_workers, pin_memory=True,
             generator=torch.Generator().manual_seed(args.seed))
     else:
         logging.info(f"Using proxy evaluation data from {args.proxy_eval_dir}")
@@ -129,7 +129,7 @@ def get_model_from_individual(individual_X, args):
         )
         valid_queue = torch.utils.data.DataLoader(
             valid_data_proxy, batch_size=args.batch_size,
-            num_workers=0, pin_memory=True,
+            num_workers=args.num_workers, pin_memory=True,
             generator=torch.Generator().manual_seed(args.seed)
         )
 
@@ -157,6 +157,11 @@ if __name__ == '__main__':
     args.add_argument('--batch_size', type=int, required=True, help='batch size')
     args.add_argument('--epochs_train_individual', type=int, required=True, help='number of epochs to train individual')
     args.add_argument('--data', type=str, required=True, help='location of the data corpus')
+    args.add_argument('--num_workers', type=int, default=0, help='number of workers for data loading')
+    args.add_argument('--loss_type', type=str, default='ws', choices=['tchebycheff', 'ws'], help='type of loss function to use for backpropagation')
+    args.add_argument('--mu', type=float, required=False, help='mu for thchebycheff function')
+    args.add_argument('--lambda_1', type=float, default=0.5, help='weight for standard loss in ws scalarization')
+    args.add_argument('--lambda_2', type=float, default=0.5, help='weight for adversarial loss in ws scalarization')
     args.add_argument('--learning_rate', type=float, required=True, help='init learning rate')
     args.add_argument('--learning_rate_min', type=float, required=True, help='min learning rate')
     args.add_argument('--momentum', type=float, required=True, help='momentum')
@@ -198,7 +203,7 @@ if __name__ == '__main__':
     model, optimizer, scheduler, individual_flops, individual_params, train_queue, valid_queue, criterion = get_model_from_individual(individual_X, args)
     time_training = time.time()
     set_seeds(args.seed)
-    train_individual(model, train_queue, criterion, optimizer, args, scheduler)
+    train_individual(model, train_queue, criterion, optimizer, scheduler, args)
     logging.info(
         f'Gen {args.gen} Training {args.i + 1} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_training))} (HH:MM:SS)')
 

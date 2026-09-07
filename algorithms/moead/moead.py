@@ -51,7 +51,8 @@ class NAS(Problem):
             args_individual = copy.copy(self.args_problem)
             args_individual.gen = -1  # not used in individual worker
             gen = len(self.statistics['hyp_log'])
-            performance = worker_evaluate_individual(gen, i, x[i, :], args_individual)
+            id = self._n_evaluated
+            performance = worker_evaluate_individual(gen, id, x[i, :], args_individual)
             objs[i, 0] = performance['std_loss']
             objs[i, 1] = performance['adv_loss']
             objs[i, 2] = performance['flops']
