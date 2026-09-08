@@ -47,11 +47,18 @@ parser.add_argument('--dataset',           type = str, default = '', help = '["c
 parser.add_argument('--generations',            type = int, default = 30, help = 'num of generations')
 parser.add_argument('--gpu',               type = int, default = 0, help = 'gpu device id')
 parser.add_argument('--grad_clip',         type = float, default = 5, help = 'gradient clipping')
-parser.add_argument('--init_channels',     type = int, default = 16, help = 'num of init channels')
+parser.add_argument('--init_channels',     type = int, default = 8, help = 'num of init channels')
 parser.add_argument('--knn',               type = int, default = 5, help = 'k-nearest neighbors')
 parser.add_argument('--layers',            type = int, default = 5, help = 'total number of layers')
+parser.add_argument('--num_workers',       type = int, default = 0, help = 'number of workers for data loading')
+parser.add_argument('--loss_type', type=str, default='tchebycheff', choices=['tchebycheff', 'ws'], help='type of loss function to use for backpropagation')
+parser.add_argument('--mu', type=float, default=0.3, help='mu for thchebycheff function')
 parser.add_argument('--lambda_1',         type = float, default = 0.5, help = 'weight for std loss')
 parser.add_argument('--lambda_2',         type = float, default = 0.5, help = 'weight for adv loss')
+parser.add_argument('--prob_cross',         type = float, default = 0.9, help = 'crossover probability')
+parser.add_argument('--prob_mut',          type = float, default = 0.1, help = 'mutation probability')
+parser.add_argument('--eta_cross',          type = float, default = 15, help = 'eta for crossover')
+parser.add_argument('--eta_mut',            type = float, default = 3, help = 'eta for mutation')
 parser.add_argument('--steps',             type = int, default = 6, help = 'number of steps in one cell')
 parser.add_argument('--multiplier',        type = int, default = 6, help = 'multiplier for number of channels')
 parser.add_argument('--learning_rate',     type = float, default = 0.025, help = 'init learning rate')
@@ -83,17 +90,26 @@ parser.add_argument('--increase_epochs', action='store_true', default=False,
                     help='Increase the number of epochs to train the supernet and individuals as generations progress')
 parser.add_argument('--reload_dir', type=str, default=None,
                     help='Directory to reload the experiment from if --reload is set')
+parser.add_argument('--proxy_data_dir', type=str, default=None, help='Directory to load the proxy data indices (if provided)')
+parser.add_argument('--proxy_eval_dir', type=str, default=None, help='Directory to load the proxy evaluation data indices (if provided)')
+parser.add_argument('--initial_population', type=str, default=None, help='Path to the initial population file (if provided)')
 
 args = parser.parse_args()
 
 
-def initial_population(n_population, alphas_dim):
-  individuals = []
-  for i in range(n_population):
-    flattened = np.random.rand(alphas_dim[0] * alphas_dim[1] * 2)
-    individuals.append(flattened)
-  individuals = np.array(individuals)
-  return individuals
+def initial_population(n_population, alphas_dim, args):
+  if args.initial_population is not None:
+    X = np.load(args.initial_population)
+    if X.shape[0] != n_population:
+      raise ValueError(
+        f"Initial population file {args.initial_population} has only {X.shape[0]} individuals, but n_population is {n_population}.")
+  else:
+    individuals = []
+    for i in range(n_population):
+      x = np.random.rand(alphas_dim[0] * alphas_dim[1] * 2)
+      individuals.append(x)
+    X = np.array(individuals)
+  return X
 
 def prepare_args_supernet(args_):
   if args_.reload_dir is not None:
@@ -119,8 +135,8 @@ def prepare_args_supernet(args_):
     k = sum(2 + i for i in range(args.steps))
     num_ops = len(PRIMITIVES)
     alphas_dim = (k, num_ops)
-    pop_obj = initial_population(args.n_population, alphas_dim)
-    pop_X = np.full_like(pop_obj, 100)  # bad values, will be replaced after evaluation
+    pop_X = initial_population(args.n_population, alphas_dim, args)
+    pop_obj = np.full((pop_X.shape[0], 4), 100)  # bad values, will be replaced after evaluation
     logging.info(f">>>> Initial population of size {len(pop_obj)} created.")
   print("Running with config:")
   for key, value in vars(args).items():
@@ -150,10 +166,9 @@ class NAS(Problem):
 
     objs = np.full((x.shape[0], self.n_obj), np.nan)
     population = []
-    arch_id = self._n_evaluated + 1
     for i in range(x.shape[0]):
       args_individual = copy.copy(self.args_problem)
-      args_individual.seed = args_individual.seed + arch_id
+      args_individual.seed = args_individual.seed
       performance = worker_evaluate_individual(self.generations, i, x[i,:].copy(), args_individual)
       objs[i, 0] = performance['std_loss']
       objs[i, 1] = performance['adv_loss']
@@ -201,9 +216,9 @@ else:
   DIR = args.reload_dir
 
 
-#if os.path.exists("logs"):
-#  shutil.rmtree("logs")
-#os.makedirs("logs", exist_ok=True)
+if os.path.exists("logs"):
+  shutil.rmtree("logs")
+os.makedirs("logs", exist_ok=True)
 
 log_format = '%(asctime)s %(message)s'
 logging.basicConfig(stream=sys.stdout, level=logging.INFO, format=log_format, datefmt='%m/%d %I:%M:%S %p')
@@ -220,9 +235,9 @@ args.save_path_final_model = DIR
 
 # create the algorithm object
 algorithm = NSGA2(pop_size=args.n_population,
-                  crossover=SimulatedBinaryCrossover(eta=15, prob=0.7),
-                  mutation=PolynomialMutation(prob=args.mutate_rate, eta=20),
-                  sampling=FloatRandomSampling()
+                  crossover=SimulatedBinaryCrossover(eta=args.eta_cross, prob=args.prob_cross),
+                  mutation=PolynomialMutation(prob=args.prob_mut, eta=args.eta_mut),
+                  sampling=pop_X
                   )
 
 # let the algorithm object never terminate and let the loop control it
@@ -266,8 +281,6 @@ for n_gen in range(initial_generation, args.generations):
 
   architectures_evaluated += len(pop)
 
-  #archive = archive_update_pq(archive, pop_obj)
-  #archive_losses = archive_update_pq(archive_losses, pop_obj[:, :2], k=2)
   hyp, hyp2, r2 = utils_search.store_metrics(architectures_evaluated, algorithm.problem.archive, algorithm.problem.archive_2, args, weights_r2, statistics)
   plot_hypervolume(statistics, args.save_path_final_model)
   plot_hypervolume2(statistics, args.save_path_final_model)
