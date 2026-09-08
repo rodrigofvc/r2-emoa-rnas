@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-
+# nohup ./batch-linux.sh > arch_search_all_seeds.log 2>&1 &
 set -u
 set -o pipefail
 

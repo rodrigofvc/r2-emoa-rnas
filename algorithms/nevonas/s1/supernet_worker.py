@@ -167,6 +167,20 @@ def unpack_alphas(vec, shape_alphas, args):
     a_reduction = torch.tensor(a_reduction_np, dtype=torch.float32, device=args.device).requires_grad_(False)
     return [a_norm, a_reduction]
 
+def smooth_tchebycheff_loss_2_objs(std_loss, adv_loss, lambda_1, lambda_2, mu):
+    if mu <= 0:
+        raise ValueError("mu must be greater than zero.")
+
+    losses = torch.stack([std_loss, adv_loss])
+    weights = losses.new_tensor([lambda_1, lambda_2])
+
+    assert np.isclose(weights.sum().item(), 1.0), "Weights must sum to 1."
+
+    stch_loss = mu * torch.logsumexp(weights * losses / mu, dim=0)
+    if not torch.isfinite(stch_loss):
+        raise ValueError(f"Non-finite STCH loss: {stch_loss.item()}")
+
+    return stch_loss
 
 def run_batch_epoch(model, inputs, target, criterion, optimizer, args):
     inputs = inputs.to(args.device)
@@ -181,7 +195,7 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args):
     adv_loss = criterion(adv_logits, target)
     std_loss = criterion(std_logits, target)
 
-    total_loss = std_loss * args.lambda_1 + adv_loss * args.lambda_2
+    total_loss = smooth_tchebycheff_loss_2_objs(std_loss, adv_loss, args.lambda_1, args.lambda_2, args.mu)
 
     total_loss.backward()
 
