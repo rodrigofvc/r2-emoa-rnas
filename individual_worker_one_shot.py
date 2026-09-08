@@ -1,5 +1,6 @@
 import argparse
 import json
+import random
 import sys
 import os
 
@@ -34,6 +35,15 @@ import torchvision
 
 from rnas_train import infer
 
+def set_seeds(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 def get_model_from_individual(individual_X, args):
 
     if args.dataset == 'cifar10':
@@ -55,6 +65,7 @@ def get_model_from_individual(individual_X, args):
     model.update_arch_parameters(discrete)
     genotype_discrete = model.genotype()
 
+    set_seeds(args.seed)
     # Create a discrete model to compute FLOPs and parameters, then delete it to free memory
     discrete_model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype_discrete)
     flops, params = utils.get_model_metrics(discrete_model)
@@ -75,14 +86,15 @@ def get_model_from_individual(individual_X, args):
         )
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, args.epochs_train_individual, eta_min=args.learning_rate_min)
+    set_seeds(args.seed)
 
     train_transform, valid_transform = utils.data_transforms_cifar10(args)
     if args.dataset == 'cifar10':
         train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
-        valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
+        valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=valid_transform)
     elif args.dataset == 'cifar100':
         train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
-        valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
+        valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=valid_transform)
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
     num_train = len(train_data)
@@ -95,11 +107,17 @@ def get_model_from_individual(individual_X, args):
         num_train = split + 96
 
     if args.proxy_data_dir is None:
+        train_sampler = torch.utils.data.sampler.SubsetRandomSampler(
+            indices[:split],
+            generator=torch.Generator().manual_seed(args.seed),
+        )
         train_queue = torch.utils.data.DataLoader(
-          train_data, batch_size=args.batch_size,
-          sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-            num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+            train_data, batch_size=args.batch_size,
+            sampler=train_sampler,
+            num_workers=args.num_workers, pin_memory=True,
+            drop_last=True, generator=torch.Generator().manual_seed(args.seed))
     else:
+        logging.info(f"Using proxy data from {args.proxy_data_dir}")
         proxy_indices = np.load(args.proxy_data_dir)
         train_data_proxy = torch.utils.data.Subset(
             train_data,
@@ -112,10 +130,14 @@ def get_model_from_individual(individual_X, args):
         )
 
     if args.proxy_eval_dir is None:
+        valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(
+            indices[split:num_train],
+            generator=torch.Generator().manual_seed(args.seed),
+        )
         valid_queue = torch.utils.data.DataLoader(
             valid_data, batch_size=args.batch_size,
-            sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-            num_workers=args.num_workers, pin_memory=True, drop_last=True,
+            sampler=valid_sampler,
+            num_workers=args.num_workers, pin_memory=True,
             generator=torch.Generator().manual_seed(args.seed))
     else:
         logging.info(f"Using proxy evaluation data from {args.proxy_eval_dir}")
@@ -126,7 +148,7 @@ def get_model_from_individual(individual_X, args):
         )
         valid_queue = torch.utils.data.DataLoader(
             valid_data_proxy, batch_size=args.batch_size,
-            num_workers=args.num_workers, pin_memory=True, drop_last=True,
+            num_workers=args.num_workers, pin_memory=True,
             generator=torch.Generator().manual_seed(args.seed)
         )
 
@@ -208,6 +230,7 @@ if __name__ == '__main__':
 
     model, optimizer, scheduler, individual_flops, individual_params, train_queue, valid_queue, criterion, alphas_dim = get_model_from_individual(individual_X, args)
 
+    set_seeds(args.seed)
     time_evaluation = time.time()
     std_acc, adv_acc, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
     logging.info(

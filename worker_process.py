@@ -180,7 +180,10 @@ def train_supernet(pop, gen, args, nadir_point, ideal_point, warmup=False):
         '--batch_size', str(args.batch_size),
         '--data', str(args.data),
         '--num_workers', str(args.num_workers),
+        '--loss_type', str(args.loss_type),
         '--mu', str(args.mu),
+        '--lambda_1', str(args.lambda_1),
+        '--lambda_2', str(args.lambda_2),
         '--optimizer', str(args.optimizer),
         '--learning_rate', str(args.learning_rate),
         '--learning_rate_min', str(args.learning_rate_min),
@@ -223,6 +226,9 @@ def train_supernet(pop, gen, args, nadir_point, ideal_point, warmup=False):
     if args.proxy_data_dir is not None:
         process_args.append('--proxy_data_dir')
         process_args.append(str(args.proxy_data_dir))
+    if args.proxy_eval_dir is not None:
+        process_args.append('--proxy_eval_dir')
+        process_args.append(str(args.proxy_eval_dir))
     env_worker = os.environ.copy()
     env_worker['CUDA_VISIBLE_DEVICES'] = str(args.gpu)  # Set the GPU device for the subprocess
     if args.debug_cuda:
@@ -246,7 +252,7 @@ def train_supernet(pop, gen, args, nadir_point, ideal_point, warmup=False):
                     # Wait a bit to ensure the process has terminated and released resources before starting the next one
                     time.sleep(5)
             else:
-                logging.info(f"Gen {gen} training completed successfully in {time.gmtime(time.time() - time_stamp_gen)} minutes.")
+                logging.info(f"Gen {gen} training completed successfully in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_gen))} minutes.")
 
         except subprocess.TimeoutExpired:
             logging.info(f"Gen {gen} training exceed timestamp: {args.timestamp_supernet}, it will be skipped. If you want to increase the timestamp, please set --timestamp_supernet argument to a higher value (in minutes).")
