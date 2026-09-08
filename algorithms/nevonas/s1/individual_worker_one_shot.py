@@ -1,5 +1,6 @@
 import argparse
 import json
+import random
 import sys
 import os
 
@@ -20,6 +21,16 @@ import numpy as np
 import torch
 import torchvision
 
+def set_seeds(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
+
 def get_model_from_individual(individual_X, args):
 
     if args.dataset == 'cifar10':
@@ -39,20 +50,20 @@ def get_model_from_individual(individual_X, args):
     discrete = discretize(individual_architect, model.genotype(), args.device)
     model.update_arch_parameters(discrete)
     genotype_discrete = model.genotype()
-
+    set_seeds(args.seed)
     # Create a discrete model to compute FLOPs and parameters, then delete it to free memory
     discrete_model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype_discrete)
     flops, params = utils_search.get_model_metrics(discrete_model)
     del discrete_model
 
-
+    set_seeds(args.seed)
     train_transform, valid_transform = utils_search.data_transforms_cifar10(args)
     if args.dataset == 'cifar10':
         train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
-        valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
+        valid_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=valid_transform)
     elif args.dataset == 'cifar100':
         train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
-        valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
+        valid_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=valid_transform)
     else:
         raise ValueError(f"Unknown dataset: {args.dataset}")
     num_train = len(train_data)
@@ -64,15 +75,51 @@ def get_model_from_individual(individual_X, args):
         split = 96
         num_train = split + 96
 
-    train_queue = torch.utils.data.DataLoader(
-      train_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-        num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+    if args.proxy_data_dir is None:
+        train_sampler = torch.utils.data.sampler.SubsetRandomSampler(
+            indices[:split],
+            generator=torch.Generator().manual_seed(args.seed),
+        )
+        train_queue = torch.utils.data.DataLoader(
+            train_data, batch_size=args.batch_size,
+            sampler=train_sampler,
+            num_workers=args.num_workers, pin_memory=True,
+            drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+    else:
+        logging.info(f"Using proxy data from {args.proxy_data_dir}")
+        proxy_indices = np.load(args.proxy_data_dir)
+        train_data_proxy = torch.utils.data.Subset(
+            train_data,
+            proxy_indices.tolist(),
+        )
+        train_queue = torch.utils.data.DataLoader(
+            train_data_proxy, batch_size=args.batch_size,
+            num_workers=args.num_workers, pin_memory=True, drop_last=True,
+            generator=torch.Generator().manual_seed(args.seed)
+        )
 
-    valid_queue = torch.utils.data.DataLoader(
-      valid_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-        num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+    if args.proxy_eval_dir is None:
+        valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(
+            indices[split:num_train],
+            generator=torch.Generator().manual_seed(args.seed),
+        )
+        valid_queue = torch.utils.data.DataLoader(
+            valid_data, batch_size=args.batch_size,
+            sampler=valid_sampler,
+            num_workers=args.num_workers, pin_memory=True,
+            generator=torch.Generator().manual_seed(args.seed))
+    else:
+        logging.info(f"Using proxy evaluation data from {args.proxy_eval_dir}")
+        proxy_eval_indices = np.load(args.proxy_eval_dir)
+        valid_data_proxy = torch.utils.data.Subset(
+            valid_data,
+            proxy_eval_indices.tolist(),
+        )
+        valid_queue = torch.utils.data.DataLoader(
+            valid_data_proxy, batch_size=args.batch_size,
+            num_workers=args.num_workers, pin_memory=True,
+            generator=torch.Generator().manual_seed(args.seed)
+        )
 
     criterion = torch.nn.CrossEntropyLoss()
 
@@ -131,6 +178,11 @@ if __name__ == '__main__':
     args.add_argument('--gpu', type=int, required=True, help='gpu device id')
     args.add_argument('--batch_size', type=int, required=True, help='batch size')
     args.add_argument('--data', type=str, required=True, help='location of the data corpus')
+    args.add_argument('--num_workers', type=int, default=0, help='number of workers for data loading')
+    args.add_argument('--loss_type', type=str, default='tchebycheff', choices=['tchebycheff', 'ws'], help='type of loss function to use for backpropagation')
+    args.add_argument('--mu', type=float, required=True, help='mu for thchebycheff function')
+    args.add_argument('--lambda_1', type=float, default=0.5, help='weight for standard loss in ws scalarization')
+    args.add_argument('--lambda_2', type=float, default=0.5, help='weight for adversarial loss in ws scalarization')
     args.add_argument('--learning_rate', type=float, required=True, help='init learning rate')
     args.add_argument('--learning_rate_min', type=float, required=True, help='min learning rate')
     args.add_argument('--momentum', type=float, required=True, help='momentum')
@@ -146,6 +198,8 @@ if __name__ == '__main__':
     args.add_argument('--drop_path_prob', type=float, required=True, help='drop path probability')
     args.add_argument('--grad_clip', type=float, required=True, help='gradient clipping')
     args.add_argument('--train_portion', type=float, required=True, help='portion of training data')
+    args.add_argument('--proxy_data_dir', type=str, default=None, help='Directory to load the proxy data indices (if provided)')
+    args.add_argument('--proxy_eval_dir', type=str, default=None, help='Directory to load the proxy evaluation indices (if provided)')
     args = args.parse_args()
 
     print(f"Running individual {args.i} with the following arguments:")
@@ -170,6 +224,7 @@ if __name__ == '__main__':
     model, individual_flops, individual_params, train_queue, valid_queue, criterion, alphas_dim = get_model_from_individual(individual_X, args)
 
     time_evaluation = time.time()
+    set_seeds(args.seed)
     std_acc, adv_acc, std_loss, adv_loss = infer(valid_queue, model, criterion, args)
     print(
         f'Gen {args.gen} Evaluation {args.i + 1} done in {time.strftime("%H:%M:%S", time.gmtime(time.time() - time_evaluation))} (HH:MM:SS) std_acc {std_acc:.2f}%, adv_acc {adv_acc:.2f}%, std_loss {std_loss:.4f}, adv_loss {adv_loss:.4f} ,flops {individual_flops:.2f}, params {individual_params:.2f}')
