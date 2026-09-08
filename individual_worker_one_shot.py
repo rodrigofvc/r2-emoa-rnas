@@ -95,11 +95,17 @@ def get_model_from_individual(individual_X, args):
         num_train = split + 96
 
     if args.proxy_data_dir is None:
+        train_sampler = torch.utils.data.sampler.SubsetRandomSampler(
+            indices[:split],
+            generator=torch.Generator().manual_seed(args.seed),
+        )
         train_queue = torch.utils.data.DataLoader(
-          train_data, batch_size=args.batch_size,
-          sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-            num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+            train_data, batch_size=args.batch_size,
+            sampler=train_sampler,
+            num_workers=args.num_workers, pin_memory=True,
+            drop_last=True, generator=torch.Generator().manual_seed(args.seed))
     else:
+        logging.info(f"Using proxy data from {args.proxy_data_dir}")
         proxy_indices = np.load(args.proxy_data_dir)
         train_data_proxy = torch.utils.data.Subset(
             train_data,
@@ -112,10 +118,14 @@ def get_model_from_individual(individual_X, args):
         )
 
     if args.proxy_eval_dir is None:
+        valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(
+            indices[split:num_train],
+            generator=torch.Generator().manual_seed(args.seed),
+        )
         valid_queue = torch.utils.data.DataLoader(
             valid_data, batch_size=args.batch_size,
-            sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-            num_workers=args.num_workers, pin_memory=True, drop_last=True,
+            sampler=valid_sampler,
+            num_workers=args.num_workers, pin_memory=True,
             generator=torch.Generator().manual_seed(args.seed))
     else:
         logging.info(f"Using proxy evaluation data from {args.proxy_eval_dir}")
@@ -126,7 +136,7 @@ def get_model_from_individual(individual_X, args):
         )
         valid_queue = torch.utils.data.DataLoader(
             valid_data_proxy, batch_size=args.batch_size,
-            num_workers=args.num_workers, pin_memory=True, drop_last=True,
+            num_workers=args.num_workers, pin_memory=True,
             generator=torch.Generator().manual_seed(args.seed)
         )
 

@@ -101,11 +101,17 @@ def prepare_args_supernet(args):
         num_train = split + 32
 
     if args.proxy_data_dir is None:
+        train_sampler = torch.utils.data.sampler.SubsetRandomSampler(
+            indices[:split],
+            generator=torch.Generator().manual_seed(args.seed),
+        )
         train_queue = torch.utils.data.DataLoader(
-          train_data, batch_size=args.batch_size,
-          sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-            num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+            train_data, batch_size=args.batch_size,
+            sampler=train_sampler,
+            num_workers=args.num_workers, pin_memory=True,
+            drop_last=True, generator=torch.Generator().manual_seed(args.seed))
     else:
+        logging.info(f"Using proxy data from {args.proxy_data_dir}")
         proxy_indices = np.load(args.proxy_data_dir)
         train_data_proxy = torch.utils.data.Subset(
             train_data,
@@ -117,10 +123,28 @@ def prepare_args_supernet(args):
             generator=torch.Generator().manual_seed(args.seed)
         )
 
-    valid_queue = torch.utils.data.DataLoader(
-      valid_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-        num_workers=args.num_workers, pin_memory=True, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+    if args.proxy_eval_dir is None:
+        valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(
+            indices[split:num_train],
+            generator=torch.Generator().manual_seed(args.seed),
+        )
+        valid_queue = torch.utils.data.DataLoader(
+            valid_data, batch_size=args.batch_size,
+            sampler=valid_sampler,
+            num_workers=args.num_workers, pin_memory=True,
+            generator=torch.Generator().manual_seed(args.seed))
+    else:
+        logging.info(f"Using proxy evaluation data from {args.proxy_eval_dir}")
+        proxy_eval_indices = np.load(args.proxy_eval_dir)
+        valid_data_proxy = torch.utils.data.Subset(
+            valid_data,
+            proxy_eval_indices.tolist(),
+        )
+        valid_queue = torch.utils.data.DataLoader(
+            valid_data_proxy, batch_size=args.batch_size,
+            num_workers=args.num_workers, pin_memory=True,
+            generator=torch.Generator().manual_seed(args.seed)
+        )
 
     epochs_scheduler = args.epochs_warmup if args.warmup else args.epochs_train_supernet
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -186,7 +210,10 @@ if __name__ == '__main__':
     args.add_argument('--gpu', type=int, required=True, help='gpu device id')
     args.add_argument('--batch_size', type=int, required=True, help='batch size')
     args.add_argument('--data', type=str, required=True, help='location of the data corpus')
-    args.add_argument('--mu', type=float, required=True, help='mu for thchebycheff function')
+    args.add_argument('--loss_type', type=str, default='tchebycheff', choices=['tchebycheff', 'ws'], help='type of loss function to use for backpropagation')
+    args.add_argument('--lambda_1', type=float, default=0.5, help='weight for standard loss in two-objective scalarization')
+    args.add_argument('--lambda_2', type=float, default=0.5, help='weight for adversarial loss in two-objective scalarization')
+    args.add_argument('--mu', type=float, required=False, help='mu for thchebycheff function')
     args.add_argument('--optimizer', type=str, required=True, help='optimizer to use')
     args.add_argument('--learning_rate', type=float, required=True, help='init learning rate')
     args.add_argument('--learning_rate_min', type=float, required=True, help='min learning rate')
@@ -213,6 +240,7 @@ if __name__ == '__main__':
     args.add_argument('--report_freq', type=float, required=False, default=45, help='report frequency during training')
     args.add_argument('--num_workers', type=int, default=0, help='number of workers for data loading')
     args.add_argument('--proxy_data_dir', type=str, default=None, help='Directory to load the proxy data indices (if provided)')
+    args.add_argument('--proxy_eval_dir', type=str, default=None, help='Directory to load the proxy evaluation data indices (if provided)')
     args, unknown_args = args.parse_known_args()
 
     with open(args.individuals_X_path, 'r') as f:
