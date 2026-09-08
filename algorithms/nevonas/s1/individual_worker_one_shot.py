@@ -56,7 +56,7 @@ def get_model_from_individual(individual_X, args):
     flops, params = utils_search.get_model_metrics(discrete_model)
     del discrete_model
 
-
+    set_seeds(args.seed)
     train_transform, valid_transform = utils_search.data_transforms_cifar10(args)
     if args.dataset == 'cifar10':
         train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)

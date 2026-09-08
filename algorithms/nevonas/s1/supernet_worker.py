@@ -20,6 +20,15 @@ logging.basicConfig(
         format='[%(asctime)s] %(levelname)s: %(message)s',
         datefmt='%H:%M:%S'
 )
+def set_seeds(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 def prepare_args_supernet(args):
     if torch.cuda.is_available():
@@ -73,7 +82,7 @@ def prepare_args_supernet(args):
       model.parameters(),
       args.learning_rate,
       weight_decay=args.weight_decay)
-
+    set_seeds(args.seed)
     ssl._create_default_https_context = ssl._create_unverified_context
     train_transform, valid_transform = utils_search.data_transforms_cifar10(args)
     if args.dataset == 'cifar10':
@@ -293,7 +302,7 @@ if __name__ == '__main__':
         args.device = torch.device('cpu')
     args.n_population = len(individuals_X)
     model, criterion, optimizer, scheduler, train_queue, valid_queue = prepare_args_supernet(args)
-
+    set_seeds(args.seed)
     train_supernet(individuals_X, train_queue, model, criterion, optimizer, scheduler, args.gen, args, warmup=args.warmup)
 
     os.remove(args.individuals_X_path)
