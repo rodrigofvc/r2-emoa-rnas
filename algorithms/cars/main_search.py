@@ -30,6 +30,11 @@ if __name__ == '__main__':
     parser.add_argument('--flops_index', type=int, default=2, help='index of flops in objectives')
     parser.add_argument('--params_index', type=int, default=3, help='index of params in objectives')
     parser.add_argument('--data', type=str, default='../../data', help='location of the data corpus')
+    parser.add_argument('--num_workers', type=int, default=0, help='number of workers for data loading')
+    parser.add_argument('--loss_type', type=str, default='tchebycheff', choices=['tchebycheff', 'ws'], help='type of loss function to use for backpropagation')
+    parser.add_argument('--mu', type=float, default=0.1, help='mu for thchebycheff function')
+    parser.add_argument('--lambda_1', type=float, default=0.5, help='weight for standard loss in two-objective scalarization')
+    parser.add_argument('--lambda_2', type=float, default=0.5, help='weight for adversarial loss in two-objective scalarization')
     parser.add_argument('--prob_cross', type=float, default=0.9, help='crossover probability')
     parser.add_argument('--prob_mut', type=float, default=0.1, help='mutation probability')
     parser.add_argument('--eta_cross', type=int, default=15, help='crossover eta')
@@ -46,7 +51,7 @@ if __name__ == '__main__':
     parser.add_argument('--steps', type=int, default=6, help='number of steps in one cell (intern nodes except input and output)')
     parser.add_argument('--multiplier', type=int, default=6, help='number of multiplier for number of channels (intern nodes to concat)')
     parser.add_argument('--attack', type=str, default='FGSM', help='adversarial attack to use')
-    parser.add_argument('--fgsm_eps', type=float, default=8/255, help='attack epsilon')
+    parser.add_argument('--attack_eps', type=float, default=8/255, help='attack epsilon')
     parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
     parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
     parser.add_argument('--drop_path_prob', type=float, default=0.3, help='drop path probability')
@@ -58,7 +63,9 @@ if __name__ == '__main__':
     parser.add_argument('--debug_cuda', action='store_true', default=False, help='Enable CUDA_LAUNCH_BLOCKING for debugging')
     parser.add_argument('--increase_epochs', action='store_true', default=False, help='Increase the number of epochs to train the supernet and individuals as generations progress')
     parser.add_argument('--reload_dir', type=str, default=None, help='Directory to reload the experiment from if --reload is set')
-
+    parser.add_argument('--proxy_data_dir', type=str, default=None, help='Directory to load the proxy data indices (if provided)')
+    parser.add_argument('--proxy_eval_dir', type=str, default=None, help='Directory to load the proxy evaluation data indices (if provided)')
+    parser.add_argument('--initial_population', type=str, default=None, help='Path to the initial population file (if provided)')
     args = parser.parse_args()
 
     logging.basicConfig(
@@ -67,9 +74,9 @@ if __name__ == '__main__':
         datefmt='%H:%M:%S'
     )
 
-    #if os.path.exists("logs"):
-    #    shutil.rmtree("logs")
-    #os.makedirs("logs", exist_ok=True)
+    if os.path.exists("logs"):
+        shutil.rmtree("logs")
+    os.makedirs("logs", exist_ok=True)
 
 
     if args.reload_dir is None:

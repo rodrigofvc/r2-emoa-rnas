@@ -20,6 +20,15 @@ logging.basicConfig(
         format='[%(asctime)s] %(levelname)s: %(message)s',
         datefmt='%H:%M:%S'
 )
+def set_seeds(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        torch.backends.cudnn.deterministic = True
+        torch.backends.cudnn.benchmark = False
 
 def prepare_args_supernet(args):
     if torch.cuda.is_available():
@@ -73,7 +82,7 @@ def prepare_args_supernet(args):
       model.parameters(),
       args.learning_rate,
       weight_decay=args.weight_decay)
-
+    set_seeds(args.seed)
     ssl._create_default_https_context = ssl._create_unverified_context
     train_transform, valid_transform = utils.data_transforms_cifar10(args)
     if args.dataset == 'cifar10':
@@ -94,20 +103,55 @@ def prepare_args_supernet(args):
         num_train = split + 32
     logging.info(f"Training samples: {split}, Validation samples: {num_train - split}")
 
-    train_queue = torch.utils.data.DataLoader(
-      train_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-        num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+    if args.proxy_data_dir is None:
+        train_sampler = torch.utils.data.sampler.SubsetRandomSampler(
+            indices[:split],
+            generator=torch.Generator().manual_seed(args.seed),
+        )
+        train_queue = torch.utils.data.DataLoader(
+            train_data, batch_size=args.batch_size,
+            sampler=train_sampler,
+            num_workers=args.num_workers, pin_memory=True,
+            drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+    else:
+        logging.info(f"Using proxy data from {args.proxy_data_dir}")
+        proxy_indices = np.load(args.proxy_data_dir)
+        train_data_proxy = torch.utils.data.Subset(
+            train_data,
+            proxy_indices.tolist(),
+        )
+        train_queue = torch.utils.data.DataLoader(
+            train_data_proxy, batch_size=args.batch_size,
+            num_workers=args.num_workers, pin_memory=True, drop_last=True,
+            generator=torch.Generator().manual_seed(args.seed)
+        )
 
-    valid_queue = torch.utils.data.DataLoader(
-      valid_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[split:num_train]),
-        num_workers=0, pin_memory=False, drop_last=True, generator=torch.Generator().manual_seed(args.seed))
+    if args.proxy_eval_dir is None:
+        valid_sampler = torch.utils.data.sampler.SubsetRandomSampler(
+            indices[split:num_train],
+            generator=torch.Generator().manual_seed(args.seed),
+        )
+        valid_queue = torch.utils.data.DataLoader(
+            valid_data, batch_size=args.batch_size,
+            sampler=valid_sampler,
+            num_workers=args.num_workers, pin_memory=True,
+            generator=torch.Generator().manual_seed(args.seed))
+    else:
+        logging.info(f"Using proxy evaluation data from {args.proxy_eval_dir}")
+        proxy_eval_indices = np.load(args.proxy_eval_dir)
+        valid_data_proxy = torch.utils.data.Subset(
+            valid_data,
+            proxy_eval_indices.tolist(),
+        )
+        valid_queue = torch.utils.data.DataLoader(
+            valid_data_proxy, batch_size=args.batch_size,
+            num_workers=args.num_workers, pin_memory=True,
+            generator=torch.Generator().manual_seed(args.seed)
+        )
 
     epochs_scheduler = args.epochs_warmup if args.warmup else args.epochs_train_supernet
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, epochs_scheduler, eta_min=args.learning_rate_min)
-
 
     return model, criterion, optimizer, scheduler, train_queue, valid_queue
 
@@ -122,8 +166,49 @@ def unpack_alphas(vec, shape_alphas, args):
     a_reduction = torch.tensor(a_reduction_np, dtype=torch.float32, device=args.device).requires_grad_(False)
     return [a_norm, a_reduction]
 
+def smooth_tchebycheff_loss_2_objs(std_loss, adv_loss, lambda_1, lambda_2, mu):
+    if mu <= 0:
+        raise ValueError("mu must be greater than zero.")
+
+    losses = torch.stack([std_loss, adv_loss])
+    weights = losses.new_tensor([lambda_1, lambda_2])
+
+    assert np.isclose(weights.sum().item(), 1.0), "Weights must sum to 1."
+
+    stch_loss = mu * torch.logsumexp(weights * losses / mu, dim=0)
+    if not torch.isfinite(stch_loss):
+        raise ValueError(f"Non-finite STCH loss: {stch_loss.item()}")
+
+    return stch_loss
 
 def run_batch_epoch(model, inputs, target, criterion, optimizer, args):
+    inputs = inputs.to(args.device)
+    target = target.to(args.device)
+
+    optimizer.zero_grad()
+
+    adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
+
+    adv_logits = model(adv_input)
+
+    adv_loss = criterion(adv_logits, target)
+    std_loss = criterion(std_logits, target)
+
+    total_loss = smooth_tchebycheff_loss_2_objs(std_loss, adv_loss, args.lambda_1, args.lambda_2, args.mu)
+
+
+    total_loss.backward()
+
+    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+    optimizer.step()
+
+    std_predicts = std_logits.argmax(dim=1)
+    adv_predicts = adv_logits.argmax(dim=1)
+    std_correct = (std_predicts == target).sum().item()
+    adv_correct = (adv_predicts == target).sum().item()
+    return std_correct, adv_correct, total_loss.item()
+
+def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
     inputs = inputs.to(args.device)
     target = target.to(args.device)
 
@@ -137,11 +222,11 @@ def run_batch_epoch(model, inputs, target, criterion, optimizer, args):
     adv_loss = criterion(adv_logits, target)
     std_loss = criterion(std_logits, target)
 
-    total_loss = std_loss * 0.5 + adv_loss * 0.5
+    total_loss = std_loss * args.lambda_1 + adv_loss.lambda_2
 
     total_loss.backward()
 
-    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip, foreach=False)
+    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
     optimizer.step()
 
     std_predicts = std_logits.argmax(dim=1)
@@ -163,7 +248,10 @@ def train_supernet(pop, train_queue, model, criterion, optimizer, scheduler, gen
             model.update_arch_parameters(individual_architect)
             discrete = discretize(individual_architect, model.genotype(), args.device)
             model.update_arch_parameters(discrete)
-            std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, args)
+            if args.loss_type == 'tchebycheff':
+                std_acc, adv_acc, loss = run_batch_epoch(model, input, target, criterion, optimizer, args)
+            else:
+                std_acc, adv_acc, loss = run_batch_epoch_ws(model, input, target, criterion, optimizer, args)
             if n_batch % args.report_freq == 0:
                 logging.info(
                     f'>>>> Gen {gen} | Epoch {epoch}/{epochs} | Batch {n_batch}/{len(train_queue)} | Loss {loss:.4f} | Std Acc {std_acc:.2f}% | Adv Acc {adv_acc:.2f}% ')
@@ -180,6 +268,10 @@ if __name__ == '__main__':
     args.add_argument('--gpu', type=int, required=True, help='gpu device id')
     args.add_argument('--batch_size', type=int, required=True, help='batch size')
     args.add_argument('--data', type=str, required=True, help='location of the data corpus')
+    args.add_argument('--loss_type', type=str, default='tchebycheff', choices=['tchebycheff', 'ws'], help='type of loss function to use for backpropagation')
+    args.add_argument('--lambda_1', type=float, default=0.5, help='weight for standard loss in two-objective scalarization')
+    args.add_argument('--lambda_2', type=float, default=0.5, help='weight for adversarial loss in two-objective scalarization')
+    args.add_argument('--mu', type=float, required=False, help='mu for thchebycheff function')
     args.add_argument('--learning_rate', type=float, required=True, help='init learning rate')
     args.add_argument('--learning_rate_min', type=float, required=True, help='min learning rate')
     args.add_argument('--momentum', type=float, required=True, help='momentum')
@@ -189,7 +281,7 @@ if __name__ == '__main__':
     args.add_argument('--layers', type=int, required=True, help='total number of layers (cells)')
     args.add_argument('--steps', type=int, required=True, help='number of steps in one cell (intern nodes except input and output)')
     args.add_argument('--multiplier', type=int, required=True, help='number of multiplier for number of channels (intern nodes to concat)')
-    args.add_argument('--fgsm_eps', type=float, required=True, help='attack epsilon')
+    args.add_argument('--attack_eps', type=float, required=True, help='attack epsilon')
     args.add_argument('--cutout', action='store_true', default=False, help='use cutout')
     args.add_argument('--cutout_length', type=int, required=True, help='cutout length')
     args.add_argument('--drop_path_prob', type=float, required=True, help='drop path probability')
@@ -201,6 +293,9 @@ if __name__ == '__main__':
     args.add_argument('--supernet_path', type=str, required=False, help='path to pretrained supernet to load before training the individual')
     args.add_argument('--individuals_X_path', type=str, required=False, help='path to the file containing the individuals X values for the current generation')
     args.add_argument('--report_freq', type=float, required=False, default=45, help='report frequency during training')
+    args.add_argument('--num_workers', type=int, default=0, help='number of workers for data loading')
+    args.add_argument('--proxy_data_dir', type=str, default=None, help='Directory to load the proxy data indices (if provided)')
+    args.add_argument('--proxy_eval_dir', type=str, default=None, help='Directory to load the proxy evaluation data indices (if provided)')
     args, unknown_args = args.parse_known_args()
 
     with open(args.individuals_X_path, 'r') as f:
@@ -221,7 +316,7 @@ if __name__ == '__main__':
         args.device = torch.device('cpu')
     args.n_population = len(individuals_X)
     model, criterion, optimizer, scheduler, train_queue, valid_queue = prepare_args_supernet(args)
-
+    set_seeds(args.seed)
     train_supernet(individuals_X, train_queue, model, criterion, optimizer, scheduler, args.gen, args, warmup=args.warmup)
 
     os.remove(args.individuals_X_path)

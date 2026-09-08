@@ -41,7 +41,7 @@ def prepare_args_supernet(args_):
         num_ops = len(PRIMITIVES)
         alphas_dim = (k, num_ops)
         time_search = time.time()
-        pop = initial_population(args.n_population, alphas_dim, args.objectives, args.search_space)
+        pop = initial_population(args.n_population, alphas_dim, args.objectives, args)
         logging.info(f">>>> Initial population of size {len(pop)} created.")
 
     weights_r2 = utils.get_weights_r2(args.n_population)
@@ -52,11 +52,17 @@ def prepare_args_supernet(args_):
             f">>>> Pretrained supernet loaded from {args.pretrained_supernet} and saved to {str(args.save_path_final_model) + os.sep + 'super-net.pt'} for future reference.")
     return args, weights_r2, archive, archive_accuracy, archive_losses, architectures_evaluated, initial_generation, pop, statistics, time_search
 
-def initial_population(n_population, alphas_dim, k, search_space):
+def initial_population(n_population, alphas_dim, k, args):
     individuals = []
-    for i in range(n_population):
-        flattened = np.random.rand(alphas_dim[0]*alphas_dim[1]*2)
-        individuals.append(Individual(X=flattened.copy(), k=k, search_space=search_space))
+    if args.initial_population is not None:
+        # Load initial population from file
+        X = np.load(args.initial_population)
+        if X.shape[0] != n_population:
+            raise ValueError(f"Initial population file contains only {X.shape[0]} individuals, but n_population is set to {n_population}.")
+    else:
+        for i in range(n_population):
+            flattened = np.random.rand(alphas_dim[0] * alphas_dim[1] * 2)
+            individuals.append(Individual(X=flattened.copy(), k=k, search_space='continuous'))
     return individuals
 
 def cars_algorithm(args_):
@@ -70,6 +76,7 @@ def cars_algorithm(args_):
         statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'),
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': [],
                   'lr_log': []}
+        train_supernet(pop, 0, args, warmup=False)
         evaluate_population_multiprocessing(0, pop, args)
         archive = archive_update_pq(archive, pop)
         archive_losses = archive_update_pq(archive_losses, pop, k=2)

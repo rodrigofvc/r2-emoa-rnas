@@ -40,6 +40,11 @@ def worker_evaluate_individual(gen, i, individual_X, args, return_dict):
         '--gpu', str(args.gpu),
         '--batch_size', str(args.batch_size),
         '--data', str(args.data),
+        '--num_workers', str(args.num_workers),
+        '--loss_type', str(args.loss_type),
+        '--mu', str(args.mu),
+        '--lambda_1', str(args.lambda_1),
+        '--lambda_2', str(args.lambda_2),
         '--learning_rate', str(args.learning_rate),
         '--learning_rate_min', str(args.learning_rate_min),
         '--momentum', str(args.momentum),
@@ -48,7 +53,7 @@ def worker_evaluate_individual(gen, i, individual_X, args, return_dict):
         '--layers', str(args.layers),
         '--steps', str(args.steps),
         '--multiplier', str(args.multiplier),
-        '--fgsm_eps', str(args.fgsm_eps),
+        '--attack_eps', str(args.attack_eps),
         '--cutout_length', str(args.cutout_length),
         '--drop_path_prob', str(args.drop_path_prob),
         '--grad_clip', str(args.grad_clip),
@@ -60,6 +65,12 @@ def worker_evaluate_individual(gen, i, individual_X, args, return_dict):
         process_args.append('--reduction')
     if args.cutout:
         process_args.append('--cutout')
+    if args.proxy_data_dir is not None:
+        process_args.append('--proxy_data_dir')
+        process_args.append(str(args.proxy_data_dir))
+    if args.proxy_eval_dir is not None:
+        process_args.append('--proxy_eval_dir')
+        process_args.append(str(args.proxy_eval_dir))
     env_worker = os.environ.copy()
     env_worker['CUDA_VISIBLE_DEVICES'] = str(args.gpu) # Set the GPU device for the subprocess
     if args.debug_cuda:
@@ -103,7 +114,7 @@ def worker_evaluate_individual(gen, i, individual_X, args, return_dict):
             logging.info(f"Failed {i}: {e}")
         finally:
             # wait a bit to ensure the process has terminated and released resources before starting the next one
-            time.sleep(5)
+            time.sleep(0.5)
             # set default values for failed individuals
             if i not in return_dict:
                 return_dict[i] = {
@@ -149,6 +160,11 @@ def train_supernet(pop, gen, args, warmup=False):
         '--gpu', str(args.gpu),
         '--batch_size', str(args.batch_size),
         '--data', str(args.data),
+        '--num_workers', str(args.num_workers),
+        '--loss_type', str(args.loss_type),
+        '--mu', str(args.mu),
+        '--lambda_1', str(args.lambda_1),
+        '--lambda_2', str(args.lambda_2),
         '--learning_rate', str(args.learning_rate),
         '--learning_rate_min', str(args.learning_rate_min),
         '--momentum', str(args.momentum),
@@ -157,7 +173,7 @@ def train_supernet(pop, gen, args, warmup=False):
         '--layers', str(args.layers),
         '--steps', str(args.steps),
         '--multiplier', str(args.multiplier),
-        '--fgsm_eps', str(args.fgsm_eps),
+        '--attack_eps', str(args.attack_eps),
         '--cutout_length', str(args.cutout_length),
         '--drop_path_prob', str(args.drop_path_prob),
         '--grad_clip', str(args.grad_clip),
@@ -186,6 +202,12 @@ def train_supernet(pop, gen, args, warmup=False):
         process_args.append('--reduction')
     if args.cutout:
         process_args.append('--cutout')
+    if args.proxy_data_dir is not None:
+        process_args.append('--proxy_data_dir')
+        process_args.append(str(args.proxy_data_dir))
+    if args.proxy_eval_dir is not None:
+        process_args.append('--proxy_eval_dir')
+        process_args.append(str(args.proxy_eval_dir))
     env_worker = os.environ.copy()
     env_worker['CUDA_VISIBLE_DEVICES'] = str(args.gpu)  # Set the GPU device for the subprocess
     if args.debug_cuda:
@@ -211,7 +233,7 @@ def train_supernet(pop, gen, args, warmup=False):
                     time.sleep(5)
             else:
                 training_succeeded = True
-                logging.info(f"Gen {gen} training completed successfully in (HH:MM:SS) {time.strftime('%HH:%MM:%SS')}")
+                logging.info(f"Gen {gen} training completed successfully in (HH:MM:SS) {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_gen))}")
 
         except subprocess.TimeoutExpired:
             logging.info(f"Gen {gen} training exceed timestamp: {args.timestamp}, it will be skipped. If you want to increase the timestamp, please set --timestamp argument to a higher value (in minutes).")
@@ -231,7 +253,7 @@ def train_supernet(pop, gen, args, warmup=False):
             logging.info(f"Failed generation {gen}: {e}")
         finally:
             # wait a bit to ensure the process has terminated and released resources before starting the next one
-            time.sleep(10)
+            time.sleep(1)
         # Remove log file of successful training, keep logs of failed training for debugging
     if training_succeeded:
         _remove_file_with_retries(log_file)
