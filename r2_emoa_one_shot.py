@@ -69,10 +69,16 @@ def set_random_seed(seed):
  --grad_clip 0.5 --train_portion 0.5
 """
 def initial_population(n_population, alphas_dim, k, args):
+    if args.initial_population is not None:
+        X = np.load(args.initial_population)
+        if X.shape[0] != n_population:
+            raise ValueError(f"Initial population file {args.initial_population} has only {X.shape[0]} individuals, but n_population is {n_population}.")
+    else:
+        for i in range(n_population):
+            X = np.random.rand(alphas_dim[0] * alphas_dim[1] * 2)
     individuals = []
     for i in range(n_population):
-        flattened = np.random.rand(alphas_dim[0] * alphas_dim[1] * 2)
-        individuals.append(Individual(X=flattened.copy(), k=k, search_space=args.search_space))
+        individuals.append(Individual(X=X[i].copy(), k=k, search_space=args.search_space))
     return individuals
 
 
@@ -110,7 +116,7 @@ def r2_emoa_oneshot_nas(args_):
 
         parents = tournament_selection(pop, n_select=args.n_population // 2, tournament_size=5)
         offsprings = binary_crossover(parents, n_childs=args.n_population, eta=args.eta_cross, prob_cross=args.prob_cross)
-        mutation = polynomial_mutation(offsprings, prob_mut=args.prob_mut, eta=args.eta_mut)
+        mutation = polynomial_mutation(offsprings, prob_individual=args.prob_mut, eta=args.eta_mut, random_state=np.random.RandomState(args.seed + generation), steps=args.steps, n_ops=len(PRIMITIVES), search_space=args.search_space)
         architectures_evaluated += len(mutation)
         # Evaluate offspring
         evaluate_population_multiprocessing(generation, mutation, weights_r2, nadir_point, ideal_point, args)
