@@ -7,7 +7,6 @@ import numpy as np
 from archivers import archive_update_pq, archive_update_pq_accuracy
 from individual import Individual
 from micro_space.micro_encoding import PRIMITIVES
-from r2_emoa import initial_population
 from worker_process import evaluate_population_multiprocessing
 
 
@@ -53,25 +52,44 @@ def set_random_seed(seed):
     np.random.seed(seed)
     random.seed(seed)
 
-def initial_population(n_population, alphas_dim, k, args):
+def get_discrete_bounds(args):
+    n_var = 4 * args.steps * 2
+    n_ops = len(PRIMITIVES)
+
+    lb = np.zeros(n_var, dtype=np.int32)
+    ub = np.ones(n_var, dtype=np.int32)
+
+    h = 1
+
+    for b in range(0, n_var // 2, 4):
+        ub[b] = n_ops - 1
+        ub[b + 1] = h
+        ub[b + 2] = n_ops - 1
+        ub[b + 3] = h
+        h += 1
+
+    ub[n_var // 2:] = ub[:n_var // 2]
+
+    return lb, ub
+
+def initial_population(n_population, alphas_dim, k, args, random_population=False):
     individuals = []
-    for i in range(n_population):
-        if args.search_space == 'discrete':
-            # Each group of 4 integers represents two operations for a given node (op1, from_node1, op2, from_node2)
-            n_var = 4 * args.steps * 2
-            n_ops = len(PRIMITIVES)
-            flattened = np.zeros(n_var, dtype=np.int32)
-            h = 1
-            for b in range(0, n_var // 2, 4):
-                flattened[b] = np.random.randint(0, n_ops)
-                flattened[b+1] = np.random.randint(0, h + 1)
-                flattened[b+2] = np.random.randint(0, n_ops)
-                flattened[b+3] = np.random.randint(0, h + 1)
-                h += 1
-            flattened[n_var // 2:] = flattened[:n_var // 2]
+    if args.initial_population is not None and not random_population:
+        # Load initial population from file
+        X = np.load(args.initial_population)
+        if X.shape[0] != n_population:
+            raise ValueError(f"Initial population file contains only {X.shape[0]} individuals, but n_population is set to {n_population}.")
+    else:
+        if args.search_space == "discrete":
+            lb, ub = get_discrete_bounds(args)
+            X = np.column_stack([np.random.randint(int(lb[j]), int(ub[j]) + 1, size=n_population) for j in range(len(lb))]).astype(np.int32)
         else:
-            flattened = np.random.rand(alphas_dim[0]*alphas_dim[1]*2)
-        individuals.append(Individual(X=flattened.copy(), k=k, search_space=args.search_space))
+            n_var = alphas_dim[0] * alphas_dim[1] * 2
+            X = np.random.rand(n_population, n_var)
+
+    for i in range(n_population):
+        individuals.append(Individual(X=X[i].copy(), k=k, search_space=args.search_space))
+
     return individuals
 
 def random_search_rnas(args_):
@@ -93,7 +111,7 @@ def random_search_rnas(args_):
             args.epochs_train_individual += 5
         time_stamp_gen = time.time()
 
-        new_population = initial_population(args.n_population, alphas_dim, 4, args)
+        new_population = initial_population(args.n_population, alphas_dim, 4, args, random_population=True)
         evaluate_population_multiprocessing(generation, new_population, weights_r2, nadir_point, ideal_point, args)
         architectures_evaluated += len(new_population)
         archive = archive_update_pq(archive, new_population)
