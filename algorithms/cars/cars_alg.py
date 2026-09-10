@@ -68,15 +68,6 @@ def initial_population(n_population, alphas_dim, k, args):
         individuals.append(Individual(X=X[i].copy(), k=k, search_space=args.search_space))
     return individuals
 
-def initial_population(n_population, alphas_dim, args):
-
-    individuals = []
-    for i in range(n_population):
-      x = np.random.rand(alphas_dim[0] * alphas_dim[1] * 2)
-      individuals.append(x)
-    X = np.array(individuals)
-  return X
-
 def cars_algorithm(args_):
     args, weights_r2, archive, archive_accuracy, archive_losses, architectures_evaluated, initial_generation, pop, statistics, time_search = prepare_args_supernet(args_)
 
