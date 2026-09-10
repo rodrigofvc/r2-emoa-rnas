@@ -101,7 +101,6 @@ def prepare_args_supernet(args):
         # testing
         split = 32
         num_train = split + 32
-    logging.info(f"Training samples: {split}, Validation samples: {num_train - split}")
 
     if args.proxy_data_dir is None:
         train_sampler = torch.utils.data.sampler.SubsetRandomSampler(
@@ -152,6 +151,8 @@ def prepare_args_supernet(args):
     epochs_scheduler = args.epochs_warmup if args.warmup else args.epochs_train_supernet
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
         optimizer, epochs_scheduler, eta_min=args.learning_rate_min)
+
+    logging.info(f"Training samples: {len(train_queue.dataset)}, Validation samples: {len(valid_queue.dataset)}")
 
     return model, criterion, optimizer, scheduler, train_queue, valid_queue
 

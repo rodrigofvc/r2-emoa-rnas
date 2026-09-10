@@ -54,16 +54,28 @@ def prepare_args_supernet(args_):
 
 def initial_population(n_population, alphas_dim, k, args):
     individuals = []
+
     if args.initial_population is not None:
         # Load initial population from file
         X = np.load(args.initial_population)
         if X.shape[0] != n_population:
             raise ValueError(f"Initial population file contains only {X.shape[0]} individuals, but n_population is set to {n_population}.")
     else:
-        for i in range(n_population):
-            flattened = np.random.rand(alphas_dim[0] * alphas_dim[1] * 2)
-            individuals.append(Individual(X=flattened.copy(), k=k, search_space='continuous'))
+        n_var = alphas_dim[0] * alphas_dim[1] * 2
+        X = np.random.rand(n_population, n_var)
+
+    for i in range(n_population):
+        individuals.append(Individual(X=X[i].copy(), k=k, search_space=args.search_space))
     return individuals
+
+def initial_population(n_population, alphas_dim, args):
+
+    individuals = []
+    for i in range(n_population):
+      x = np.random.rand(alphas_dim[0] * alphas_dim[1] * 2)
+      individuals.append(x)
+    X = np.array(individuals)
+  return X
 
 def cars_algorithm(args_):
     args, weights_r2, archive, archive_accuracy, archive_losses, architectures_evaluated, initial_generation, pop, statistics, time_search = prepare_args_supernet(args_)
