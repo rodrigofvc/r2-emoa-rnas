@@ -10,7 +10,7 @@ for %%S in (18906049 15798821 65381509 27293207 27522793) do (
     python moras.py ^
         --seed %%S ^
         --search_space discrete ^
-        --dataset cifar10 ^
+        --dataset cifar100 ^
         --batch_size 192 ^
         --data ../../data ^
         --n_population 40 ^
@@ -34,8 +34,8 @@ for %%S in (18906049 15798821 65381509 27293207 27522793) do (
         --multiplier 4 ^
         --attack FGSM ^
         --grad_clip 5.0 ^
-        --proxy_data_dir proxy-data/proxy_train/train_proxy_cifar10_resnet20_2500.npy ^
-        --proxy_eval_dir proxy-data/proxy_eval/eval_proxy_indices_cifar10_192_5000.npy ^
+        --proxy_data_dir proxy-data/proxy_train/train_proxy_cifar100_resnet56_3750.npy ^
+        --proxy_eval_dir proxy-data/proxy_eval/eval_proxy_indices_cifar100_192_5000.npy ^
         --initial_population initial/initial_population_40.npy
 
     set "STATUS=!ERRORLEVEL!"
