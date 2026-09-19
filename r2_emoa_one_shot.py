@@ -29,8 +29,8 @@ def prepare_args_supernet(args_):
         archive_accuracy = []
         archive_losses = []
         architectures_evaluated = 0
-        nadir_point = np.ones(4, )
-        ideal_point = np.zeros(4, )
+        nadir_point = np.zeros(4,)
+        ideal_point = np.full(4, np.inf)
         np.random.seed(args.seed)
         random.seed(args.seed)
         statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'),
@@ -74,8 +74,7 @@ def initial_population(n_population, alphas_dim, k, args):
         if X.shape[0] != n_population:
             raise ValueError(f"Initial population file {args.initial_population} has only {X.shape[0]} individuals, but n_population is {n_population}.")
     else:
-        for i in range(n_population):
-            X = np.random.rand(alphas_dim[0] * alphas_dim[1] * 2)
+        X = np.random.rand(n_population, alphas_dim[0] * alphas_dim[1] * 2)
     individuals = []
     for i in range(n_population):
         individuals.append(Individual(X=X[i].copy(), k=k, search_space=args.search_space))
@@ -90,6 +89,7 @@ def r2_emoa_oneshot_nas(args_):
             logging.info(">>>> Warmup training of the supernet...")
             train_supernet(pop, 0, args, nadir_point, ideal_point, warmup=True)
             logging.info(">>>> Warmup training DONE.")
+        train_supernet(pop, 0, args, nadir_point, ideal_point, warmup=False)
         statistics = {'max_f1': 0, 'max_f2': 0, 'max_f3': 0, 'max_f4': 0, 'min_f1': float('inf'), 'min_f2': float('inf'),
                   'min_f3': float('inf'), 'min_f4': float('inf'), 'hyp_log': [], 'hyp2_log': [], 'r2_log': [],
                   'lr_log': [], 'hyp2_acc_log': [], 'hyp_acc_log': []}
@@ -114,7 +114,7 @@ def r2_emoa_oneshot_nas(args_):
         logging.info(
             f">>>> Gen {generation} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_epoch))} (HH:MM:SS)")
 
-        parents = tournament_selection(pop, n_select=args.n_population // 2, tournament_size=5)
+        parents = tournament_selection(pop, n_select=args.n_population // 2, tournament_size=args.tournament_size)
         offsprings = binary_crossover(parents, n_childs=args.n_population, eta=args.eta_cross, prob_cross=args.prob_cross)
         mutation = polynomial_mutation(offsprings, prob_individual=args.prob_mut, eta=args.eta_mut, random_state=np.random.RandomState(args.seed + generation), steps=args.steps, n_ops=len(PRIMITIVES), search_space=args.search_space)
         architectures_evaluated += len(mutation)
