@@ -17,7 +17,7 @@ CIFAR_MEAN = [0.49139968, 0.48215827, 0.44653124]
 CIFAR_STD = [0.24703233, 0.24348505, 0.26158768]
 
 
-def fgsm_simple(model, x, y, eps=8/255):
+def fgsm_simple(model, x, y, eps=8/255, retain_clean_graph=True):
     """
     FGSM for inputs previously normalized as:
 
@@ -57,7 +57,7 @@ def fgsm_simple(model, x, y, eps=8/255):
 
     std_logits = model(x_adv)
     std_loss = F.cross_entropy(std_logits, y)
-    grad = torch.autograd.grad(std_loss, x_adv, retain_graph=True, create_graph=False)[0]
+    grad = torch.autograd.grad(std_loss, x_adv, retain_graph=retain_clean_graph, create_graph=False)[0]
     adv = x_adv + eps_normalized * grad.sign()
     adv = torch.maximum(torch.minimum(adv, upper_bound), lower_bound).detach()
 

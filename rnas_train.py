@@ -9,7 +9,6 @@ import re
 
 import torch
 from torch import nn
-from torch.cuda.amp import GradScaler
 import numpy as np
 import torchvision
 
@@ -171,6 +170,7 @@ def train_amp(train_queue, model, criterion, scheduler, optimizer, args):
     model.train()
 
     scaler = torch.amp.GradScaler('cuda')
+    use_clean_loss = args.loss_type in ('tchebycheff', 'ws')
 
     for n_batch, (inputs, target) in enumerate(train_queue):
         inputs = inputs.to(args.device, non_blocking=False)
@@ -178,13 +178,21 @@ def train_amp(train_queue, model, criterion, scheduler, optimizer, args):
 
         optimizer.zero_grad(set_to_none=True)
 
-        adv_inputs, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
+        adv_inputs, std_logits = fgsm_simple(model, inputs, target, args.attack_eps, retain_clean_graph=use_clean_loss)
 
         with torch.amp.autocast(device_type="cuda"):
             logits_adv = model(adv_inputs)
             adv_loss = criterion(logits_adv, target)
+            if args.loss_type == 'tchebycheff':
+                std_loss = criterion(std_logits, target)
+                loss = smooth_tchebycheff_loss_2_objs(std_loss, adv_loss, args.lambda_1, args.lambda_2, args.mu)
+            elif args.loss_type == 'ws':
+                std_loss = criterion(std_logits, target)
+                loss = std_loss * args.lambda_1 + adv_loss * args.lambda_2
+            else:
+                loss = adv_loss
 
-        scaler.scale(adv_loss).backward()
+        scaler.scale(loss).backward()
 
         scaler.unscale_(optimizer)
 
@@ -279,6 +287,29 @@ def run_batch_epoch_ws(model, inputs, target, criterion, optimizer, args):
     adv_correct = (adv_predicts == target).sum().item()
     return std_correct, adv_correct, total_loss.item()
 
+def run_batch_epoch_adv(model, inputs, target, criterion, optimizer, args):
+    inputs = inputs.to(args.device, non_blocking=True)
+    target = target.to(args.device, non_blocking=True)
+
+    optimizer.zero_grad()
+
+    adv_input, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
+
+    adv_logits = model(adv_input)
+
+    adv_loss = criterion(adv_logits, target)
+
+    adv_loss.backward()
+
+    nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
+    optimizer.step()
+
+    std_predicts = std_logits.argmax(dim=1)
+    adv_predicts = adv_logits.argmax(dim=1)
+    std_correct = (std_predicts == target).sum().item()
+    adv_correct = (adv_predicts == target).sum().item()
+    return std_correct, adv_correct
+
 def run_batch_epoch(model, inputs, target, criterion, optimizer, args, model_flops, model_parameters, r2_weights, z_ref_stch, nadir_point, ideal_point):
 
     inputs = inputs.to(args.device, non_blocking=True)
@@ -364,6 +395,10 @@ if __name__ == '__main__':
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs to train')
     parser.add_argument('--data', type=str, default='./data', help='location of the data corpus')
     parser.add_argument('--num_workers', type=int, default=0, help='number of workers')
+    parser.add_argument('--loss_type', type=str, default='adv', choices=['tchebycheff', 'ws', 'adv'], help='type of loss function to use for backpropagation')
+    parser.add_argument('--mu', type=float, default=0.3, help='mu for thchebycheff function')
+    parser.add_argument('--lambda_1', type=float, default=0.5, help='weight for standard loss in two-objective scalarization')
+    parser.add_argument('--lambda_2', type=float, default=0.5, help='weight for adversarial loss in two-objective scalarization')
     parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
     parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
@@ -459,13 +494,17 @@ if __name__ == '__main__':
         for i, genotype in enumerate(archive_genotypes):
             args, train_queue, criterion, model, initial_epoch, optimizer, scheduler = prepare_args(args, genotype)
             logging.info(f">>>> Training individual {i}/{len(archive_genotypes)-1}")
-            for epoch in range(initial_epoch, args.epochs):
-                logging.info(f"Individual {i}/{len(archive_genotypes)-1} Epoch {epoch}/{args.epochs}")
-                time_stamp = time.time()
-                if args.amp:
-                    adv_acc = train_amp(train_queue, model, criterion, scheduler, optimizer, args)
-                else:
-                    adv_acc = train(train_queue, model, criterion, scheduler, optimizer, args)
-                logging.info(
-                    f">>>> Individual {i}/{len(archive_genotypes)-1} Epoch {epoch} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))} (HH:MM:SS) adv_acc {adv_acc:.2f}% ")
-            utils.save_model(model, args.save_path_final_model + "archive" + os.sep, f"individual_{i}_model.pt")
+            try:
+                for epoch in range(initial_epoch, args.epochs):
+                    logging.info(f"Individual {i}/{len(archive_genotypes)-1} Epoch {epoch}/{args.epochs}")
+                    time_stamp = time.time()
+                    if args.amp:
+                        adv_acc = train_amp(train_queue, model, criterion, scheduler, optimizer, args)
+                    else:
+                        adv_acc = train(train_queue, model, criterion, scheduler, optimizer, args)
+                    logging.info(
+                        f">>>> Individual {i}/{len(archive_genotypes)-1} Epoch {epoch} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))} (HH:MM:SS) adv_acc {adv_acc:.2f}% ")
+                utils.save_model(model, args.save_path_final_model + "archive" + os.sep, f"individual_{i}_model.pt")
+            except Exception as e:
+                logging.error(f"Error while training individual {i}: {e}")
+                continue
