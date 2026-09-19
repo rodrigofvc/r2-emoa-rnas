@@ -19,6 +19,25 @@ def get_genotypes_from_archive(archs_path, args):
     with open(archs_path, 'r') as f:
         population_data = json.load(f)
     genotypes = []
+
+    pop = [create_from_json(ind_json, args.search_space) for ind_json in population_data['archive']]
+    n_pop = len(pop)
+    pop = archive_update_pq([], pop, k=4)
+    assert len(pop) == n_pop, "Archive update changed the number of individuals."
+    for p in pop:
+        genotype_dict = p.genotype
+        genotype = Genotype(normal=genotype_dict[0],
+                                normal_concat=genotype_dict[1],
+                                reduce=genotype_dict[2],
+                                reduce_concat=genotype_dict[3])
+        genotypes.append(genotype)
+    assert len(genotypes) > 0, "No genotypes found in the archive."
+    return genotypes
+
+def get_genotypes_from_archive_dep(archs_path, args):
+    with open(archs_path, 'r') as f:
+        population_data = json.load(f)
+    genotypes = []
     if args.algorithm == 'r2-emoa' or args.algorithm == 'r2-emoa-one-shot' or args.algorithm == 'cars':
         pop = [create_from_json(ind_json, args.search_space) for ind_json in population_data['population']]
         pop = archive_update_pq([], pop, k=4)

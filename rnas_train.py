@@ -72,7 +72,6 @@ def prepare_args(args_, genotype):
             args.learning_rate,
             momentum=args.momentum,
             weight_decay=args.weight_decay,
-            foreach=False
         )
 
         scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(
@@ -94,26 +93,41 @@ def prepare_args(args_, genotype):
 
 
     ssl._create_default_https_context = ssl._create_unverified_context
-    train_transform, valid_transform = utils.data_transforms_cifar10(args)
+    train_transform, _ = utils.data_transforms_cifar10(args)
     if args.dataset == 'cifar10':
         train_data = torchvision.datasets.CIFAR10(root=args.data, train=True, download=True, transform=train_transform)
     elif args.dataset == 'cifar100':
         train_data = torchvision.datasets.CIFAR100(root=args.data, train=True, download=True, transform=train_transform)
 
-    num_train = len(train_data)
-    indices = list(range(num_train))
-    split = int(np.floor(args.train_portion * num_train))
+    if args.proxy_data_dir is None:
+        num_train = len(train_data)
+        indices = list(range(num_train))
+        split = int(np.floor(args.train_portion * num_train))
 
-    if torch.backends.mps.is_available():
-        # testing
-        split = 32
-    print(f"Training samples: {split}")
+        if torch.backends.mps.is_available():
+            # testing
+            split = 32
 
-    train_queue = torch.utils.data.DataLoader(
-      train_data, batch_size=args.batch_size,
-      sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-        num_workers=args.num_workers, pin_memory=True)
+        train_queue = torch.utils.data.DataLoader(
+          train_data, batch_size=args.batch_size,
+          sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
+            num_workers=args.num_workers, pin_memory=True)
+    else:
+        # load the proxy data indices from the specified directory
+        if not os.path.exists(args.proxy_data_dir):
+            raise FileNotFoundError(f"Proxy indices file not found at {args.proxy_data_dir}")
+        proxy_indices = np.load(args.proxy_data_dir)
+        train_data_proxy = torch.utils.data.Subset(
+            train_data,
+            proxy_indices.tolist(),
+        )
+        train_queue = torch.utils.data.DataLoader(
+            train_data_proxy, batch_size=args.batch_size,
+            num_workers=args.num_workers, pin_memory=True, drop_last=True,
+            generator=torch.Generator().manual_seed(args.seed)
+        )
 
+    logging.info(f"Training {len(train_queue)* args.batch_size} samples, train_portion {args.train_portion}")
     criterion = torch.nn.CrossEntropyLoss().to(args.device)
 
     return args, train_queue, criterion, model, initial_epoch, optimizer, scheduler
@@ -135,7 +149,7 @@ def train(train_queue, model, criterion, scheduler, optimizer, args):
         adv_loss = criterion(logits_adv, target)
         adv_loss.backward()
 
-        nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip, foreach=False)
+        nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
         optimizer.step()
 
         adv_predicts = logits_adv.argmax(dim=1)
@@ -174,11 +188,7 @@ def train_amp(train_queue, model, criterion, scheduler, optimizer, args):
 
         scaler.unscale_(optimizer)
 
-        nn.utils.clip_grad_norm_(
-            model.parameters(),
-            args.grad_clip,
-            foreach=False
-        )
+        nn.utils.clip_grad_norm_(model.parameters(), args.grad_clip)
 
         scaler.step(optimizer)
         scaler.update()
@@ -367,6 +377,7 @@ if __name__ == '__main__':
     parser.add_argument('--multiplier', type=int, default=4, help='number of multiplier for channels')
     parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
     parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
+    parser.add_argument('--proxy_data_dir', type=str, default=None, help='Directory to load the proxy data indices (if provided)')
     parser.add_argument('--train_portion', type=float, default=0.5, help='portion of training data')
     parser.add_argument('--debug_cuda', action='store_true', default=False, help='debug cuda')
     parser.add_argument('--reload_dir', type=str, default=None, help='reload from this directory')

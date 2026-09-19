@@ -40,9 +40,13 @@ def create_from_json(json_dict, search_space):
         ind.F_acc = np.array(json_dict['F_acc'])
     else:
         ind.F_acc = None
-    ind.c_r2 = json_dict['c_r2']
+    if 'k' in json_dict:
+        ind.k = json_dict['k']
+    if 'c_r2' in json_dict:
+        ind.c_r2 = json_dict['c_r2']
+    if 'feasible' in json_dict:
+        ind.feasible = json_dict['feasible']
     ind.std_acc = json_dict['std_acc']
     ind.adv_acc = json_dict['adv_acc']
     ind.genotype = json_dict['genotype']
-    ind.feasible = json_dict['feasible']
     return ind

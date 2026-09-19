@@ -44,7 +44,7 @@ def prepare_args(args, model):
     test_queue = torch.utils.data.DataLoader(
       test_data, batch_size=args.batch_size,
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
-        num_workers=0, pin_memory=False)
+        num_workers=args.num_workers, pin_memory=False)
 
     criterion = torch.nn.CrossEntropyLoss().to(args.device)
 
@@ -113,6 +113,7 @@ if __name__ == '__main__':
     parser.add_argument('--algorithm', type=str, choices=['nsganet', 'nevonas', 'cars', 'r2-emoa', 'r2-emoa-one-shot'])
     parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'], help='dataset for training')
     parser.add_argument('--data', type=str, default='./data', help='location of the data corpus')
+    parser.add_argument('--num_workers', type=int, default=0, help='number of workers for data loading')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--model_path', type=str, default=None, help="Path to the saved model")
     parser.add_argument('--archive_path', type=str, default=None, help="Path to the models archive (if applicable)")
