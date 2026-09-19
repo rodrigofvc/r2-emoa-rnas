@@ -495,6 +495,7 @@ if __name__ == '__main__':
             args, train_queue, criterion, model, initial_epoch, optimizer, scheduler = prepare_args(args, genotype)
             logging.info(f">>>> Training individual {i}/{len(archive_genotypes)-1}")
             try:
+                start_time = time.time()
                 for epoch in range(initial_epoch, args.epochs):
                     logging.info(f"Individual {i}/{len(archive_genotypes)-1} Epoch {epoch}/{args.epochs}")
                     time_stamp = time.time()
@@ -505,6 +506,7 @@ if __name__ == '__main__':
                     logging.info(
                         f">>>> Individual {i}/{len(archive_genotypes)-1} Epoch {epoch} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))} (HH:MM:SS) adv_acc {adv_acc:.2f}% ")
                 utils.save_model(model, args.save_path_final_model + "archive" + os.sep, f"individual_{i}_model.pt")
+                logging.info(f">>>> Individual {i}/{len(archive_genotypes)-1} training DONE in {time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))} (HH:MM:SS)")
             except Exception as e:
                 logging.error(f"Error while training individual {i}: {e}")
                 continue
