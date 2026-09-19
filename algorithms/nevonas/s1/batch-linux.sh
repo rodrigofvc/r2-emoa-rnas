@@ -25,7 +25,7 @@ for SEED in "${SEEDS[@]}"; do
         --init_channels 8 \
         --generations 31 \
         --n_population 40 \
-        --epochs_warmup 0 \
+        --epochs_warmup 50 \
         --epochs_train_supernet 10 \
         --learning_rate 0.025 \
         --learning_rate_min 0.001 \
@@ -36,6 +36,10 @@ for SEED in "${SEEDS[@]}"; do
         --prob_mut 0.1 \
         --eta_cross 15 \
         --eta_mut 3 \
+        --loss_type tchebycheff \
+        --mu 0.3 \
+        --lambda_1 0.5 \
+        --lambda_2 0.5 \
         --report_freq 50 \
         --layers 5 \
         --steps 4 \
