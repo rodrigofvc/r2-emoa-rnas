@@ -25,7 +25,7 @@ for SEED in "${SEEDS[@]}"; do
         --init_channels 8 \
         --generations 31 \
         --n_population 40 \
-        --epochs_warmup 80 \
+        --epochs_warmup 100 \
         --epochs_train_supernet 10 \
         --learning_rate 0.025 \
         --learning_rate_min 0.001 \
