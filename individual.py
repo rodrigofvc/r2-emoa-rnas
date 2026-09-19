@@ -36,7 +36,7 @@ def create_from_json(json_dict, search_space):
         ind.F = np.array(json_dict['F'])
     else:
         ind.F = None
-    if json_dict['F_acc'] is not None:
+    if 'F_acc' in json_dict:
         ind.F_acc = np.array(json_dict['F_acc'])
     else:
         ind.F_acc = None

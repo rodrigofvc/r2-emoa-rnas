@@ -9,7 +9,7 @@ import re
 
 import torch
 from torch import nn
-from torch.cuda.amp import GradScaler, autocast
+from torch.cuda.amp import GradScaler
 import numpy as np
 import torchvision
 
@@ -170,7 +170,7 @@ def train_amp(train_queue, model, criterion, scheduler, optimizer, args):
     model.to(args.device)
     model.train()
 
-    scaler = GradScaler('cuda')
+    scaler = torch.amp.GradScaler('cuda')
 
     for n_batch, (inputs, target) in enumerate(train_queue):
         inputs = inputs.to(args.device, non_blocking=False)
@@ -180,7 +180,7 @@ def train_amp(train_queue, model, criterion, scheduler, optimizer, args):
 
         adv_inputs, std_logits = fgsm_simple(model, inputs, target, args.attack_eps)
 
-        with autocast(device_type="cuda"):
+        with torch.amp.autocast(device_type="cuda"):
             logits_adv = model(adv_inputs)
             adv_loss = criterion(logits_adv, target)
 
@@ -357,12 +357,13 @@ if __name__ == '__main__':
     """
     parser = argparse.ArgumentParser(description="Training architectures found by RNAS")
     parser.add_argument('--seed', type=int, default=18906049, help='random seed')
-    parser.add_argument('--algorithm', type=str, choices=['r2-emoa', 'nevonas', 'nsganet', 'cars', 'r2-emoa-one-shot'], help='which algorithm was used to search')
+    parser.add_argument('--algorithm', type=str, choices=['moead', 'sms-emoa', 'moras', 'random-search', 'r2-emoa', 'nevonas', 'nsganet', 'cars', 'r2-emoa-one-shot'], help='which algorithm was used to search')
     parser.add_argument('--search_space', type=str, default='discrete', help='which search space was used to search')
     parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'], help='dataset for training')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
     parser.add_argument('--epochs', type=int, default=100, help='number of epochs to train')
     parser.add_argument('--data', type=str, default='./data', help='location of the data corpus')
+    parser.add_argument('--num_workers', type=int, default=0, help='number of workers')
     parser.add_argument('--learning_rate', type=float, default=0.025, help='init learning rate')
     parser.add_argument('--learning_rate_min', type=float, default=0.001, help='min learning rate')
     parser.add_argument('--momentum', type=float, default=0.9, help='momentum')
@@ -375,6 +376,8 @@ if __name__ == '__main__':
     parser.add_argument('--layers', type=int, default=8, help='total number of layers')
     parser.add_argument('--steps', type=int, default=4, help='number of steps in one cell')
     parser.add_argument('--multiplier', type=int, default=4, help='number of multiplier for channels')
+    parser.add_argument('--attack', type=str, default='FGSM', help='adversarial attack to use')
+    parser.add_argument('--attack_eps', type=float, default=8/255, help='attack epsilon')
     parser.add_argument('--cutout', action='store_true', default=False, help='use cutout')
     parser.add_argument('--cutout_length', type=int, default=16, help='cutout length')
     parser.add_argument('--proxy_data_dir', type=str, default=None, help='Directory to load the proxy data indices (if provided)')
