@@ -4,21 +4,29 @@ import numpy as np
 def dominates(ind1, ind2, k):
     if np.allclose(ind1.F[:k], ind2.F[:k], atol=1e-8):
         return False
-    return all(f1 <= f2 for f1, f2 in zip(ind1.F[:k], ind2.F[:k]))
+    return all(f1 <= f2 for f1, f2 in zip(ind1.F[:k], ind2.F[:k])) and any(f1 < f2 for f1, f2 in zip(ind1.F[:k], ind2.F[:k]))
 
+def equal_genotype(ind1, ind2):
+    return np.array_equal(ind1.X, ind2.X)
 
 # Return non-dominated points in archive
 def archive_update_pq(archive, population_, k=4):
     population = [ind for ind in population_ if ind.feasible]
     for ind in population:
         dominated = False
+        repeated_genotype = False
         to_remove = []
         for i, arch_ind in enumerate(archive):
+            if equal_genotype(arch_ind, ind):
+                repeated_genotype = True
+                break
             if dominates(arch_ind, ind, k):
                 dominated = True
                 break
             elif dominates(ind, arch_ind, k):
                 to_remove.append(i)
+        if repeated_genotype:
+            continue
         if not dominated:
             for i in reversed(to_remove):
                 archive.pop(i)
@@ -29,8 +37,12 @@ def archive_update_pq_losses(archive, population_):
     population = [ind for ind in population_ if ind.feasible]
     for ind in population:
         dominated = False
+        repeated_genotype = False
         to_remove = []
         for i, arch_ind in enumerate(archive):
+            if equal_genotype(arch_ind, ind):
+                repeated_genotype = True
+                break
             if ((arch_ind.adv_loss <= ind.adv_loss and
                 arch_ind.std_loss <= ind.std_loss) and
                     not np.isclose(arch_ind.adv_loss, ind.adv_loss) and
@@ -42,6 +54,8 @@ def archive_update_pq_losses(archive, population_):
                     not np.isclose(arch_ind.adv_loss, ind.adv_loss) and
                     not np.isclose(arch_ind.std_loss, ind.std_loss)):
                 to_remove.append(i)
+        if repeated_genotype:
+            continue
         if not dominated:
             for i in reversed(to_remove):
                 archive.pop(i)
@@ -52,8 +66,12 @@ def archive_update_pq_accuracy(archive, population_):
     population = [ind for ind in population_ if ind.feasible]
     for ind in population:
         dominated = False
+        repeated_genotype = False
         to_remove = []
         for i, arch_ind in enumerate(archive):
+            if equal_genotype(arch_ind, ind):
+                repeated_genotype = True
+                break
             if ((arch_ind.adv_acc >= ind.adv_acc and
                 arch_ind.std_acc >= ind.std_acc) and
                     not np.isclose(arch_ind.adv_acc, ind.adv_acc) and
@@ -65,6 +83,8 @@ def archive_update_pq_accuracy(archive, population_):
                   not np.isclose(arch_ind.adv_acc, ind.adv_acc) and
                   not np.isclose(arch_ind.std_acc, ind.std_acc)):
                 to_remove.append(i)
+        if repeated_genotype:
+            continue
         if not dominated:
             for i in reversed(to_remove):
                 archive.pop(i)

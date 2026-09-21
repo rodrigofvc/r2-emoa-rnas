@@ -155,9 +155,9 @@ def r2_emoa_rnas(args_):
         architectures_evaluated += args.n_population
         update_ref_points(mutation, nadir_point, ideal_point)
 
-        archive = archive_update_pq(archive, pop + mutation)
-        archive_accuracy = archive_update_pq_accuracy(archive_accuracy, pop + mutation)
-        archive_losses = archive_update_pq(archive_losses, pop + mutation, k=2)
+        archive = archive_update_pq(archive, mutation)
+        archive_accuracy = archive_update_pq_accuracy(archive_accuracy, mutation)
+        archive_losses = archive_update_pq(archive_losses, mutation, k=2)
         pop = update_population_r2(args.n_population, pop, mutation, weights_r2)
         hyp_archive, hyp_2, hyp2_acc, r2_archive = utils.store_metrics(architectures_evaluated, archive, archive_losses, archive_accuracy, args, weights_r2, statistics)
         utils.save_architectures(archive, args.save_path_final_architect)

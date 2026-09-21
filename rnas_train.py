@@ -17,6 +17,12 @@ import utils_train
 from micro_space.model import NetworkCIFAR
 from adversarial import fgsm_simple
 
+def set_seed(seed):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
+
 def prepare_args(args_, genotype):
     initial_epoch = 0
     model = None
@@ -64,6 +70,8 @@ def prepare_args(args_, genotype):
         # the execution is new and we need to initialize all the variables
         args = args_
         n_classes = 10 if args.dataset == 'cifar10' else 100
+        # set the random seed for reproducibility
+        set_seed(args.seed)
         model = NetworkCIFAR(args.init_channels, n_classes, args.layers, False, genotype)
 
         optimizer = torch.optim.SGD(
@@ -490,7 +498,7 @@ if __name__ == '__main__':
         logging.info(f"Total training time: {time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp_train))} (HH:MM:SS)")
     else:
         # train the whole archive of architectures and store the trained models in the same directory
-        archive_genotypes = utils_train.get_genotypes_from_archive(args.archive_path, args)
+        archive_genotypes = utils_train.get_genotypes_from_archive(args.archive_path, args.search_space)
         for i, genotype in enumerate(archive_genotypes):
             args, train_queue, criterion, model, initial_epoch, optimizer, scheduler = prepare_args(args, genotype)
             logging.info(f">>>> Training individual {i}/{len(archive_genotypes)-1}")
