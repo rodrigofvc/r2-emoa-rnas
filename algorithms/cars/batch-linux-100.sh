@@ -19,7 +19,7 @@ for SEED in "${SEEDS[@]}"; do
 
     python3 main_search.py \
         --seed "$SEED" \
-        --dataset cifar10 \
+        --dataset cifar100 \
         --batch_size 192 \
         --n_population 40 \
         --generations 31 \
@@ -48,8 +48,8 @@ for SEED in "${SEEDS[@]}"; do
         --grad_clip 5.0 \
         --timestamp_supernet 240 \
         --timestamp_individual 10 \
-        --proxy_data_dir proxy-data/proxy_train/train_proxy_cifar10_resnet20_2500.npy \
-        --proxy_eval_dir proxy-data/proxy_eval/eval_proxy_indices_cifar10_192_5000.npy \
+        --proxy_data_dir proxy-data/proxy_train/train_proxy_cifar100_resnet56_3750.npy \
+        --proxy_eval_dir proxy-data/proxy_eval/eval_proxy_indices_cifar100_192_5000.npy \
         --initial_population initial/initial_population_40_continuous.npy \
         2>&1 | tee "$LOG_FILE"
 
