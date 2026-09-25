@@ -396,7 +396,7 @@ if __name__ == '__main__':
     """
     parser = argparse.ArgumentParser(description="Training architectures found by RNAS")
     parser.add_argument('--seed', type=int, default=18906049, help='random seed')
-    parser.add_argument('--algorithm', type=str, choices=['moead', 'sms-emoa', 'moras', 'random-search', 'r2-emoa', 'nevonas', 'nsganet', 'cars', 'r2-emoa-one-shot'], help='which algorithm was used to search')
+    parser.add_argument('--algorithm', type=str, help='which algorithm was used to search')
     parser.add_argument('--search_space', type=str, default='discrete', help='which search space was used to search')
     parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'], help='dataset for training')
     parser.add_argument('--batch_size', type=int, default=32, help='batch size')
@@ -505,7 +505,7 @@ if __name__ == '__main__':
             try:
                 start_time = time.time()
                 for epoch in range(initial_epoch, args.epochs):
-                    logging.info(f"Individual {i}/{len(archive_genotypes)-1} Epoch {epoch}/{args.epochs}")
+                    logging.info(f"{args.algorithm} Individual {i}/{len(archive_genotypes)-1} Epoch {epoch}/{args.epochs}")
                     time_stamp = time.time()
                     if args.amp:
                         adv_acc = train_amp(train_queue, model, criterion, scheduler, optimizer, args)
