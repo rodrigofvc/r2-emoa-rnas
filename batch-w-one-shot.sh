@@ -15,7 +15,7 @@ for %%S in (18906049 15798821 65381509 27293207 27522793) do (
         --batch_size 192 ^
         --n_population 40 ^
         --generations 31 ^
-        --epochs_warmup 0 ^
+        --epochs_warmup 100 ^
         --epochs_train_supernet 10 ^
         --prob_cross 0.9 ^
         --prob_mut 0.1 ^
