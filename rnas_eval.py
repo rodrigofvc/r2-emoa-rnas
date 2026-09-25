@@ -12,6 +12,11 @@ import torchattacks
 
 import utils
 
+def set_seed(seed):
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed(seed)
 
 def prepare_args(args, model):
     if torch.cuda.is_available():
@@ -25,6 +30,7 @@ def prepare_args(args, model):
     model.to(args.device)
 
     ssl._create_default_https_context = ssl._create_unverified_context
+    set_seed(args.seed)
     _, valid_transform = utils.data_transforms_cifar10(args)
     if args.dataset == 'cifar10':
         test_data = torchvision.datasets.CIFAR10(root=args.data, train=False, download=True, transform=valid_transform)
@@ -46,6 +52,7 @@ def prepare_args(args, model):
       sampler=torch.utils.data.sampler.SubsetRandomSampler(indices[:split]),
         num_workers=args.num_workers, pin_memory=False)
 
+    logging.info(f"Test samples: {len(test_queue)* args.batch_size}")
     criterion = torch.nn.CrossEntropyLoss().to(args.device)
 
     return test_queue, criterion
@@ -65,10 +72,10 @@ def eval(test_queue, model, attack_name, args):
         attack = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=10)
     elif attack_name == 'PGD_20':
         attack = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=20)
+    elif attack_name == 'CW_0.1':
+        attack = torchattacks.CW(model, c=0.1)
     elif attack_name == 'CW_0.01':
         attack = torchattacks.CW(model, c=0.01)
-    elif attack_name == 'CW_0.001':
-        attack = torchattacks.CW(model, c=0.001)
     else:
         raise ValueError(f"Unknown attack name: {attack_name}")
     criterion = torch.nn.CrossEntropyLoss().to(args.device)
@@ -88,13 +95,13 @@ def eval(test_queue, model, attack_name, args):
         adv_predicts = adv_logits.argmax(dim=1)
         std_correct += (std_predicts == target).sum().item()
         adv_correct += (adv_predicts == target).sum().item()
-        total_std_loss += std_loss * target.size(0)
-        total_adv_loss += adv_loss * target.size(0)
         total += target.size(0)
+        total_std_loss += std_loss
+        total_adv_loss += adv_loss
     std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
-    total_std_loss = total_std_loss / total
-    total_adv_loss = total_adv_loss / total
+    total_std_loss = total_std_loss / len(test_queue)
+    total_adv_loss = total_adv_loss / len(test_queue)
     flops, params = utils.get_model_metrics(model)
     return std_accuracy * 100.0, adv_accuracy * 100.0, total_std_loss, total_adv_loss, flops, params
 
@@ -109,8 +116,8 @@ if __name__ == '__main__':
     """
     # python rnas_eval.py --seed 12 --algorithm r2-emoa --dataset cifar100 --batch_size 256 --model_path results/r2-emoa/cifar100/2026-05-08_10-04-43_18906049/train/full_trained_model.pt
     parser = argparse.ArgumentParser(description="Evaluating architectures found by RNAS")
-    parser.add_argument('--seed', type=int, default=0, help='random seed')
-    parser.add_argument('--algorithm', type=str, choices=['nsganet', 'nevonas', 'cars', 'r2-emoa', 'r2-emoa-one-shot'])
+    parser.add_argument('--seed', type=int, default=18906049, help='random seed')
+    parser.add_argument('--algorithm', type=str, choices=['nsganet', 'nevonas', 'cars', 'r2-emoa', 'r2-emoa-one-shot', 'sms-emoa', 'moras', 'moead', 'random-search'])
     parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'], help='dataset for training')
     parser.add_argument('--data', type=str, default='./data', help='location of the data corpus')
     parser.add_argument('--num_workers', type=int, default=0, help='number of workers for data loading')
@@ -161,7 +168,7 @@ if __name__ == '__main__':
     elif args.archive_path is not None:
         models_dir = os.listdir(args.archive_path)
         models_dir = [d for d in models_dir if d.endswith('.pt')]
-        attack_f_list = ['PGD_7', 'PGD_10', 'PGD_20', 'FGSM', 'CW_0.01', 'CW_0.001']
+        attack_f_list = ['PGD_7', 'PGD_10', 'PGD_20', 'FGSM', 'CW_0.1', 'CW_0.01']
         for model_file in models_dir:
             model_path = os.path.join(args.archive_path, model_file)
             model = torch.load(model_path, weights_only=False)
