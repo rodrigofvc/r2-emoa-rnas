@@ -117,7 +117,7 @@ if __name__ == '__main__':
     # python rnas_eval.py --seed 12 --algorithm r2-emoa --dataset cifar100 --batch_size 256 --model_path results/r2-emoa/cifar100/2026-05-08_10-04-43_18906049/train/full_trained_model.pt
     parser = argparse.ArgumentParser(description="Evaluating architectures found by RNAS")
     parser.add_argument('--seed', type=int, default=18906049, help='random seed')
-    parser.add_argument('--algorithm', type=str, choices=['nsganet', 'nevonas', 'cars', 'r2-emoa', 'r2-emoa-one-shot', 'sms-emoa', 'moras', 'moead', 'random-search'])
+    parser.add_argument('--algorithm', type=str)
     parser.add_argument('--dataset', type=str, choices=['cifar10', 'cifar100'], help='dataset for training')
     parser.add_argument('--data', type=str, default='./data', help='location of the data corpus')
     parser.add_argument('--num_workers', type=int, default=0, help='number of workers for data loading')
