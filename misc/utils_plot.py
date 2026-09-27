@@ -83,7 +83,7 @@ median_moead_100 hv:                    results/moead/cifar100/2026-09-18_19-51-
 median_nsganet_100  hv:                 search-NSGA-Net-micro-20260917-105458
 median_random_100 hv:                   results/random-search/cifar100/2026-09-16_02-35-18_27293207/search/
 median_nevonas_100 hv:                  search-S1-20260922-050939-cifar100
-median_cars_100 hv:
+median_cars_100 hv:                     results/cars/cifar100/2026-09-26_13-20-01_65381509/search/
 median_r2_emoa_rnas_60_40 cifar100 hv:  results/r2-emoa/cifar100/2026-09-11_00-58-43_18906049/search/
 median_r2_emoa_rnas_75_25 cifar100 hv:  results/r2-emoa/cifar100/2026-09-13_04-29-18_27522793/search/
 median_r2_emoa_rnas_unif cifar100 hv:   results/r2-emoa/cifar100/2026-09-14_10-13-09_27522793/search/
@@ -281,6 +281,13 @@ if __name__ == '__main__':
         'search-S1-20260922-133900-cifar100',
         'search-S1-20260923-002220-cifar100',
     ]
+    dirs_cars_100 = [
+        'results/cars/cifar100/2026-09-25_18-24-31_18906049/search/',
+        'results/cars/cifar100/2026-09-26_07-01-28_15798821/search/',
+        'results/cars/cifar100/2026-09-26_13-20-01_65381509/search/',
+        'results/cars/cifar100/2026-09-26_18-37-36_27293207/search/',
+        'results/cars/cifar100/2026-09-26_23-58-41_27522793/search/',
+    ]
     median_sms_emoa_100 = get_median_algorithm('sms-emoa', 'evaluations-sms-emoa.csv', dirs_sms_emoa_100, indicator='hv')
     median_moras_100 = get_median_algorithm('moras', 'evaluations-moras.csv', dirs_moras_100, indicator='hv')
     median_moead_100 = get_median_algorithm('moead', 'evaluations-moead.csv', dirs_moead_100, indicator='hv')
@@ -290,12 +297,14 @@ if __name__ == '__main__':
     median_r2_emoa_rnas_75_25_100 = get_median_algorithm('r2-emoa', '../evaluations.csv', dirs_r2_emoa_75_25_100, indicator='hv')
     median_r2_emoa_rnas_unif_100 = get_median_algorithm('r2-emoa', '../evaluations.csv', dirs_r2_emoa_unif_100, indicator='hv')
     median_nevonas_100 = get_median_algorithm('nevonas', 'evaluations-nevonas.csv', dirs_nevonas_100, indicator='hv')
+    median_cars_100 = get_median_algorithm('cars', 'evaluations-cars.csv', dirs_cars_100, indicator='hv')
     print(f'median_sms_emoa cifar100 hv: {median_sms_emoa_100}')
     print(f'median_moras cifar100 hv: {median_moras_100}')
     print(f'median_moead_100 hv: {median_moead_100}')
     print(f'median_nsganet_100  hv: {median_nsganet_100}')
     print(f'median_random_100 hv: {median_random_100}')
     print(f'median_nevonas_100 hv: {median_nevonas_100}')
+    print(f'median_cars_100 hv: {median_cars_100}')
     print(f'median_r2_emoa_rnas_60_40 cifar100 hv:{median_r2_emoa_rnas_60_40_100}')
     print(f'median_r2_emoa_rnas_75_25 cifar100 hv:{median_r2_emoa_rnas_75_25_100}')
     print(f'median_r2_emoa_rnas_unif cifar100 hv:{median_r2_emoa_rnas_unif_100}')
@@ -307,6 +316,7 @@ if __name__ == '__main__':
                                  (median_nsganet_100, 'NSGA-Net', 'evaluations-nsganet.csv'),
                                  (median_random_100, 'Random Search', '../evaluations.csv'),
                                  (median_nevonas_100, 'NevoNAS', 'evaluations-nevonas.csv'),
+                                 (median_cars_100, 'CARS', 'evaluations-cars.csv'),
                                  (median_r2_emoa_rnas_60_40_100, 'R2-EMOA-RNAS$_{0.60}$', '../evaluations.csv'),
                                  (median_r2_emoa_rnas_75_25_100, 'R2-EMOA-RNAS$_{0.75}$', '../evaluations.csv'),
                                  (median_r2_emoa_rnas_unif_100, 'R2-EMOA-RNAS$_{Unif}$', '../evaluations.csv')], indicator='hv', threshold=182250, plot_threshold=False)
@@ -320,6 +330,7 @@ if __name__ == '__main__':
     median_r2_emoa_rnas_75_25_100 = get_median_algorithm('r2-emoa', '../evaluations.csv', dirs_r2_emoa_75_25_100, indicator='hv_2obj')
     median_r2_emoa_rnas_unif_100 = get_median_algorithm('r2-emoa', '../evaluations.csv', dirs_r2_emoa_unif_100, indicator='hv_2obj')
     median_nevonas_100 = get_median_algorithm('nevonas', 'evaluations-nevonas.csv', dirs_nevonas_100, indicator='hv_2obj')
+    median_cars_100 = get_median_algorithm('cars', 'evaluations-cars.csv', dirs_cars_100, indicator='hv_2obj')
     plot_evaluations_algorithms('cifar100',
                                 [(median_sms_emoa_100, 'SMS-EMOA', 'evaluations-sms-emoa.csv'),
                                  (median_moras_100, 'MORAS', 'evaluations-moras.csv'),
@@ -327,6 +338,7 @@ if __name__ == '__main__':
                                  (median_nsganet_100, 'NSGA-Net', 'evaluations-nsganet.csv'),
                                  (median_random_100, 'Random Search', '../evaluations.csv'),
                                  (median_nevonas_100, 'NevoNAS', 'evaluations-nevonas.csv'),
+                                 (median_cars_100, 'CARS', 'evaluations-cars.csv'),
                                  (median_r2_emoa_rnas_60_40_100, 'R2-EMOA-RNAS$_{0.60}$', '../evaluations.csv'),
                                  (median_r2_emoa_rnas_75_25_100, 'R2-EMOA-RNAS$_{0.75}$', '../evaluations.csv'),
                                  (median_r2_emoa_rnas_unif_100, 'R2-EMOA-RNAS$_{Unif}$', '../evaluations.csv')], indicator='hv_2obj', threshold=182250, plot_threshold=False)
