@@ -3,6 +3,7 @@ set -u
 set -o pipefail
 
 DATASET=${1:-"cifar10"}
+R2_WEIGHTS=${2:-"r2_weights/weights/weights_60_40_n40.json"}
 
 SEEDS=(18906049 15798821 65381509 27293207 27522793)
 LOG_DIR="logs_r2_emoa_one_shot"
@@ -48,7 +49,7 @@ for SEED in "${SEEDS[@]}"; do
         --grad_clip 5.0 \
         --timestamp_supernet 240 \
         --timestamp_individual 8 \
-        --r2_weights_dir r2_weights/weights/weights_60_40_n40.json \
+        --r2_weights_dir "$R2_WEIGHTS" \
         --proxy_data_dir proxy-data/proxy_train/train_proxy_cifar10_resnet20_2500.npy \
         --proxy_eval_dir proxy-data/proxy_eval/eval_proxy_indices_cifar10_192_5000.npy \
         --initial_population initial/initial_population_40_continuous.npy \
