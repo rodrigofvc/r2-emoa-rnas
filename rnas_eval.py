@@ -57,10 +57,31 @@ def prepare_args(args, model):
 
     return test_queue, criterion
 
-def eval(test_queue, model, attack_name, args):
+def eval_clean(test_queue, model, args):
     std_correct = 0
-    adv_correct = 0
     total_std_loss = 0.0
+    total = 0
+    model.eval()
+    criterion = torch.nn.CrossEntropyLoss().to(args.device)
+    for step, (inputs, target) in enumerate(test_queue):
+        inputs = inputs.to(args.device)
+        target = target.to(args.device)
+
+        with torch.no_grad():
+            std_logits = model(inputs)
+            std_loss = criterion(std_logits, target).item()
+
+        std_predicts = std_logits.argmax(dim=1)
+        std_correct += (std_predicts == target).sum().item()
+        total += target.size(0)
+        total_std_loss += std_loss
+    std_accuracy = std_correct / total
+    total_std_loss = total_std_loss / len(test_queue)
+    return std_accuracy * 100.0, total_std_loss
+
+
+def eval_adv(test_queue, model, attack_name, args):
+    adv_correct = 0
     total_adv_loss = 0.0
     total = 0
     model.eval()
@@ -86,24 +107,16 @@ def eval(test_queue, model, attack_name, args):
         adv_input = adv_input.to(args.device)
 
         with torch.no_grad():
-            std_logits = model(inputs)
             adv_logits = model(adv_input)
-            std_loss = criterion(std_logits, target).item()
             adv_loss = criterion(adv_logits, target).item()
 
-        std_predicts = std_logits.argmax(dim=1)
         adv_predicts = adv_logits.argmax(dim=1)
-        std_correct += (std_predicts == target).sum().item()
         adv_correct += (adv_predicts == target).sum().item()
         total += target.size(0)
-        total_std_loss += std_loss
         total_adv_loss += adv_loss
-    std_accuracy = std_correct / total
     adv_accuracy = adv_correct / total
-    total_std_loss = total_std_loss / len(test_queue)
     total_adv_loss = total_adv_loss / len(test_queue)
-    flops, params = utils.get_model_metrics(model)
-    return std_accuracy * 100.0, adv_accuracy * 100.0, total_std_loss, total_adv_loss, flops, params
+    return adv_accuracy * 100.0, total_adv_loss
 
 
 if __name__ == '__main__':
@@ -168,17 +181,21 @@ if __name__ == '__main__':
     elif args.archive_path is not None:
         models_dir = os.listdir(args.archive_path)
         models_dir = [d for d in models_dir if d.endswith('.pt')]
-        attack_f_list = ['PGD_7', 'PGD_10', 'PGD_20', 'FGSM', 'CW_0.1', 'CW_0.01']
-        for model_file in models_dir:
+        attack_f_list = ['clean', 'PGD_7', 'PGD_10', 'PGD_20', 'FGSM', 'CW_0.1', 'CW_0.01']
+        fieldnames = ['algorithm', 'dataset', 'model', 'flops', 'params', 'attack', 'accuracy', 'loss']
+        for j, model_file in enumerate(models_dir):
             model_path = os.path.join(args.archive_path, model_file)
             model = torch.load(model_path, weights_only=False)
             test_queue, criterion = prepare_args(args, model)
+            flops, params = utils.get_model_metrics(model)
             for i, attack_f in enumerate(attack_f_list):
                 time_stamp = time.time()
-                std_accuracy, adv_accuracy, std_loss, adv_loss, flops, params = eval(test_queue, model, attack_f, args)
-                logging.info(f"Model {model_file} Attack {attack_f}: STD accuracy {std_accuracy:.3f} ADV accuracy {adv_accuracy:.3f}, time ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))})")
+                if attack_f == 'clean':
+                    accuracy, loss = eval_clean(test_queue, model, args)
+                else:
+                    accuracy, loss = eval_adv(test_queue, model, attack_f, args)
+                logging.info(f"Algorithm {args.algorithm} Model {j+1}/{len(models_dir)} Attack {attack_f}: accuracy {accuracy:.3f}, time ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))})")
                 with open('test-evaluations.csv', mode='a', newline='') as csvfile:
-                    fieldnames = ['algorithm', 'dataset', 'model', 'flops', 'params', 'attack', 'std_accuracy', 'adv_accuracy', 'std_loss', 'adv_loss']
                     writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
                     writer.writerow({'algorithm': args.algorithm,
                                      'dataset': args.dataset,
@@ -186,7 +203,5 @@ if __name__ == '__main__':
                                      'flops': flops,
                                      'params': params,
                                      'attack': attack_f,
-                                     'std_accuracy': std_accuracy,
-                                     'adv_accuracy': adv_accuracy,
-                                     'std_loss': std_loss,
-                                     'adv_loss': adv_loss})
+                                     'accuracy': accuracy,
+                                     'loss': loss})
