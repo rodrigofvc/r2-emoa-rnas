@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-
 set -u
 set -o pipefail
+
+DATASET=${1:-"cifar10"}
 
 SEEDS=(18906049 15798821 65381509 27293207 27522793)
 LOG_DIR="logs_r2_emoa_one_shot"
@@ -20,7 +21,7 @@ for SEED in "${SEEDS[@]}"; do
     python3 rnas_search.py \
         --seed "$SEED" \
         --algorithm r2-emoa-one-shot \
-        --dataset cifar10 \
+        --dataset "$DATASET" \
         --search_space continuous \
         --batch_size 192 \
         --n_population 40 \
