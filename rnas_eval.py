@@ -87,6 +87,8 @@ def eval_adv(test_queue, model, attack_name, args):
     model.eval()
     if attack_name == 'FGSM':
         attack = torchattacks.FGSM(model, eps=8/255)
+    elif attack_name == 'BIM_10':
+        attack = torchattacks.BIM(model, eps=8/255, alpha=2/255, steps=10)
     elif attack_name == 'PGD_7':
         attack = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=7)
     elif attack_name == 'PGD_10':
@@ -94,11 +96,14 @@ def eval_adv(test_queue, model, attack_name, args):
     elif attack_name == 'PGD_20':
         attack = torchattacks.PGD(model, eps=8/255, alpha=2/255, steps=20)
     elif attack_name == 'CW_0.1':
-        attack = torchattacks.CW(model, c=0.1)
+        attack = torchattacks.CW(model, c=0.1, steps=50)
     elif attack_name == 'CW_0.01':
-        attack = torchattacks.CW(model, c=0.01)
+        attack = torchattacks.CW(model, c=0.01, steps=50)
     else:
         raise ValueError(f"Unknown attack name: {attack_name}")
+    CIFAR_MEAN = [0.49139968, 0.48215827, 0.44653124]
+    CIFAR_STD = [0.24703233, 0.24348505, 0.26158768]
+    attack.set_normalization_used(mean=CIFAR_MEAN, std=CIFAR_STD)
     criterion = torch.nn.CrossEntropyLoss().to(args.device)
     for step, (inputs, target) in enumerate(test_queue):
         inputs = inputs.to(args.device)
@@ -162,13 +167,14 @@ if __name__ == '__main__':
     if args.model_path is not None:
         model = torch.load(args.model_path, weights_only=False)
 
-        attack_f_list = ['PGD_7', 'PGD_10', 'PGD_20', 'FGSM', 'CW_0.01', 'CW_0.001']
+        attack_f_list = ['PGD_7', 'BIM_10', 'PGD_10', 'PGD_20', 'FGSM', 'CW_0.1', 'CW_0.01']
 
         test_queue, criterion = prepare_args(args, model)
         for i, attack_f in enumerate(attack_f_list):
             time_stamp = time.time()
-            std_accuracy, adv_accuracy, std_loss, adv_loss, flops, params = eval(test_queue, model, attack_f, args)
-            logging.info(f"Attack {attack_f}: STD accuracy {std_accuracy:.3f} ADV accuracy {adv_accuracy:.3f}, time ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))})")
+            adv_accuracy, adv_loss = eval_adv(test_queue, model, attack_f, args)
+            std_accuracy, std_loss = eval_clean(test_queue, model, args)
+            logging.info(f"Attack {attack_f}: ADV accuracy {adv_accuracy:.3f}, time ({time.strftime('%H:%M:%S', time.gmtime(time.time() - time_stamp))})")
             with open('test-evaluations.csv', mode='a', newline='') as csvfile:
                 fieldnames = ['algorithm', 'dataset', 'model', 'attack', 'std_accuracy', 'adv_accuracy']
                 writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
@@ -181,7 +187,7 @@ if __name__ == '__main__':
     elif args.archive_path is not None:
         models_dir = os.listdir(args.archive_path)
         models_dir = [d for d in models_dir if d.endswith('.pt')]
-        attack_f_list = ['clean', 'PGD_7', 'PGD_10', 'PGD_20', 'FGSM', 'CW_0.1', 'CW_0.01']
+        attack_f_list = ['clean', 'BIM_10', 'PGD_7', 'PGD_10', 'PGD_20', 'FGSM', 'CW_0.1', 'CW_0.01']
         fieldnames = ['algorithm', 'dataset', 'model', 'flops', 'params', 'attack', 'accuracy', 'loss']
         for j, model_file in enumerate(models_dir):
             model_path = os.path.join(args.archive_path, model_file)

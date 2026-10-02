@@ -6,7 +6,7 @@ def plot_evaluations_algorithms(dataset, dirs_, indicator='hv', threshold=36, pl
     dirs = [d[0] for d in dirs_]
     labels = [d[1] for d in dirs_]
     files = [d[2] for d in dirs_]
-    colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'cyan', 'lime', 'gray', 'yellow', 'teal', 'navy', 'magenta', 'black']
+    colors = ['red', 'blue', 'green', 'orange', 'purple', 'brown', 'pink', 'cyan', 'lime', 'gray', 'navy', 'yellow', 'teal', 'navy', 'magenta', 'black']
     plt.figure(figsize=(10, 6))
     for file, dir_, label, color in zip(files, dirs, labels, colors):
         print(f'Reading file: {file} for directory: {dir_}')
@@ -197,10 +197,10 @@ if __name__ == '__main__':
                                  (median_nevonas, 'NevoNAS', 'evaluations-nevonas.csv'),
                                  (median_nsganet, 'NSGA-Net', 'evaluations-nsganet.csv'),
                                  (median_random, 'Random Search', '../evaluations.csv'),
-                                 (median_r2_emoa_one_shot_60_40, 'R2-EMOA-One-Shot-RNAS$_{0.60}$', '../evaluations.csv'),
-                                 (median_r2_emoa_rnas_60_40, 'R2-EMOA-RNAS$_{0.60}$', '../evaluations.csv'),
-                                 (median_r2_emoa_rnas_75_25, 'R2-EMOA-RNAS$_{0.75}$', '../evaluations.csv'),
-                                 (median_r2_emoa_rnas_unif, 'R2-EMOA-RNAS$_{Unif}$', '../evaluations.csv')], indicator='hv', threshold=182250, plot_threshold=False)
+                                 (median_r2_emoa_one_shot_60_40, 'R2-EMOA-One-Shot-RNAS$_{60}$', '../evaluations.csv'),
+                                 (median_r2_emoa_rnas_60_40, 'R2-EMOA-RNAS$_{60}$', '../evaluations.csv'),
+                                 (median_r2_emoa_rnas_75_25, 'R2-EMOA-RNAS$_{75}$', '../evaluations.csv'),
+                                 (median_r2_emoa_rnas_unif, 'R2-EMOA-RNAS$_{\mathrm{Unif}}$', '../evaluations.csv')], indicator='hv', threshold=182250, plot_threshold=False)
 
     print(f'median_sms_emoa cifar10 hv: {median_sms_emoa}')
     print(f'median_moead cifar10 hv: {median_moead}')
@@ -221,20 +221,22 @@ if __name__ == '__main__':
     median_nevonas = get_median_algorithm('nevonas', 'evaluations-nevonas.csv', dirs_nevonas, indicator='hv_2obj')
     median_nsganet = get_median_algorithm('nsganet', 'evaluations-nsganet.csv', dirs_nsganet, indicator='hv_2obj')
     median_random = get_median_algorithm('random', '../evaluations.csv', dirs_random, indicator='hv_2obj')
+    median_r2_emoa_one_shot_60_40 = get_median_algorithm('r2-emoa-one-shot', '../evaluations.csv', dirs_r2_emoa_one_shot_60_40, indicator='hv_2obj')
     median_r2_emoa_rnas_60_40 = get_median_algorithm('r2-emoa', '../evaluations.csv', dirs_r2_emoa_60_40, indicator='hv_2obj')
     median_r2_emoa_rnas_75_25 = get_median_algorithm('r2-emoa', '../evaluations.csv', dirs_r2_emoa_75_25, indicator='hv_2obj')
     median_r2_emoa_rnas_unif = get_median_algorithm('r2-emoa', '../evaluations.csv', dirs_r2_emoa_unif, indicator='hv_2obj')
     plot_evaluations_algorithms('cifar10',
                                 [(median_sms_emoa, 'SMS-EMOA', 'evaluations-sms-emoa.csv'),
-                                 (median_cars, 'CARS', 'evaluations-cars.csv'),
-                                 (median_moead, 'MOEA/D', 'evaluations-moead.csv'),
                                  (median_moras, 'MORAS', 'evaluations-moras.csv'),
-                                 (median_nevonas, 'NevoNAS', 'evaluations-nevonas.csv'),
+                                 (median_moead, 'MOEA/D', 'evaluations-moead.csv'),
                                  (median_nsganet, 'NSGA-Net', 'evaluations-nsganet.csv'),
                                  (median_random, 'Random Search', '../evaluations.csv'),
-                                 (median_r2_emoa_rnas_60_40, 'R2-EMOA-RNAS$_{0.60}$', '../evaluations.csv'),
-                                 (median_r2_emoa_rnas_75_25, 'R2-EMOA-RNAS$_{0.75}$', '../evaluations.csv'),
-                                 (median_r2_emoa_rnas_unif, 'R2-EMOA-RNAS$_{Unif}$', '../evaluations.csv')], indicator='hv_2obj', threshold=182250, plot_threshold=False)
+                                 (median_nevonas, 'NevoNAS', 'evaluations-nevonas.csv'),
+                                 (median_cars, 'CARS', 'evaluations-cars.csv'),
+                                 (median_r2_emoa_one_shot_60_40, 'R2-EMOA-One-Shot-RNAS$_{60}$', '../evaluations.csv'),
+                                 (median_r2_emoa_rnas_60_40, 'R2-EMOA-RNAS$_{60}$', '../evaluations.csv'),
+                                 (median_r2_emoa_rnas_75_25, 'R2-EMOA-RNAS$_{75}$', '../evaluations.csv'),
+                                 (median_r2_emoa_rnas_unif, 'R2-EMOA-RNAS$_{\mathrm{Unif}}$', '../evaluations.csv')], indicator='hv_2obj', threshold=182250, plot_threshold=False)
     dirs_sms_emoa_100 = [
         'results/sms-emoa/cifar100/2026-09-14_15-43-07_18906049/search/',
         'results/sms-emoa/cifar100/2026-09-14_20-56-00_15798821/search/',
@@ -343,9 +345,10 @@ if __name__ == '__main__':
                                  (median_random_100, 'Random Search', '../evaluations.csv'),
                                  (median_nevonas_100, 'NevoNAS', 'evaluations-nevonas.csv'),
                                  (median_cars_100, 'CARS', 'evaluations-cars.csv'),
-                                 (median_r2_emoa_rnas_60_40_100, 'R2-EMOA-RNAS$_{0.60}$', '../evaluations.csv'),
-                                 (median_r2_emoa_rnas_75_25_100, 'R2-EMOA-RNAS$_{0.75}$', '../evaluations.csv'),
-                                 (median_r2_emoa_rnas_unif_100, 'R2-EMOA-RNAS$_{Unif}$', '../evaluations.csv')], indicator='hv', threshold=182250, plot_threshold=False)
+                                 (median_r2_emoa_one_shot_60_40_100, 'R2-EMOA-One-Shot-RNAS$_{60}$', '../evaluations.csv'),
+                                 (median_r2_emoa_rnas_60_40_100, 'R2-EMOA-RNAS$_{60}$', '../evaluations.csv'),
+                                 (median_r2_emoa_rnas_75_25_100, 'R2-EMOA-RNAS$_{75}$', '../evaluations.csv'),
+                                 (median_r2_emoa_rnas_unif_100, 'R2-EMOA-RNAS$_{\mathrm{Unif}}$', '../evaluations.csv')], indicator='hv', threshold=182250, plot_threshold=False)
 
     median_sms_emoa_100 = get_median_algorithm('sms-emoa', 'evaluations-sms-emoa.csv', dirs_sms_emoa_100, indicator='hv_2obj')
     median_moras_100 = get_median_algorithm('moras', 'evaluations-moras.csv', dirs_moras_100, indicator='hv_2obj')
@@ -357,6 +360,7 @@ if __name__ == '__main__':
     median_r2_emoa_rnas_unif_100 = get_median_algorithm('r2-emoa', '../evaluations.csv', dirs_r2_emoa_unif_100, indicator='hv_2obj')
     median_nevonas_100 = get_median_algorithm('nevonas', 'evaluations-nevonas.csv', dirs_nevonas_100, indicator='hv_2obj')
     median_cars_100 = get_median_algorithm('cars', 'evaluations-cars.csv', dirs_cars_100, indicator='hv_2obj')
+    median_r2_emoa_one_shot_60_40_100 = get_median_algorithm('r2-emoa-one-shot', '../evaluations.csv', dirs_r2_emoa_one_shot_60_40_100, indicator='hv_2obj')
     plot_evaluations_algorithms('cifar100',
                                 [(median_sms_emoa_100, 'SMS-EMOA', 'evaluations-sms-emoa.csv'),
                                  (median_moras_100, 'MORAS', 'evaluations-moras.csv'),
@@ -365,6 +369,7 @@ if __name__ == '__main__':
                                  (median_random_100, 'Random Search', '../evaluations.csv'),
                                  (median_nevonas_100, 'NevoNAS', 'evaluations-nevonas.csv'),
                                  (median_cars_100, 'CARS', 'evaluations-cars.csv'),
-                                 (median_r2_emoa_rnas_60_40_100, 'R2-EMOA-RNAS$_{0.60}$', '../evaluations.csv'),
-                                 (median_r2_emoa_rnas_75_25_100, 'R2-EMOA-RNAS$_{0.75}$', '../evaluations.csv'),
-                                 (median_r2_emoa_rnas_unif_100, 'R2-EMOA-RNAS$_{Unif}$', '../evaluations.csv')], indicator='hv_2obj', threshold=182250, plot_threshold=False)
+                                 (median_r2_emoa_one_shot_60_40_100, 'R2-EMOA-One-Shot-RNAS$_{60}$', '../evaluations.csv'),
+                                 (median_r2_emoa_rnas_60_40_100, 'R2-EMOA-RNAS$_{60}$', '../evaluations.csv'),
+                                 (median_r2_emoa_rnas_75_25_100, 'R2-EMOA-RNAS$_{75}$', '../evaluations.csv'),
+                                 (median_r2_emoa_rnas_unif_100, 'R2-EMOA-RNAS$_{\mathrm{Unif}}$', '../evaluations.csv')], indicator='hv_2obj', threshold=182250, plot_threshold=False)
