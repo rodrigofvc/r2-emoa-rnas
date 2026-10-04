@@ -26,7 +26,7 @@ def prepare_args(args, model, data_split='test'):
     else:
         device = torch.device("cpu")
 
-    print("Using device:", device)
+    #print("Using device:", device)
     args.device = device
     model.to(args.device)
 
@@ -75,7 +75,7 @@ def prepare_args(args, model, data_split='test'):
         pin_memory=torch.cuda.is_available()
     )
 
-    logging.info(f"{data_split.capitalize()} samples: {len(selected_indices)}")
+    #logging.info(f"{data_split.capitalize()} samples: {len(selected_indices)}")
 
     criterion = torch.nn.CrossEntropyLoss().to(args.device)
 
@@ -371,7 +371,7 @@ if __name__ == '__main__':
                     else:
                         accuracy, loss = eval_adv(test_queue, model, attack_name, args)
 
-                    logging.info(f"Test model {j + 1}/{len(selected_records)}, attack={attack_name}, accuracy={accuracy:.3f}, time={time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))}")
+                    logging.info(f"Test {args.algorithm} model {j + 1}/{len(selected_records)}, attack={attack_name}, accuracy={accuracy:.3f} ({time.strftime('%H:%M:%S', time.gmtime(time.time() - start_time))})")
 
                     writer.writerow({
                         'algorithm': args.algorithm,
